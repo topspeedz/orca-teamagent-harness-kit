@@ -43,6 +43,25 @@ for (const command of ['for r in a; do git push; done', '! git push', 'nohup git
   'pwsh -NoProfile -Command "git status; git push"', "sh -c 'cd x && git push'"]) {
   assert.ok(decide(bash(command), P)?.deny, command); n++;
 }
+// A quoted-delimiter heredoc that `cat` redirects to a file is text, not commands (first run: a spec file mentioning `git push` was denied).
+for (const command of [
+  "cat > spec.md <<'EOF'\n승인 뒤에만 `git push`를 실행한다\ngit push origin main\nEOF",
+  "mkdir -p d && cat > d/spec.md <<'EOF'\ngit push\nEOF\ngit status",
+  'cat <<"EOF" > f\ngit push\nEOF',
+  "cat >> f <<-'EOF'\n\tgit push\n\tEOF",
+]) { assert.equal(decide(bash(command), P), null, command); n++; }
+// Every other heredoc body is still read as commands.
+for (const command of [
+  'cat > f <<EOF\n`git push`\nEOF', // unquoted delimiter: the backticks run
+  "bash <<'EOF'\ngit push\nEOF", // the body is a script
+  "cat <<'EOF' | bash\ngit push\nEOF", // piped into a shell
+  "cat <<'EOF'\ngit push\nEOF", // no file redirect: a $(…) around it would run the output
+  "cat 2>/dev/null <<'EOF'\ngit push\nEOF", // stderr redirect only
+  "cat > f <<'EOF'\ntext\nEOF\ngit push", // a command after the heredoc
+  "cat > f <<'EOF'; git push\ntext\nEOF", // a command on the opening line
+  "cat > f <<'EOF'\ngit push", // no terminator
+  "cat > f <<EOF <<'B'\n`git push`\nEOF\nx\nB", // two heredocs on one line
+]) { assert.ok(decide(bash(command), P)?.deny, command); n++; }
 assert.equal(decide(bash("echo 'a; git push'"), P), null); n++;
 assert.equal(decide(bash('git status && git pull'), P), null); n++;
 assert.equal(decide(bash('git status'), P), null); n++;

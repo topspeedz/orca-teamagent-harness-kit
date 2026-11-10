@@ -15,7 +15,7 @@
 ## 2. 브리프 작성
 
 - phase 이름은 `<YYYY-MM-DD>-<주제>` 한 가지다.
-- 양식 `docs/harness/templates/brief.md`로 `_workspace/_run/<phase>/brief.md`를 쓴다. 요청 원문, 경로, 백로그 항목, 완료 기준, 편집 범위, 금지, 슬롯 수, 사용자가 위임한 범위, Run ID, `## 사용자 결정`(원문과 날짜)을 적는다.
+- 양식 `docs/harness/templates/brief.md`로 `_workspace/_run/<phase>/brief.md`를 쓴다. 요청 원문, 경로, 백로그 항목, 완료 기준, 편집 범위, 금지, 슬롯 수, 사용자가 위임한 범위, 창구 Run, `## 사용자 결정`(원문과 날짜)을 적는다. `실행 Run` 칸은 코디네이터가 채운다.
 - 사용자에게 반드시 묻는 것을 설문에서 끝낸다: 새 의존성, 기술 결정 변경, 외부에 쓰는 행위, 비용.
 
 ## 3. 코디네이터 기동
@@ -29,11 +29,11 @@ node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <sp
 - 스크립트가 같은 phase 이름이나 같은 백로그 ID의 Run을 찾으면 띄우지 않는다. 사용자에게 알리고 어느 쪽이 맡을지 묻는다.
 - 코디네이터 설정 파일이 없으면 스크립트가 `coordinator-settings.mjs generate`를 먼저 돌리라고 안내한다. 그대로 따른다.
 - 스크립트가 코드 1로 끝나면 그 안내를 사용자에게 그대로 전한다. 다시 띄우지 않는다. 예를 들어 처음 여는 폴더의 신뢰 확인 화면이 막고 있으면 사용자가 그 터미널에서 확인해야 한다.
-- 영수증의 Run ID와 Dispatch ID를 브리프의 Run ID 칸에 적는다.
+- 영수증의 Run ID와 Dispatch ID를 브리프의 `창구 Run` 칸에 적는다. 코디네이터는 시작하면서 실행 Run을 따로 만들고 그 ID를 브리프의 `실행 Run` 칸에 적는다.
 
 ## 4. 대기와 중계
 
-창구도 코디네이터의 보고를 `SKILL.md`의 대기 계약대로 기다린다.
+창구도 코디네이터의 보고를 `SKILL.md`의 대기 계약대로 기다린다. 턴을 끝내면 Orca가 알림으로 깨우고, 알림이 적어 준 `check`를 그대로 돌린다.
 
 | 받은 것 | 창구가 하는 것 |
 | --- | --- |
@@ -42,10 +42,10 @@ node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <sp
 | `worker_done` | 5절의 최종 보고로 간다. |
 | 승인이 필요한 명령(push, PR 등)의 `ask` | 창구는 권한 질문이 뜨는 세션이다. 사용자 승인 아래 창구가 실행하고 결과를 `reply`로 돌려준다. |
 
-**사용자 지시 전달.** 대기 중인 코디네이터에게 사용자 지시를 전할 때는 `status` 유형 메시지로 보낸다. 긴 지시는 파일에 쓰고 본문은 `"$(cat <파일>)"`로 넘긴다. 세부 인자는 `orca skills get orchestration`을 따른다.
+**사용자 지시 전달.** 턴을 끝내고 기다리는 코디네이터에게 사용자 지시를 전할 때는 `status` 유형 메시지를 코디네이터의 **실행 Run으로** 보낸다. Run ID는 브리프의 `실행 Run` 칸에서 읽는다. 코디네이터는 자기 Run을 갖고 있어서 `--to dispatch:`로 보낸 메시지는 코디네이터를 깨우지 못한다. 긴 지시는 파일에 쓰고 본문은 `"$(cat <파일>)"`로 넘긴다. 세부 인자는 `orca skills get orchestration`을 따른다.
 
 ```text
-orca orchestration send --to dispatch:<코디네이터 Dispatch ID> --type status --subject "<요지>" --body "$(cat <파일>)"
+orca orchestration send --to run:<실행 Run> --type status --subject "<요지>" --body "$(cat <파일>)"
 ```
 
 범위를 늘리는 지시는 `status`로 보태지 않는다. 지금 phase를 끝낸 뒤 새 phase로 띄운다.

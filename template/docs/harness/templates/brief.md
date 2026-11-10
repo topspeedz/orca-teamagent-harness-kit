@@ -1,6 +1,7 @@
 # 브리프: <phase 이름>
 
-Run ID: <Run ID>
+창구 Run: <창구가 만든 Run ID와 코디네이터 Dispatch ID>
+실행 Run: <코디네이터가 시작하면서 적는다>
 
 ## 요청 원문
 

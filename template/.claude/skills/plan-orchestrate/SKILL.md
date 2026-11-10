@@ -38,7 +38,7 @@ description: "요구사항이 흐릿한 큰 작업을 설문부터 커밋과 PR�
 | 설계서는 있으나 브리프의 `## 사용자 결정`에 설계 승인 없음 | 2의 승인 질문 |
 | 계획서 `docs/superpowers/plans/<날짜>-<주제>.md` 없음 | 3 계획 |
 | 계획서는 있으나 브리프에 계획 승인 없음 | 3의 승인 질문 |
-| 계획 승인이 있고 브리프의 Run ID 칸에 코디네이터가 없음 | 코디네이터 기동 |
+| 계획 승인이 있고 브리프의 `창구 Run` 칸에 코디네이터 Dispatch가 없음 | 코디네이터 기동 |
 | 코디네이터가 떠 있음 | 코디네이터의 `references/recovery.md` |
 
 ## 1. 설문 (창구)
@@ -65,7 +65,7 @@ description: "요구사항이 흐릿한 큰 작업을 설문부터 커밋과 PR�
 | 리포트 경로 | `_workspace/_run/<phase>/NN_planner_<design 또는 plan>_v<N>.md`. `NN`은 이 스킬의 단계 번호(02 설계, 03 계획) |
 
 - 배정 줄은 모델 표에서 읽는다: `node .claude/scripts/model-selection.mjs lookup --agent planner --unit <설계 또는 계획>`. spec에는 `배정: planner / <작업 단위> (<런타임> <model>/<effort>)` 한 줄로 적는다.
-- 기동은 `node .claude/scripts/orca-launch.mjs worker --agent planner --unit <설계 또는 계획> --spec-file <spec> --bracket <phase> --does <하는 일>`만 쓴다. 영수증의 Run ID를 브리프에 적는다.
+- 기동은 `node .claude/scripts/orca-launch.mjs worker --agent planner --unit <설계 또는 계획> --spec-file <spec> --bracket <phase> --does <하는 일>`만 쓴다. 영수증의 Run ID를 브리프의 `창구 Run` 칸에 적는다.
 - 띄운 뒤에는 아래 대기 계약대로 기다린다. 정산은 `worker_done`마다 기대한 Dispatch인가, 리포트 파일이 있는가, `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가를 본다.
 
 ### `## 사용자 결정 필요` 왕복
@@ -113,21 +113,20 @@ planner는 문서 형식을 위해 `superpowers:brainstorming`(설계서)과 `su
 - **워커는 커밋하지 않는다.** 같은 작업 트리를 함께 쓰므로 서로의 변경이 섞인다. 커밋은 코디네이터가 경로를 지정해서 한다.
 
 ## 대기 계약 (생략·요약 금지)
-대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
-1. 대기는 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 포그라운드 대기는
-   도구 한도(최대 10분)에 끊기고, `Start-Process`·`nohup` 분리 실행은 끝나도 아무도 못 깨운다. stderr keepalive를 Monitor로 보지 않는다.
-   결과는 stdout의 JSON만 읽고 `| head -c`로 자르지 않는다(keepalive 줄이 자를 몫을 다 먹어 본문이 사라진다 — 거르려면 `| grep -v _keepalive`).
-   **한 Run에 `check --wait`는 동시에 하나** — 앞 대기의 깨우기를 받은 뒤에만 다시 걸고, 추적을 잃은 앞 대기는 먼저 멈춘다.
-2. 깨우는 조건에서 heartbeat를 뺀다: `orca orchestration check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000 --json`.
-   heartbeat를 빼도 타임아웃마다 1회는 깨므로 짧게 잡으면 빈 깨움만 는다.
-   `status`는 빼지 않는다 — 사용자 지시가 대기 중인 코디네이터에게 전달되는 통로다(빼면 사용자 지시를 놓친다).
-3. 깨면 돌려받은 묶음 전체를 처리한다. `--types`는 깨우는 조건일 뿐 묶음에는 heartbeat도 섞여 온다. 소비하는 `check`가
-   묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않는다(그 표시를 하지 않는 구버전 Orca 전용 옵션이다).
-   이미 처리한 message id는 다시 정산하지 않는다 — `"replayed": true` 묶음(heartbeat뿐인 묶음의 재배달, 또는 겹쳐 건 대기가
-   거부 없이 받은 같은 `worker_done`)이 그 경우다. 같은 Dispatch의 `worker_done`이 id만 다르게 수 초 간격으로 두 번 오면 워커
-   재전송이다 — 첫 것으로만 정산한다. 소비하는 `check`는 대기를 건 쪽 본인만 실행한다(서브에이전트는 쓰지 않는다).
-4. 묶음에 heartbeat만 있으면 사용자에게 보고하지 않고 말없이 대기를 다시 건다.
-   "You have N orchestration messages" 알림도 같다 — 추적 중인 대기가 있으면 도구 호출 없이 턴을 끝낸다.
-5. 타임아웃은 실패가 아니다 — 다시 건다. 연속 3번 빈 대기면 `worker-list`로 워커 생존을 본다.
-   침묵·타임아웃·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
-   heartbeat는 워커가 보내는 것이지 코디네이터가 보내거나 답할 것이 아니다.
+명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
+1. 기다릴 때는 턴을 끝낸다. 보고·질문·답·지시가 오면 Orca가 이 대화에 알림을 넣어 깨운다.
+   `check --wait`, 폴링, 감시 스크립트, 타이머로 기다리지 않는다 — 대기 명령이 메시지를 가져가면 Orca는 깨울 것이 없어지고,
+   그 출력을 놓치면 메시지는 다시 오지 않는다. 예외는 코디네이터가 창구에 묻는 `ask --wait` 하나다(답이 그 명령의 출력으로 온다).
+2. 깨면 알림이 적어 준 `check` 명령을 그대로 한 번 실행한다(`orca orchestration check` 또는 `… check --run <Run>`).
+   포그라운드로, 다른 명령과 한 줄에 묶지 않고, `--wait` 없이, 출력을 `| head`로 자르지 않고 돌린다.
+   메시지가 알림에 통째로 왔으면 `check` 없이 그대로 처리한다.
+3. 돌려받은 묶음 전체를 처리한 뒤에 다음 일을 한다. `check`가 묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않고,
+   같은 메시지는 다시 오지 않는다. 이미 처리한 message id는 다시 정산하지 않는다 — 같은 Dispatch의 `worker_done`이 id만 다르게
+   두 번 오면 워커 재전송이므로 첫 것으로만 정산한다. `check`는 깨어난 본인만 실행한다(서브에이전트는 쓰지 않는다).
+4. 알림의 `check`가 비어 있으면 같은 명령에 `--all`을 붙여 한 번 더 본다(가져가지 않고 최근 메시지를 보여 준다).
+   아직 정산하지 않은 message id가 있으면 그것을 정산한다 — 다른 세션의 `check`가 먼저 가져간 메시지는 여기에만 남는다.
+   없으면 앞 묶음에 함께 온 메시지의 늦은 알림이다. 그때와 더 할 일이 없을 때는 보고하지 않고 도구 호출 없이 턴을 끝낸다.
+   워커가 보고 없이 멈추면 Orca가 `escalation`으로 깨우므로, 살아 있는지 보려고 주기적으로 깨지 않는다.
+5. 침묵은 실패가 아니다. 다른 일로 깨어 있을 때 올 보고가 안 와 있으면 메시지를 가져가지 않는 명령으로만 본다:
+   `orca orchestration check --all`(이미 가져간 메시지 포함), `orca orchestration worker-list`(워커 생존).
+   침묵·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.

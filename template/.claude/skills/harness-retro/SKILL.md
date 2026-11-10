@@ -22,7 +22,8 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 병렬 지표: 작업 시간 합 ÷ 임계 경로, 최대 동시 Task 수, 계획값과 실제값 | 계획값 `waterfall.json`의 likely 일정, 실제값 `actual.json` |
 | 코디네이터가 깬 턴 수와 그 가운데 heartbeat만 든 깸 | Claude Code 세션 기록(`.jsonl`) |
 | 수정 루프 횟수 | `ledger.md`의 예산 줄 |
-| 재시도와 원인, 실패 Task, 질문이 있던 Task | `ledger.md`의 표 |
+| 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
+| 실패 Task | `actual.json`의 `status` (Orca의 기록) |
 | 작업 폴더의 크기 | `_workspace/` |
 
 ### 명령
@@ -44,7 +45,13 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 
 ### `actual.json` 만드는 법
 
-코디네이터가 Run 폴더에 `[{"id":"<Task ID>","start":"<ISO 시각>","end":"<ISO 시각>"}]` 배열로 적는다. `start`는 그 Task의 기동 영수증에 찍힌 시각, `end`는 그 Task의 `worker_done`을 받은 시각을 옮겨 적는다. `id`는 `waterfall.json`의 Task ID와 같아야 하고, 의존은 `waterfall.json`에서 가져온다. 재시도한 Task는 마지막 기동의 시각을 적고 재시도 자체는 장부에 남는다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
+코디네이터가 7단계를 띄우기 전에 아래 명령으로 만든다. 손으로 적지 않는다.
+
+```bash
+node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-tasks.json > _workspace/_run/<phase>/actual.json
+```
+
+`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
 
 ### heartbeat만 든 깸은 근사다
 

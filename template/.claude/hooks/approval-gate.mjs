@@ -10,12 +10,37 @@ const SEP = new Set([';', '&', '|', '\n', '(', ')', '{', '}', '`']);
 const LEAD = /^(?:(?:if|then|do|else|elif|while|until|!|env|command|exec|nohup|time)\s+|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s+)/;
 const SHELL_C = /^(?:bash|sh|zsh|dash|pwsh|powershell)(?:\.exe)?\s+(?:-\S+\s+)*?-(?:\w*c|command)\s+([\s\S]*)$/i;
 const GIT_OPTS = /^git(?:\s+(?:-[Cc]\s+(?:"[^"]*"|'[^']*'|\S+)|--[\w-]+(?:=\S+)?))+(?=\s)/;
+const HEREDOC = /^<<(-?)[ \t]*(?:'([\w.-]+)'|"([\w.-]+)"|\\([\w.-]+))/;
+const TO_FILE = /\s1?>>?\s*[^&\s>]/;
+
+// One piece without its leading keywords and VAR=value assignments.
+function bare(piece) {
+  let p = piece.trim();
+  for (let prev; prev !== p;) { prev = p; p = p.replace(LEAD, ''); }
+  return p;
+}
+
+// Index just past the heredoc's terminator line, or -1 when the body never ends.
+function bodyEnd(command, newline, { word, dash }) {
+  for (let s = newline + 1; s < command.length;) {
+    const e = command.indexOf('\n', s);
+    const end = e < 0 ? command.length : e;
+    const line = command.slice(s, end);
+    if ((dash ? line.replace(/^\t+/, '') : line) === word) return end;
+    s = end + 1;
+  }
+  return -1;
+}
 
 // Splits at separators outside quotes; inside double quotes only $( and ` start a new piece. Backslash is not an escape (fails closed).
+// A heredoc body is skipped as text only when `cat` redirects it to a file under a quoted delimiter: nothing in it expands or runs.
+// Every other heredoc body (unquoted delimiter, another command, a pipe, no terminator) is still read as commands (fails closed).
 function pieces(command) {
   const out = [];
   let cur = '';
   let quote = null;
+  let here = null; // the only heredoc opened on this line, when its delimiter is quoted
+  let seen = 0; // heredoc operators on this line
   for (let i = 0; i < command.length; i++) {
     const c = command[i];
     if (quote === "'") { if (c === "'") quote = null; cur += c; continue; }
@@ -24,6 +49,17 @@ function pieces(command) {
       else if (c === '`' || (c === '$' && command[i + 1] === '(')) { out.push(cur); cur = ''; if (c === '$') i++; continue; }
       cur += c;
       continue;
+    }
+    if (c === '<' && command[i + 1] === '<' && command[i - 1] !== '<' && command[i + 2] !== '<') {
+      const m = HEREDOC.exec(command.slice(i));
+      here = ++seen === 1 && m ? { word: m[2] ?? m[3] ?? m[4], dash: !!m[1], at: out.length } : null;
+    }
+    if (c === '\n') {
+      // here.at === out.length: no separator split the line after the heredoc operator
+      const end = here && here.at === out.length && /^cat\s/.test(bare(cur)) && TO_FILE.test(cur) ? bodyEnd(command, i, here) : -1;
+      here = null;
+      seen = 0;
+      if (end >= 0) { out.push(cur); cur = ''; i = end - 1; continue; }
     }
     if (c === "'" || c === '"') quote = c;
     if (SEP.has(c)) { out.push(cur); cur = ''; } else cur += c;
@@ -36,8 +72,7 @@ function matches(command, prefix) {
   const words = prefix.trim().split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const re = new RegExp(`^${words.join('\\s+')}`);
   return pieces(command).some((piece) => {
-    let p = piece.trim();
-    for (let prev; prev !== p;) { prev = p; p = p.replace(LEAD, ''); }
+    const p = bare(piece);
     const inner = p.match(SHELL_C);
     if (inner && matches(inner[1].trim().replace(/^(["'])([\s\S]*)\1$/, '$2'), prefix)) return true;
     return re.test(p.replace(GIT_OPTS, 'git'));

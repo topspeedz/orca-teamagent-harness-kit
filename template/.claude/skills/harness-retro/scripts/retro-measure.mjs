@@ -40,17 +40,20 @@ export function planned(wf) {
   return { ...parallel(rows, depsOf(wf)), slots: wf.maxWorkers };
 }
 
-// Actual values: [{id,start,end}] ISO times written by the coordinator; deps come from waterfall.json.
+// Actual values: [{id,start,end,status?}] ISO times from `orca-launch.mjs actual`; deps come from waterfall.json.
+// A Task that is not in the plan (a team Task, a phase step) is left out of the parallel figures and counted in `skipped`.
 export function actual(list, wf) {
   const deps = depsOf(wf);
-  const ms = list.map((r) => {
+  const ms = list.filter((r) => r.id in deps).map((r) => {
     const s = Date.parse(r.start), e = Date.parse(r.end);
-    if (!(r.id in deps)) throw new Error(`actual: ${r.id} is not a task in waterfall.json`);
     if (Number.isNaN(s) || Number.isNaN(e) || e < s) throw new Error(`actual: ${r.id} has an invalid start/end`);
     return { id: r.id, s, e };
   });
   const t0 = Math.min(...ms.map((r) => r.s));
-  return parallel(ms.map((r) => ({ id: r.id, start: (r.s - t0) / 60000, end: (r.e - t0) / 60000 })), deps);
+  return {
+    ...parallel(ms.map((r) => ({ id: r.id, start: (r.s - t0) / 60000, end: (r.e - t0) / 60000 })), deps),
+    failed: list.filter((r) => r.status === 'failed').length, skipped: list.length - ms.length,
+  };
 }
 
 // ledger.md: budget line `수정 루프 <N>회` (the `최대 <N>회` cap is not a count) and the one table.
@@ -61,10 +64,14 @@ export function ledger(text) {
   const head = lines.findIndex((l) => /^\|\s*Task\s*\|/.test(l));
   const rows = [];
   if (head >= 0) for (const l of lines.slice(head + 2)) { if (!l.trim().startsWith('|')) break; rows.push(cells(l)); }
+  // columns are found by header: the status column left the ledger when Orca became the source of Task state
+  const header = head >= 0 ? cells(lines[head]) : [];
+  const col = (name) => header.findIndex((h) => h.startsWith(name));
+  const RETRY = col('재시도'), ASKED = col('질문');
   const causes = [];
   let retries = 0;
   for (const r of rows) {
-    const m = (r[4] || '').match(/^(\d+)\s*(?:\((.*)\))?/);
+    const m = (r[RETRY] || '').match(/^(\d+)\s*(?:\((.*)\))?/);
     const count = m ? Number(m[1]) : 0;
     retries += count;
     if (count) causes.push({ task: r[0], count, cause: m[2] || '(원인 없음)' });
@@ -72,8 +79,7 @@ export function ledger(text) {
   return {
     fixLoops: loop ? Number(loop[1]) : null,
     tasks: rows.length, retries,
-    failed: rows.filter((r) => r[3] === '실패').length,
-    questions: rows.filter((r) => r[5] && r[5] !== '없음' && r[5] !== '0').length,
+    questions: rows.filter((r) => r[ASKED] && r[ASKED] !== '없음' && r[ASKED] !== '0').length,
     causes,
   };
 }
@@ -147,7 +153,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   out.push(`| 슬롯 수 | ${pv(plan, 'slots')} | - |`, '', '| 지표 | 값 |', '| --- | --- |');
   const l = led.v;
   out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`, `| 재시도 합 | ${l ? l.retries : NA} |`,
-    `| 실패 Task | ${l ? l.failed : NA} |`, `| 질문이 있던 Task | ${l ? l.questions : NA} |`);
+    `| 실패 Task | ${act.v ? act.v.failed : NA} |`, `| 질문이 있던 Task | ${l ? l.questions : NA} |`);
   // Coordinator sessions = 20+ orca commands (measure-token-usage rule); workers and leads get the same notices.
   const files = sessionFiles(arg('--sessions'), Number(arg('--days')) || 7);
   const coord = files.map((f) => wakes(readFileSync(f, 'utf8'))).filter((w) => w.orca >= 20);
@@ -161,6 +167,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const why = [['waterfall', wf], ['actual', act], ['ledger', led]].filter(([, r]) => r.err).map(([k, r]) => `${k}: ${r.err}`);
   if (!coord.length) why.push(`sessions: 코디네이터 세션 없음(.jsonl ${files.length}개 중 orca 명령 20회 이상 0개)`);
   if (ws === NA) why.push('workspace: 입력 없음 또는 읽기 실패');
+  if (act.v?.skipped) out.push('', `actual: 계획(waterfall)에 없는 Task ${act.v.skipped}개는 병렬 지표에서 뺐다`);
   if (why.length) out.push('', `측정 불가 사유: ${why.join(' · ')}`);
   console.log(out.join('\n'));
 }

@@ -90,10 +90,10 @@ Domain teams such as development or design are not included. You add them from t
 | Component | What it does |
 | --- | --- |
 | `approval-gate` hook | Blocks commands that need user approval (deploy, push, and so on) in non-interactive sessions and tells the worker to escalate with `ask`. Force pushes are blocked in every session by `permissions.deny` |
-| `orca-wait-gate` hook | Blocks any `check --wait` that violates the wait contract (started with a shell `&`, or missing `--timeout-ms` or `--types`) |
+| `orca-wait-gate` hook | Blocks `check --wait`. Waiting is done only by ending the turn and letting Orca wake the session |
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
-| `orca-launch.mjs` | Looks up the model assignment table, starts the worker, and sets the tab title in the form `[BL-0012] qa-inspector : opus/medium - verify checkout flow` |
+| `orca-launch.mjs` | Looks up the model assignment table, starts the worker, and sets the tab title in the form `[BL-0012] qa-inspector : opus/medium - verify checkout flow`. It also registers the coordinator's Tasks in Orca with their dependencies, and provides subcommands to list ready Tasks, hold a Task behind a decision gate, handle a failed verdict, and retry |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report |
 | `wait-contract-check.mjs` | Checks that the wait contract embedded in three skills matches its source file |
@@ -106,9 +106,17 @@ Every script and hook uses Node built-in modules only and ships with its own sel
 **Lower token usage for the coordinator**
 
 - The coordinator runs with a dedicated settings file that enables the minimum set of plugins and skills. You choose what stays enabled in `.claude/coordinator.keep.json`.
-- The coordinator does not wake up on every heartbeat. It waits with a single background job, and the five-line wait contract and a hook enforce this.
+- Waiting is left to Orca. The coordinator and team leads end their turn, and Orca wakes them when a report arrives. `check --wait`, which takes messages away, is not used; the five-line wait contract and a hook enforce this.
 - The coordinator does not read full worker reports or rerun worker tests. It only checks the result of the report evaluation script.
 - The coordinator starts as a fresh session after the plan is approved, so skills loaded during design do not stay in its context.
+
+**Orca enforces Task order and decision holds**
+
+- The coordinator registers the plan's Tasks, with their dependencies, in its own execution Run. Orca refuses to start a Task until the Tasks it depends on have finished.
+- A Task that needs a user decision is held behind a gate and released once the decision arrives. If a Task it depends on is still unfinished, the script puts it back to waiting.
+- When a worker reports success but its report fails the verdict, the script marks that Task failed, re-holds the Tasks that depend on it, and retries the same Task.
+- Orca is the source of Task state. The ledger records only what Orca does not hold: the applied model, retry causes, questions, and report paths.
+- A team lead does not create its own Run. Team members join the coordinator's execution Run, and one wait delivers both the members' reports and the coordinator's answers to the lead.
 
 **Model and effort managed in one table**
 
@@ -188,14 +196,17 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ### 1. Run the `setup` skill
 
-Open Claude Code at the root of the target project and run `/orca-teamagent-harness-kit:setup`. The skill runs in six steps.
+Open Claude Code at the root of the target project and run `/orca-teamagent-harness-kit:setup`. The skill runs in seven steps.
 
 1. **Environment check**: git, Orca, Node, superpowers, the DAG swimlane and waterfall diagram skills, Codex, and existing instruction files (`AGENTS.md`, `CLAUDE.md`).
 2. **Five questions**: whether to use Codex, which commands need user approval, the permission mode of the coordinator terminal, the planner's model, and which plugins and skills stay enabled for the coordinator.
 3. **Install**: skips files with identical content. For existing files that differ, shows a diff and overwrites only the approved ones.
 4. **Generate settings**: updates the allowlist `.claude/coordinator.keep.json` and generates the coordinator settings file.
 5. **Verify**: runs the installed self-tests, the model assignment table check, and the wait contract check.
-6. **Report**: installed files, skipped files, failed checks, and next steps.
+6. **Foundation design**: runs the project's verification commands and records only the passing ones in the instructions, then sets forbidden commands (`permissions.deny`), document routing, and a token baseline.
+7. **Report**: installed files, skipped files, failed checks, foundation design results, and next steps.
+
+In a project that does not use Orca, only steps 1, 6, and 7 run (the template is not installed).
 
 Rerunning it adds only the missing files and runs verification again. You can also call the script directly.
 

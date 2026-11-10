@@ -88,10 +88,10 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | 구성 요소 | 역할 |
 | --- | --- |
 | `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 `permissions.deny`로 모든 세션에서 차단한다 |
-| `orca-wait-gate` hook | 대기 규약을 위반한 `check --wait`(셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것)를 차단한다 |
+| `orca-wait-gate` hook | `check --wait`를 차단한다. 대기는 턴을 끝내고 Orca의 알림으로 깨는 방식만 쓴다 |
 | `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
 | `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
-| `orca-launch.mjs` | 모델 배정표를 조회해 워커를 실행하고, 탭 제목을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 설정한다 |
+| `orca-launch.mjs` | 모델 배정표를 조회해 워커를 실행하고, 탭 제목을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 설정한다. 코디네이터가 실행하는 Task를 의존 관계와 함께 Orca에 등록하고, 준비된 Task 조회, 결정 대기 게이트, 판정 실패 처리, 재시도를 하위 명령으로 제공한다 |
 | `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
 | `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정한다 |
 | `wait-contract-check.mjs` | 세 skill에 포함된 대기 규약이 원본과 일치하는지 비교한다 |
@@ -104,9 +104,17 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **코디네이터의 토큰 사용량을 줄인다**
 
 - 코디네이터는 플러그인과 skill을 최소로 활성화한 전용 설정으로 실행된다. 활성화할 항목은 `.claude/coordinator.keep.json`에서 사용자가 직접 지정한다.
-- 코디네이터는 heartbeat마다 깨어나지 않는다. 대기는 백그라운드 작업 하나로만 걸고, 대기 규약 5줄과 hook이 이를 강제한다.
+- 대기는 Orca의 알림에 맡긴다. 코디네이터와 팀장은 턴을 끝내고, 보고가 오면 Orca가 깨운다. 메시지를 가져가 버리는 `check --wait`는 쓰지 않으며, 대기 규약 5줄과 hook이 이를 강제한다.
 - 코디네이터는 워커 리포트의 전문을 읽지 않고 워커의 테스트를 다시 실행하지도 않는다. 리포트 판정 스크립트의 결과만 확인한다.
 - 코디네이터는 계획 승인 후 새 세션으로 실행된다. 설계 단계에서 로드한 skill이 컨텍스트에 남지 않는다.
+
+**Task 순서와 결정 대기를 Orca가 강제한다**
+
+- 코디네이터는 자신의 실행 Run에 계획의 Task를 의존 관계와 함께 등록한다. 선행 Task가 끝나기 전에는 Orca가 실행을 거부한다.
+- 사용자 결정이 필요한 Task는 게이트로 막고, 결정을 받은 뒤에 푼다. 선행 Task가 아직 끝나지 않았으면 스크립트가 다시 대기 상태로 되돌린다.
+- 워커가 성공을 보고했더라도 리포트 판정이 실패하면, 스크립트가 그 Task를 실패로 되돌리고 후속 Task를 다시 묶은 뒤 같은 Task를 재시도한다.
+- Task 상태의 기준은 Orca다. 장부에는 Orca가 갖지 않는 정보(적용된 모델, 재시도 원인, 질문, 리포트 경로)만 기록한다.
+- 팀장은 Run을 따로 만들지 않는다. 팀원은 코디네이터의 실행 Run에 들어가고, 팀장은 대기 하나로 팀원의 보고와 코디네이터의 답을 모두 받는다.
 
 **모델과 effort를 표 하나로 관리한다**
 
@@ -186,14 +194,17 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ### 1. `setup` skill 실행
 
-대상 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). skill은 여섯 단계로 진행된다.
+대상 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). skill은 일곱 단계로 진행된다.
 
 1. **환경 점검**: git, Orca, Node, superpowers, DAG Swimlane 다이어그램과 Waterfall 다이어그램 skill, Codex, 기존 지침 파일(`AGENTS.md`, `CLAUDE.md`)을 확인한다.
 2. **질문 5개**: Codex 사용 여부, 사용자 승인이 필요한 명령, 코디네이터 터미널의 권한 모드, planner의 모델, 코디네이터에서 활성화할 플러그인과 skill.
 3. **설치**: 내용이 같은 파일은 건너뛰고, 내용이 다른 기존 파일은 diff를 보여 준 뒤 승인받은 파일만 덮어쓴다.
 4. **설정 생성**: allowlist `.claude/coordinator.keep.json`을 수정하고 코디네이터 설정 파일을 생성한다.
 5. **검증**: 설치된 self-test, 모델 배정표 검증, 대기 규약 비교를 실행한다.
-6. **결과 보고**: 설치한 파일, 건너뛴 파일, 실패한 검증, 다음 단계.
+6. **기반 설계**: 프로젝트의 검증 명령을 실제로 실행해 통과한 것만 지침에 기록하고, 금지 명령(`permissions.deny`), 문서 라우팅, 토큰 기준선을 정한다.
+7. **결과 보고**: 설치한 파일, 건너뛴 파일, 실패한 검증, 기반 설계 결과, 다음 단계.
+
+Orca를 사용하지 않는 프로젝트에서는 1, 6, 7단계만 실행한다(템플릿은 설치하지 않는다).
 
 재실행하면 누락된 파일만 추가하고 검증을 다시 실행한다. 스크립트를 직접 호출할 수도 있다.
 

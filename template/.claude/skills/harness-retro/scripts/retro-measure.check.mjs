@@ -51,29 +51,37 @@ t('actual: ISO times to minutes, deps from waterfall', () => {
   assert.equal(r.sum, 57); assert.equal(r.critical, 50); assert.equal(r.maxConcurrent, 2); assert.equal(r.elapsed, 50);
 });
 
-t('actual: unknown id or end before start throws', () => {
-  assert.throws(() => actual([{ id: 'Z', start: at(0), end: at(1) }], wf), /Z/);
+t('actual: a Task that is not in the plan (a team Task, a phase step) is left out and counted; end before start throws', () => {
+  const r = actual([{ id: 'A', start: at(0), end: at(12) }, { id: 'Z', start: at(0), end: at(1) }], wf);
+  assert.equal(r.tasks, 1); assert.equal(r.skipped, 1);
   assert.throws(() => actual([{ id: 'A', start: at(5), end: at(1) }], wf), /A/);
+});
+
+t('actual: failed Tasks are counted from the status Orca recorded', () => {
+  const r = actual([{ id: 'A', start: at(0), end: at(12), status: 'completed' }, { id: 'B', start: at(12), end: at(20), status: 'failed' },
+    { id: 'Z', start: at(0), end: at(1), status: 'failed' }], wf);
+  assert.equal(r.failed, 2);
+  assert.equal(actual([{ id: 'A', start: at(0), end: at(12) }], wf).failed, 0);
 });
 
 const LEDGER = `# 장부: x
 
 예산: 구현 Task 3개 · 검증 Task 1개 · 수정 루프 1회 · 최대 2회
 
-| Task | 에이전트 | 배정(요청과 적용) | 상태 | 재시도(원인) | 질문 | 리포트 경로 |
-| --- | --- | --- | --- | --- | --- | --- |
-| T1 | planner | 요청 a · 적용 a | 완료 | 0 | 없음 | r1 |
-| T2 | qa-inspector | 요청 a · 적용 a | 완료 | 1 (리포트 검사 실패) | 1 | r2 |
-| T3 | code-reviewer | 요청 a · 적용 a | 실패 | 2 (기동 실패) | 없음 | r3 |
+| Task | 에이전트 | 배정(요청과 적용) | 재시도(원인) | 질문 | 리포트 경로 |
+| --- | --- | --- | --- | --- | --- |
+| T1 | planner | 요청 a · 적용 a | 0 | 없음 | r1 |
+| T2 | qa-inspector | 요청 a · 적용 a | 1 (리포트 검사 실패) | 1 | r2 |
+| T3 | code-reviewer | 요청 a · 적용 a | 2 (기동 실패) | 없음 | r3 |
 
 ## 결정
 
 - 표 밖 산문 | 파이프가 있어도 표가 아니다
 `;
 
-t('ledger: loops, retries with causes, questions, failed', () => {
+t('ledger: loops, retries with causes, questions; columns are found by their header', () => {
   assert.deepEqual(ledger(LEDGER), {
-    fixLoops: 1, tasks: 3, retries: 3, failed: 1, questions: 1,
+    fixLoops: 1, tasks: 3, retries: 3, questions: 1,
     causes: [{ task: 'T2', count: 1, cause: '리포트 검사 실패' }, { task: 'T3', count: 2, cause: '기동 실패' }],
   });
 });

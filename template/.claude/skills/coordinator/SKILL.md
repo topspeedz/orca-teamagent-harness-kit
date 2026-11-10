@@ -32,7 +32,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
 코디네이터가 쓰는 파일은 세 가지뿐이다.
 
-1. 작업 폴더의 Run 폴더 `_workspace/_run/<phase>/`(브리프, 장부, spec, 최종 보고)
+1. 작업 폴더의 Run 폴더 `_workspace/_run/<phase>/`(브리프, 장부, spec, Task 대응표 `orca-tasks.json`, 최종 보고)
 2. `docs/backlog.md`의 상태 열
 3. phase가 끝날 때 만드는 `docs/history/<phase>/` 사본
 
@@ -49,22 +49,56 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 | 아래에서 위 | `ask` | 막혔을 때. 답이 올 때까지 턴을 끝낸다. |
 | 위에서 아래 | `reply` | `question`에 답할 때 |
 | 아래에서 위 | `worker_done` | 완료 보고. 본문 세 문장, 수정한 파일 목록, 리포트 경로를 싣는다. |
-| 창구에서 코디네이터 | `status` 유형 메시지 | 대기 중인 코디네이터에게 사용자 지시를 전할 때 |
+| 코디네이터에서 창구 | `ask --wait` (백그라운드 작업) | 사용자에게 물을 것이 있을 때. 답은 그 명령의 출력으로 온다. |
+| 창구에서 코디네이터 | `send --to run:<실행 Run>` (`status` 유형) | 턴을 끝내고 기다리는 코디네이터에게 사용자 지시를 전할 때 |
 
-- 워커와 코디네이터는 사용자에게 직접 묻지 않는다. 코디네이터는 사용자에게 물을 것을 `ask`로 창구에 올리고, 창구가 사용자에게 묻는다. 로컬 질문 창은 창구가 볼 수 없으므로 쓰지 않는다.
+- 워커와 코디네이터는 사용자에게 직접 묻지 않는다. 코디네이터는 사용자에게 물을 것을 창구에 올리고, 창구가 사용자에게 묻는다. 로컬 질문 창은 창구가 볼 수 없으므로 쓰지 않는다.
+- **코디네이터가 창구에 묻는 방법.** 실행 Run을 가진 코디네이터에게는 일반 `ask`의 답이 오지 않는다. 그래서 답을 기다리는 형태로 백그라운드에 건다: `orca orchestration ask --from <내 핸들> --question "<질문>" --wait --timeout-ms 1800000 --json`. 답은 이 명령의 출력(`answer`)으로 온다. 시간이 다 되면 질문은 살아 있으므로 `--question` 대신 `--resume <message id>`로 다시 건다. 이 백그라운드 작업은 걸어 둔 채 턴을 끝내고, 그동안 워커의 보고는 Orca 알림으로 깨어 평소대로 정산한다.
+- **기다릴 때는 턴을 끝낸다.** 워커의 보고와 창구의 지시는 실행 Run으로 들어오고, Orca가 `orca orchestration check --run <실행 Run>`을 적은 알림으로 깨운다. 그 명령을 그대로 한 번 돌려 묶음을 정산한다(아래 대기 계약).
+- **`check --wait`로 기다리지 않는다.** 대기 명령이 가져간 메시지는 다시 오지 않는다(훅 `orca-wait-gate`가 막는다). 올 보고가 안 와 있으면 `orca orchestration inbox --terminal run:<실행 Run> --limit 20`으로 이미 가져간 메시지가 있는지 본다.
 - 긴 본문은 파일에 쓰고 `"$(cat <파일>)"`로 넘긴다. 한글 인자를 파이프로 넘기면 깨질 수 있다.
 - 범위 추가와 재작업은 `send`로 보태지 않고 새로 띄운다. 모델과 effort는 새 터미널을 띄울 때만 정해지므로, 보탠 일은 적용값을 입증할 수 없다.
-- 코디네이터는 `run-create`를 하지 않는다. 코디네이터가 띄운 워커는 코디네이터의 Task가 속한 Run, 곧 창구가 만든 Run에 들어간다. 같은 Run 안에서도 보고는 띄운 쪽에게만 간다. 팀장은 자기 팀 Run을 따로 만들고 팀원의 보고는 팀장이 받는다.
+- 코디네이터는 시작할 때 실행 Run을 따로 만든다(아래 워커 기동 1). 코디네이터가 띄우는 Task는 그 Run에 등록되고, 팀장과 팀원도 그 Run에 들어간다. 같은 Run 안에서도 보고는 띄운 쪽에게만 간다. 팀장은 `run-create`를 하지 않는다.
 
 ## 워커 기동
 
-- **기동은 이 명령만 쓴다.** `node .claude/scripts/orca-launch.mjs worker --agent <에이전트> --unit <작업 단위> --spec-file <spec> --bracket <백로그 ID 또는 phase 이름> --does <하는 일>`. 스크립트가 spec의 `배정:` 줄을 모델 표와 대조하고, 다르면 띄우지 않는다. `orca orchestration worker-start`를 직접 부르지 않는다.
-- spec은 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 쓴다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 사용자가 다른 값을 지시했으면 `사용자 예외: <원문>` 줄을 넣고 `--override-reason "<원문>"`을 넘긴다.
+코디네이터가 띄우는 Task는 모두 Orca에 등록한 뒤 띄운다. 앞 Task가 끝났는지와 사용자 결정을 기다리는지는 Orca가 지킨다. 아래의 `<map>`은 `_workspace/_run/<phase>/orca-tasks.json`이다.
+
+1. **실행 Run.** 시작할 때 한 번 돌리고, 나온 Run ID를 브리프의 `실행 Run` 칸에 적는다. Task를 등록하고 조회하는 일은 Run을 가진 쪽만 할 수 있다.
+
+   ```text
+   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map>
+   ```
+
+2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 스크립트가 `배정:` 줄을 모델 표와 대조하고, 다르면 등록하지 않는다. 사용자가 다른 값을 지시했으면 spec에 `사용자 예외: <원문>` 줄을 넣고 `--override-reason "<원문>"`을 넘긴다.
+
+   ```text
+   node .claude/scripts/orca-launch.mjs register --map <map> --id <Task ID> --spec-file <spec> [--deps <앞 Task ID>,<앞 Task ID>]
+   ```
+
+3. **띄우기.** `ready`가 보여 주는 Task를 빈 슬롯만큼 띄운다. 남은 임계 경로가 긴 것부터 띄운다. `worker_done`을 정산할 때마다 `ready`를 다시 본다. 웨이브를 기다리지 않는다.
+
+   ```text
+   node .claude/scripts/orca-launch.mjs ready --map <map>
+   node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일>
+   ```
+
+- **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
 - **폭은 계획이 정한다.** 계획 없이 즉석에서 병렬을 만들지 않는다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
-- **준비된 Task 단위로 띄운다.** 웨이브를 기다리지 않는다. `worker_done`을 정산할 때마다 의존이 모두 끝난 Task를 빈 슬롯만큼 바로 띄운다. 남은 임계 경로가 긴 것부터 띄운다.
-- **팀장.** 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요하면 팀장을 띄운다. 명단의 "팀장이 되는 에이전트"로, spec 첫 줄을 `[역할: <에이전트> · 리드]`로 쓰고 기동 명령에 `--lead`를 붙인다. 팀장 spec의 배정 줄은 계획서의 팀원 배정이 아니라 `배정: <에이전트> / 리드 (<모델 표의 `리드` 줄 값>)`이고, `--lead`로 띄울 때 `--unit`은 쓰이지 않는다. 팀장에게는 팀 spec 하나를 주고 통합 보고 하나를 받는다.
-- **그림.** 장부의 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 장부에서 가져오고 기억으로 적지 않는다.
+- **팀장.** 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요하면 팀장을 띄운다. 그 팀의 Task들은 팀 spec 하나로 묶어 Task 하나로 등록하고(`register`에 `--lead`), 팀 사이의 의존은 이 팀 Task끼리 건다. 팀 안의 순서는 팀장이 지킨다. 명단의 "팀장이 되는 에이전트"로, spec 첫 줄을 `[역할: <에이전트> · 리드]`로 쓴다. 팀장 spec의 배정 줄은 계획서의 팀원 배정이 아니라 `배정: <에이전트> / 리드 (<모델 표의 `리드` 줄 값>)`이다. 팀장에게는 팀 spec 하나를 주고 통합 보고 하나를 받는다.
+- **그림.** `ready`가 돌려준 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 `ready`의 `status`에서 가져오고 기억으로 적지 않는다(`completed`는 완료, `dispatched`는 진행, 그 밖은 대기).
 - 기동 영수증의 적용값을 장부에 적는다. 요청한 값만 보고 적지 않는다([settle.md](references/settle.md)).
+
+## 결정 대기
+
+사용자 결정이 나야 시작할 수 있는 Task에는 게이트를 건다.
+
+```text
+node .claude/scripts/orca-launch.mjs gate --map <map> --id <Task ID> --question "<질문>"
+node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolution "<답>"
+```
+
+`gate`로 막은 뒤 같은 질문을 `ask --wait`로 창구에 올린다. 답이 오면 원문을 장부의 `## 결정`과 그 Task의 메모(`spec/<Task ID>.memo.md`)에 적고 `resolve`로 푼다. 등록된 spec은 바꿀 수 없어서 결정은 메모로만 워커에게 간다. `orca orchestration gate-resolve`를 직접 부르지 않는다. Orca는 게이트가 풀리면 앞 Task가 안 끝났어도 그 Task를 준비 상태로 만들기 때문에, `resolve`가 의존을 확인해 다시 묶는다.
 
 ## phase의 단계
 
@@ -78,12 +112,16 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 | 7 하네스 회고 | `harness-engineer` 워커 Task로 띄운다. 생략하지 않는다. 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다. |
 | 8 커밋과 PR | 창구를 거쳐 사용자 승인을 받은 뒤 한 번에 한다. |
 
+- 4, 6, 7단계의 Task도 같은 방식으로 등록해 띄운다.
+- 7단계를 띄우기 전에 실제 시각을 남긴다. 회고가 이 파일로 실제값을 잰다: `node .claude/scripts/orca-launch.mjs actual --map <map> > _workspace/_run/<phase>/actual.json`
+
 건너뛰기: 백로그 항목과 수락 기준이 이미 있으면 4단계를 생략한다.
 
 ## 정산
 
 `worker_done`마다 세 가지를 본다. 기대한 Dispatch인가, 리포트 파일이 있는가, `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가. 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 워커의 검사를 다시 돌리지 않고 리포트 전문을 읽지 않는다.
 
+- **실패로 처리할 때는 `fail` 명령을 돌린다.** `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`. Orca는 워커의 성공 보고만으로 그 Task를 끝난 것으로 치고 뒤 Task를 준비 상태로 올린다. 이 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
 - 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다.
 - `stopReason: "finished"`인 `escalation`("Worker stopped without reporting")은 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다.
 - 기동 스크립트가 턴 시작을 확인하지 못해도 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 확인한 뒤에만 복구한다.
@@ -119,24 +157,23 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 3. 커밋과 PR은 사용자 승인 뒤 한 번에 한다. 경로를 지정해 커밋한다. 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다. 워커는 커밋하지 않는다.
 4. 최종 보고 경로를 실어 `worker_done`을 보낸다.
 
-**승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 그대로 따른다.
+**승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask --wait`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 같은 방법으로 올린다.
 
 ## 대기 계약 (생략·요약 금지)
-대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
-1. 대기는 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 포그라운드 대기는
-   도구 한도(최대 10분)에 끊기고, `Start-Process`·`nohup` 분리 실행은 끝나도 아무도 못 깨운다. stderr keepalive를 Monitor로 보지 않는다.
-   결과는 stdout의 JSON만 읽고 `| head -c`로 자르지 않는다(keepalive 줄이 자를 몫을 다 먹어 본문이 사라진다 — 거르려면 `| grep -v _keepalive`).
-   **한 Run에 `check --wait`는 동시에 하나** — 앞 대기의 깨우기를 받은 뒤에만 다시 걸고, 추적을 잃은 앞 대기는 먼저 멈춘다.
-2. 깨우는 조건에서 heartbeat를 뺀다: `orca orchestration check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000 --json`.
-   heartbeat를 빼도 타임아웃마다 1회는 깨므로 짧게 잡으면 빈 깨움만 는다.
-   `status`는 빼지 않는다 — 사용자 지시가 대기 중인 코디네이터에게 전달되는 통로다(빼면 사용자 지시를 놓친다).
-3. 깨면 돌려받은 묶음 전체를 처리한다. `--types`는 깨우는 조건일 뿐 묶음에는 heartbeat도 섞여 온다. 소비하는 `check`가
-   묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않는다(그 표시를 하지 않는 구버전 Orca 전용 옵션이다).
-   이미 처리한 message id는 다시 정산하지 않는다 — `"replayed": true` 묶음(heartbeat뿐인 묶음의 재배달, 또는 겹쳐 건 대기가
-   거부 없이 받은 같은 `worker_done`)이 그 경우다. 같은 Dispatch의 `worker_done`이 id만 다르게 수 초 간격으로 두 번 오면 워커
-   재전송이다 — 첫 것으로만 정산한다. 소비하는 `check`는 대기를 건 쪽 본인만 실행한다(서브에이전트는 쓰지 않는다).
-4. 묶음에 heartbeat만 있으면 사용자에게 보고하지 않고 말없이 대기를 다시 건다.
-   "You have N orchestration messages" 알림도 같다 — 추적 중인 대기가 있으면 도구 호출 없이 턴을 끝낸다.
-5. 타임아웃은 실패가 아니다 — 다시 건다. 연속 3번 빈 대기면 `worker-list`로 워커 생존을 본다.
-   침묵·타임아웃·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
-   heartbeat는 워커가 보내는 것이지 코디네이터가 보내거나 답할 것이 아니다.
+명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
+1. 기다릴 때는 턴을 끝낸다. 보고·질문·답·지시가 오면 Orca가 이 대화에 알림을 넣어 깨운다.
+   `check --wait`, 폴링, 감시 스크립트, 타이머로 기다리지 않는다 — 대기 명령이 메시지를 가져가면 Orca는 깨울 것이 없어지고,
+   그 출력을 놓치면 메시지는 다시 오지 않는다. 예외는 코디네이터가 창구에 묻는 `ask --wait` 하나다(답이 그 명령의 출력으로 온다).
+2. 깨면 알림이 적어 준 `check` 명령을 그대로 한 번 실행한다(`orca orchestration check` 또는 `… check --run <Run>`).
+   포그라운드로, 다른 명령과 한 줄에 묶지 않고, `--wait` 없이, 출력을 `| head`로 자르지 않고 돌린다.
+   메시지가 알림에 통째로 왔으면 `check` 없이 그대로 처리한다.
+3. 돌려받은 묶음 전체를 처리한 뒤에 다음 일을 한다. `check`가 묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않고,
+   같은 메시지는 다시 오지 않는다. 이미 처리한 message id는 다시 정산하지 않는다 — 같은 Dispatch의 `worker_done`이 id만 다르게
+   두 번 오면 워커 재전송이므로 첫 것으로만 정산한다. `check`는 깨어난 본인만 실행한다(서브에이전트는 쓰지 않는다).
+4. 알림의 `check`가 비어 있으면 같은 명령에 `--all`을 붙여 한 번 더 본다(가져가지 않고 최근 메시지를 보여 준다).
+   아직 정산하지 않은 message id가 있으면 그것을 정산한다 — 다른 세션의 `check`가 먼저 가져간 메시지는 여기에만 남는다.
+   없으면 앞 묶음에 함께 온 메시지의 늦은 알림이다. 그때와 더 할 일이 없을 때는 보고하지 않고 도구 호출 없이 턴을 끝낸다.
+   워커가 보고 없이 멈추면 Orca가 `escalation`으로 깨우므로, 살아 있는지 보려고 주기적으로 깨지 않는다.
+5. 침묵은 실패가 아니다. 다른 일로 깨어 있을 때 올 보고가 안 와 있으면 메시지를 가져가지 않는 명령으로만 본다:
+   `orca orchestration check --all`(이미 가져간 메시지 포함), `orca orchestration worker-list`(워커 생존).
+   침묵·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
