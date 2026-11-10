@@ -88,7 +88,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | 구성 요소 | 역할 |
 | --- | --- |
 | `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 `permissions.deny`로 모든 세션에서 차단한다 |
-| `orca-wait-gate` hook | `check --wait`를 차단한다. 대기는 턴을 끝내고 Orca의 알림으로 깨는 방식만 쓴다 |
+| `orca-wait-gate` hook | 대기 규약을 위반한 `check --wait`(셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것, 다른 명령과 한 줄에 묶어 백그라운드로 건 것)를 차단한다 |
 | `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
 | `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
 | `orca-launch.mjs` | 모델 배정표를 조회해 워커를 실행하고, 탭 제목을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 설정한다. 코디네이터가 실행하는 Task를 의존 관계와 함께 Orca에 등록하고, 준비된 Task 조회, 결정 대기 게이트, 판정 실패 처리, 재시도를 하위 명령으로 제공한다 |
@@ -104,7 +104,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **코디네이터의 토큰 사용량을 줄인다**
 
 - 코디네이터는 플러그인과 skill을 최소로 활성화한 전용 설정으로 실행된다. 활성화할 항목은 `.claude/coordinator.keep.json`에서 사용자가 직접 지정한다.
-- 대기는 Orca의 알림에 맡긴다. 코디네이터와 팀장은 턴을 끝내고, 보고가 오면 Orca가 깨운다. 메시지를 가져가 버리는 `check --wait`는 쓰지 않으며, 대기 규약 5줄과 hook이 이를 강제한다.
+- 코디네이터는 heartbeat마다 깨어나지 않는다. 대기는 백그라운드 작업 하나로만 걸고, 대기 규약 5줄과 hook이 이를 강제한다.
 - 코디네이터는 워커 리포트의 전문을 읽지 않고 워커의 테스트를 다시 실행하지도 않는다. 리포트 판정 스크립트의 결과만 확인한다.
 - 코디네이터는 계획 승인 후 새 세션으로 실행된다. 설계 단계에서 로드한 skill이 컨텍스트에 남지 않는다.
 

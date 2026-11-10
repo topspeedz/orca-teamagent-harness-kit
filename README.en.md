@@ -90,7 +90,7 @@ Domain teams such as development or design are not included. You add them from t
 | Component | What it does |
 | --- | --- |
 | `approval-gate` hook | Blocks commands that need user approval (deploy, push, and so on) in non-interactive sessions and tells the worker to escalate with `ask`. Force pushes are blocked in every session by `permissions.deny` |
-| `orca-wait-gate` hook | Blocks `check --wait`. Waiting is done only by ending the turn and letting Orca wake the session |
+| `orca-wait-gate` hook | Blocks any `check --wait` that violates the wait contract (started with a shell `&`, missing `--timeout-ms` or `--types`, or chained to other commands in one background line) |
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
 | `orca-launch.mjs` | Looks up the model assignment table, starts the worker, and sets the tab title in the form `[BL-0012] qa-inspector : opus/medium - verify checkout flow`. It also registers the coordinator's Tasks in Orca with their dependencies, and provides subcommands to list ready Tasks, hold a Task behind a decision gate, handle a failed verdict, and retry |
@@ -106,7 +106,7 @@ Every script and hook uses Node built-in modules only and ships with its own sel
 **Lower token usage for the coordinator**
 
 - The coordinator runs with a dedicated settings file that enables the minimum set of plugins and skills. You choose what stays enabled in `.claude/coordinator.keep.json`.
-- Waiting is left to Orca. The coordinator and team leads end their turn, and Orca wakes them when a report arrives. `check --wait`, which takes messages away, is not used; the five-line wait contract and a hook enforce this.
+- The coordinator does not wake up on every heartbeat. It waits with a single background job, and the five-line wait contract and a hook enforce this.
 - The coordinator does not read full worker reports or rerun worker tests. It only checks the result of the report evaluation script.
 - The coordinator starts as a fresh session after the plan is approved, so skills loaded during design do not stay in its context.
 

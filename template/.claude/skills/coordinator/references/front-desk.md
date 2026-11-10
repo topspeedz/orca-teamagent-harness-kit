@@ -33,7 +33,7 @@ node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <sp
 
 ## 4. 대기와 중계
 
-창구도 코디네이터의 보고를 `SKILL.md`의 대기 계약대로 기다린다. 턴을 끝내면 Orca가 알림으로 깨우고, 알림이 적어 준 `check`를 그대로 돌린다.
+창구도 코디네이터의 보고를 `SKILL.md`의 대기 계약대로 기다린다. 대기 명령을 단독으로 걸고 출력을 끝까지 읽는 규칙(`SKILL.md`의 통신)도 같다.
 
 | 받은 것 | 창구가 하는 것 |
 | --- | --- |
@@ -42,7 +42,7 @@ node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <sp
 | `worker_done` | 5절의 최종 보고로 간다. |
 | 승인이 필요한 명령(push, PR 등)의 `ask` | 창구는 권한 질문이 뜨는 세션이다. 사용자 승인 아래 창구가 실행하고 결과를 `reply`로 돌려준다. |
 
-**사용자 지시 전달.** 턴을 끝내고 기다리는 코디네이터에게 사용자 지시를 전할 때는 `status` 유형 메시지를 코디네이터의 **실행 Run으로** 보낸다. Run ID는 브리프의 `실행 Run` 칸에서 읽는다. 코디네이터는 자기 Run을 갖고 있어서 `--to dispatch:`로 보낸 메시지는 코디네이터를 깨우지 못한다. 긴 지시는 파일에 쓰고 본문은 `"$(cat <파일>)"`로 넘긴다. 세부 인자는 `orca skills get orchestration`을 따른다.
+**사용자 지시 전달.** 대기 중인 코디네이터에게 사용자 지시를 전할 때는 `status` 유형 메시지를 코디네이터의 **실행 Run으로** 보낸다. Run ID는 브리프의 `실행 Run` 칸에서 읽는다. 코디네이터는 자기 Run을 갖고 있어서 `--to dispatch:`로 보낸 메시지는 그 대기를 깨우지 못한다. 긴 지시는 파일에 쓰고 본문은 `"$(cat <파일>)"`로 넘긴다. 세부 인자는 `orca skills get orchestration`을 따른다.
 
 ```text
 orca orchestration send --to run:<실행 Run> --type status --subject "<요지>" --body "$(cat <파일>)"
