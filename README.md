@@ -6,6 +6,16 @@
 
 창구, 코디네이터, 팀장, 팀원으로 이어지는 역할 계층과 그 계층이 따르는 규칙(대기, 승인, 모델 배정, 검증, 문서화)을 skill, hook, 스크립트, 템플릿으로 패키징했다. 플러그인이 제공하는 skill은 `setup` 하나이고, 프로젝트에 설치되는 파일은 `template/` 아래에 대상 프로젝트와 같은 경로 구조로 들어 있다.
 
+> **기본 환경: Orca + Superpowers + TeamAgent Harness**
+>
+> 이 키트는 아래 세 가지를 함께 쓰는 것을 전제로 한다. 하나라도 빠지면 동작하지 않는다.
+>
+> | 구성 | 역할 |
+> | --- | --- |
+> | **Orca** | 워커 실행과 오케스트레이션 (터미널, Run, Task, 메시지) |
+> | **Superpowers** | 설계와 계획 skill (`brainstorming`, `writing-plans`) |
+> | **TeamAgent Harness** (이 키트) | 역할 계층, 규칙, hook, 스크립트, 템플릿 |
+
 ```
 사용자
   │
@@ -117,11 +127,21 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ## 환경 구성
 
+### 기본 환경 (필수)
+
+**Orca + Superpowers + TeamAgent Harness**, 이 세 가지가 기본 환경이다. Orca가 워커를 실행하고, Superpowers가 설계와 계획의 형식을 제공하고, 이 키트가 그 위에 팀 구조와 규칙을 올린다.
+
+| 구성 | 내용 |
+| --- | --- |
+| **Orca** | CLI 1.4.255에서 테스트했다. 실행 절차의 기준 문서는 `orca skills get orchestration`의 가이드다 |
+| **Superpowers** | Claude Code 플러그인. `brainstorming`, `writing-plans` skill이 필요하다 |
+| **TeamAgent Harness** | 이 플러그인. `setup` skill로 프로젝트에 설치한다 |
+
+### 그 밖의 요구 사항
+
 | 항목 | 내용 |
 | --- | --- |
-| Orca | CLI 1.4.255에서 테스트했다. 실행 절차의 기준 문서는 `orca skills get orchestration`의 가이드다 |
 | Claude Code | 플러그인 설치와 `setup` skill 실행에 사용한다 |
-| superpowers 플러그인 | `brainstorming`, `writing-plans` skill이 필요하다 |
 | Node | 스크립트와 hook을 실행한다. 추가로 설치할 패키지는 없다 |
 | git | 대상 프로젝트가 git 저장소가 아니면 `setup` skill이 알리고 계속할지 확인한다 |
 | OS | Windows와 Git Bash에서만 테스트했다 |

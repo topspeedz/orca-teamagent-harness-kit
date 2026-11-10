@@ -6,6 +6,16 @@
 
 It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin exposes a single skill, `setup`. The files it installs live under `template/`, mirroring the paths they take in the target project.
 
+> **Base environment: Orca + Superpowers + TeamAgent Harness**
+>
+> This kit assumes all three are used together. It does not work if any one is missing.
+>
+> | Component | Role |
+> | --- | --- |
+> | **Orca** | Worker execution and orchestration (terminals, runs, tasks, messages) |
+> | **Superpowers** | Design and planning skills (`brainstorming`, `writing-plans`) |
+> | **TeamAgent Harness** (this kit) | Role hierarchy, rules, hooks, scripts, templates |
+
 > **Note:** The installed skills, agent definitions, and `AGENTS.md` are written in Korean.
 
 ```
@@ -119,11 +129,21 @@ Every script and hook uses Node built-in modules only and ships with its own sel
 
 ## Requirements
 
+### Base environment (required)
+
+**Orca + Superpowers + TeamAgent Harness** is the base environment. Orca runs the workers, Superpowers provides the format for design and planning, and this kit adds the team structure and rules on top.
+
+| Component | Details |
+| --- | --- |
+| **Orca** | Tested with CLI 1.4.255. The reference for run procedures is the guide from `orca skills get orchestration` |
+| **Superpowers** | Claude Code plugin. The `brainstorming` and `writing-plans` skills are required |
+| **TeamAgent Harness** | This plugin. Installed into a project with the `setup` skill |
+
+### Other requirements
+
 | Item | Details |
 | --- | --- |
-| Orca | Tested with CLI 1.4.255. The reference for run procedures is the guide from `orca skills get orchestration` |
 | Claude Code | Used to install the plugin and run the `setup` skill |
-| superpowers plugin | The `brainstorming` and `writing-plans` skills are required |
 | Node | Runs the scripts and hooks. No extra packages to install |
 | git | If the target project is not a git repository, the `setup` skill tells you and asks whether to continue |
 | OS | Tested only on Windows with Git Bash |
