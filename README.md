@@ -42,6 +42,20 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ## 특징
 
+**Multi-Team Agent 방식**
+
+팀 에이전트 구조는 [revfactory/harness](https://github.com/revfactory/harness)를 참조했다. 차이는 팀의 수다.
+
+| | revfactory/harness | 이 키트 |
+| --- | --- | --- |
+| 방식 | Single Team | **Multi-Team Agent** |
+| 구조 | 하나의 에이전트 팀이 작업을 수행한다 | 코디네이터 아래에 여러 팀이 있고, 팀마다 팀장과 팀원을 둔다 |
+| 조율 | 팀 내부에서 조율한다 | 코디네이터가 팀 사이의 순서와 병렬 실행을 DAG로 조율한다 |
+
+- 기획, 개발, 검증, 하네스처럼 역할이 다른 팀이 하나의 phase 안에서 함께 동작한다.
+- 팀마다 팀 skill을 갖고, 팀장이 자기 팀의 Task를 분할하고 팀원을 감독한다.
+- 팀은 템플릿으로 직접 추가한다.
+
 **역할 계층과 요청 규모별 라우팅**
 
 - 계층은 코디네이터 아래 두 단계까지다. 팀원은 워커를 실행하지 않고, 워커는 commit하지 않는다.

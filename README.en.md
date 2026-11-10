@@ -44,6 +44,20 @@ Once setup finishes, add a team ([Adding a team](#adding-a-team)) and send work 
 
 ## Features
 
+**Multi-Team Agent**
+
+The team agent structure is based on [revfactory/harness](https://github.com/revfactory/harness). The difference is the number of teams.
+
+| | revfactory/harness | This kit |
+| --- | --- | --- |
+| Approach | Single team | **Multi-Team Agent** |
+| Structure | One agent team does the work | Several teams sit under the coordinator, each with a team lead and team members |
+| Coordination | Coordinated inside the team | The coordinator uses a DAG to order and parallelize work across teams |
+
+- Teams with different roles, such as product, development, verification, and harness, work together inside one phase.
+- Each team has its own team skill. The team lead splits the team's tasks and supervises its members.
+- You add teams from templates.
+
 **Role hierarchy and size-based routing**
 
 - The hierarchy goes two levels below the coordinator. Team members do not start workers, and workers do not commit.
