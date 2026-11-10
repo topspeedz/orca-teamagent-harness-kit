@@ -1,0 +1,130 @@
+---
+name: setup
+description: 이 프로젝트에 Orca 멀티 에이전트 하네스 틀(공통 지침, 에이전트 5개, 절차·역할·팀 스킬, 훅 4개, 기동·검사 스크립트, 설정, 문서 뼈대)을 깔고 검증한다. "하네스 키트 세팅", "orca-teamagent 깔아줘", "이 저장소에 Orca 하네스 세팅", 세팅을 다시 돌려 빠진 것 채우기에 사용. 팀과 에이전트를 새로 만들지 않는다.
+---
+
+# Orca 하네스 세팅
+
+프로젝트 루트에서 실행한다. 아래 경로는 플러그인 안의 것이다.
+
+- 스크립트: `${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs`
+- 틀: `${CLAUDE_PLUGIN_ROOT}/template` (Codex를 고르면 `${CLAUDE_PLUGIN_ROOT}/template-codex`도)
+
+다시 실행해도 된다. 같은 내용의 파일은 건너뛰고 빠진 것만 채운 뒤 검증을 다시 돌린다. 세팅이 깐 뒤 사용자가 고친 파일은 건너뛴다(깔 때 `.claude/harness-install.json`에 남긴 해시와 다르면 `skipped`에 사유 `사용자가 고침`으로 나온다). 그 기록에 없는 파일이 틀과 다르면 충돌로 올릴 뿐 승인 없이 덮어쓰지 않는다.
+
+하지 않는 것:
+
+- 팀과 에이전트를 틀 밖에서 만들지 않는다. 팀은 사용자가 양식으로 직접 추가한다(README).
+- 프로젝트에 없는 검증 명령을 지어내지 않는다.
+- 빠진 전제(Orca, Node, superpowers 등)를 대신 설치하지 않는다.
+
+## 1. 점검
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .
+```
+
+출력 JSON을 사용자에게 표로 보여 준다.
+
+| 칸 | 거짓이거나 비었을 때 |
+| --- | --- |
+| `git` | git 저장소가 아니다. 알리고 계속할지 묻는다 |
+| `orca` | Orca CLI가 없다. 코디네이터와 워커를 띄울 수 없다고 알린다 |
+| `superpowers` | 계획 도구(`brainstorming`, `writing-plans`)가 없다고 알린다 |
+| `globalDiagramSkills` | 참인 그림 스킬은 전역 사본을 쓰고 프로젝트에 깔지 않는다 |
+| `codex` | Codex를 함께 쓸 수 없다. 2단계의 Codex 질문에 이 사실을 붙인다 |
+| `existing` | 이미 있는 지침·설정 파일. 3단계에서 충돌로 올라올 수 있다고 알린다 |
+
+`existing`에 `package.json`이나 `Makefile`이 있으면 읽어서 프로젝트의 검증 명령(테스트, 린트, 빌드)을 찾아 보고에 적는다. 없으면 없다고 적는다.
+
+## 2. 질문 (다섯 개, 두 번에 나눠)
+
+**첫 번째 (질문 도구로 네 개).**
+
+1. Codex를 함께 쓰는가 (예 / 아니오).
+2. 사람 승인이 필요한 행위는 무엇인가. 명령의 접두어로 받는다(예: `git push`, `gh pr create`, 배포 명령). 여러 개를 고를 수 있게 하고 직접 적을 수 있게 한다.
+3. 코디네이터 터미널의 권한 모드: `default` / `acceptEdits` / `bypassPermissions`. 승인이 필요한 명령은 권한 질문이 실제로 뜨는 세션만 실행한다는 것을 함께 알린다. 승인 없이 도는 모드면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 넘긴다.
+4. planner의 모델: `opus` / `max` (권장), `fable` / `max`.
+
+**두 번째 (코디네이터에 남길 플러그인과 스킬).** 이 기계의 목록을 읽는다.
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/template/.claude/scripts/coordinator-settings.mjs" inventory
+```
+
+목록을 표로 보여 주고 남길 것을 적어 달라고 한다. 선택지가 많아 질문 도구로 고르게 하지 않는다.
+
+- 기본으로 남는 것은 감독 절차에 꼭 필요한 것뿐이다: `coordinator`, `orchestration`, `orca-cli`, `dag-swimlane`, `waterfall-timeline`.
+- 남길 근거는 코디네이터나 그 세션의 서브에이전트가 실제로 부르는 것, 절차에 로드하라고 적힌 것이다. 워커 spec에 적어 넘기는 스킬은 워커가 로드하므로 남길 근거가 아니다.
+- 끄면 잃는 기능을 고르기 전에 알린다. 예: 메모리 플러그인을 끄면 코디네이터 세션은 기록되지 않는다.
+
+답을 `_workspace/setup/answers.json`에 쓴다(`_workspace/`는 깔기 뒤 `.gitignore`로 빠진다). 다시 실행할 때는 이 파일을 보여 주고 바꿀 것만 묻는다.
+
+```json
+{
+  "codex": false,
+  "approvalPrefixes": ["git push"],
+  "coordinatorPermissionMode": "default",
+  "planner": { "model": "opus", "effort": "max" }
+}
+```
+
+남길 목록은 이 파일에 넣지 않고 4단계에서 쓴다.
+
+## 3. 깔기
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json
+```
+
+스크립트가 하는 일:
+
+- 없는 파일은 복사하고, 같은 내용의 파일은 건너뛴다.
+- `.claude/settings.json`은 훅과 `permissions` 항목만 더한다. `.gitignore`는 없는 줄만 덧붙인다. 둘은 충돌로 올리지 않는다.
+- 승인 접두어를 `permissions.ask`(`Bash(<접두어>:*)`, `PowerShell(<접두어>:*)`)와 `.claude/hooks/approval-gate.config.json`에 넣는다.
+- 모델 표 `docs/harness/model-selection.md`의 planner 줄에 고른 model과 effort를 넣는다.
+- 전역에 있는 그림 스킬은 건너뛴다(사유 `전역에 있음`).
+- `.claude/coordinator.keep.json`이 없으면 `coordinator-settings.mjs init-keep`으로 만들고, `permissionMode`에 고른 권한 모드를 넣는다.
+
+출력의 `conflicts`가 비지 않으면(코드 2) 내용이 다른 기존 파일이다. 파일마다 차이를 보여 준다.
+
+```sh
+git diff --no-index -- "${CLAUDE_PLUGIN_ROOT}/template/<경로>" "<경로>"
+```
+
+모델 표와 `approval-gate.config.json`은 틀에 답을 넣은 값으로 비교된다는 것을 함께 알린다. 사용자가 덮어써도 된다고 한 경로만 쉼표로 이어 다시 실행한다.
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "CLAUDE.md,AGENTS.md"
+```
+
+승인받지 못한 충돌은 그대로 두고 보고에 적는다.
+
+## 4. 생성
+
+`.claude/coordinator.keep.json`에서 2단계에서 남기기로 한 항목을 `"keep"`으로 바꾼다. 나머지는 `"off"`로 둔다. 그다음 코디네이터 설정을 만든다.
+
+```sh
+node .claude/scripts/coordinator-settings.mjs generate
+```
+
+출력의 `kept`, `off`, 미분류 개수를 보고에 옮긴다. `경고: 분류되지 않은 항목`이 나오면 그 항목을 남길 목록에 넣을지 사용자에게 묻는다.
+
+## 5. 검증
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
+```
+
+`.claude/` 아래 셀프테스트 전부, `node .claude/scripts/model-selection.mjs check`, `node .claude/scripts/wait-contract-check.mjs`를 돌려 표로 찍는다. 하나라도 실패하면 코드 1이다. 실패를 고치려고 틀의 파일을 고치지 않는다. 실패한 줄을 그대로 보고에 옮긴다.
+
+## 6. 보고
+
+사용자에게 다음을 알린다.
+
+- 깔린 것: 3단계의 `written`.
+- 건너뛴 것: `skipped`와 사유, 승인받지 못한 `conflicts`.
+- 실패한 검증: 5단계 표의 ❌ 줄.
+- 1단계에서 찾은 프로젝트의 검증 명령(없으면 없다고).
+- 다음 할 일: 팀 추가(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`), 모델 표 `docs/harness/model-selection.md` 손보기.
+- 워커의 권한 모드: `worker-start`로 뜨는 워커의 권한 모드는 명령 옵션으로 정할 수 없고 Orca의 "새 에이전트 탭" 설정을 따른다. 그 설정의 위치는 CLI에서 확인하지 못했으므로 Orca 설정 화면에서 직접 찾아야 한다고 전한다.

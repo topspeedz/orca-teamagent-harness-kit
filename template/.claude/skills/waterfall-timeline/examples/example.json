@@ -1,0 +1,15 @@
+{
+  "title": "제품 개선 예상시간 워터폴",
+  "estimatedAt": "예제 — 실측 아님",
+  "clock": "T+0 = 작업 시작. 분 단위 예상 일정.",
+  "current": "계획 완료 · 구현 대기",
+  "maxWorkers": 2,
+  "assumptions": ["실행 슬롯 2개. 사용자 승인 대기 W는 미정이며 작업 경과에서 제외.", "예제 추정이며 완료시각을 보장하지 않음. 준비·감독·수정 반복 시간 별도."],
+  "tasks": [
+    {"id":"PLAN","title":"공통 계약 확인","role":"planner","tone":"plan","status":"done","deps":[],"kind":"work","estimate":{"low":10,"likely":20,"high":30},"schedule":{"low":{"start":0,"end":10},"likely":{"start":0,"end":20},"high":{"start":0,"end":30}},"basis":"예제 추정"},
+    {"id":"UI","title":"화면 구현","role":"developer","tone":"dev","status":"wait","deps":["PLAN"],"kind":"work","estimate":{"low":20,"likely":40,"high":60},"schedule":{"low":{"start":10,"end":30},"likely":{"start":20,"end":60},"high":{"start":30,"end":90}},"basis":"예제 추정"},
+    {"id":"DATA","title":"데이터 확인","role":"analyst","tone":"dev","status":"wait","deps":["PLAN"],"kind":"work","estimate":{"low":10,"likely":20,"high":40},"schedule":{"low":{"start":10,"end":20},"likely":{"start":20,"end":40},"high":{"start":30,"end":70}},"basis":"예제 추정"},
+    {"id":"QA","title":"통합 검증","role":"qa","tone":"verify","status":"wait","deps":["UI","DATA"],"kind":"work","estimate":{"low":15,"likely":30,"high":50},"schedule":{"low":{"start":30,"end":45},"likely":{"start":60,"end":90},"high":{"start":90,"end":140}},"basis":"예제 추정"},
+    {"id":"APPROVE","title":"사용자 확인","role":"user","tone":"coord","status":"wait","deps":["QA"],"kind":"approval","estimate":null,"schedule":{"low":{"start":45,"end":45},"likely":{"start":90,"end":90},"high":{"start":140,"end":140}},"basis":"승인 대기 W 미정"}
+  ]
+}

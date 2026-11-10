@@ -1,0 +1,23 @@
+{
+  "title": "Crossing check",
+  "columns": ["A", "B", "C"],
+  "lanes": [
+    { "id": "dev", "name": "Dev", "tone": "dev" },
+    { "id": "harness", "name": "Harness", "tone": "harness" }
+  ],
+  "nodes": [
+    { "id": "a", "lane": "dev", "col": 0, "title": "a", "sub": "source", "status": "done" },
+    { "id": "b", "lane": "dev", "col": 1, "title": "b", "sub": "sits on the a->c row", "status": "run" },
+    { "id": "c", "lane": "dev", "col": 2, "title": "c", "sub": "target", "status": "wait" },
+    { "id": "h", "lane": "harness", "col": 2, "title": "h", "sub": "retro", "status": "wait" }
+  ],
+  "edges": [
+    { "from": "a", "to": "b" },
+    { "from": "a", "to": "c" }
+  ],
+  "notes": [
+    { "title": "1", "body": "a->c skips a column and both candidate rows run through b." },
+    { "title": "2", "body": "The renderer must exit 1." },
+    { "title": "3", "body": "Used by render.mjs --self-test." }
+  ]
+}

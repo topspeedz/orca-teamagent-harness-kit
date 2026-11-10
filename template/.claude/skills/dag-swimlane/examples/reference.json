@@ -1,0 +1,61 @@
+{
+  "title": "샘플 DAG",
+  "heading": "샘플 기능 — 작업 DAG (스윔레인)",
+  "sub": "<b>샘플:</b> 레인 = 팀, 열 = 순서. <b>같은 열 = 병렬</b>. 화살표 = 선행 의존. 가로로 스크롤해서 보세요.",
+  "aria": "같은 열은 병렬: PM 뒤 T1∥T2, T3∥T5∥ADR, T4∥T6∥T7, T8, 검증 3종 병렬, 수정, 보고, 회고 순.",
+  "columns": ["BL 정리", "웨이브 ①", "웨이브 ②", "웨이브 ③", "웨이브 ④", "검증 (병렬)", "수정", "보고", "회고"],
+  "lanes": [
+    { "id": "plan", "name": "기획 팀", "roles": ["product-manager"], "tone": "plan" },
+    { "id": "dev", "name": "개발 팀", "roles": ["developer", "· 리드 경유"], "tone": "dev" },
+    { "id": "verify", "name": "검증 팀", "roles": ["DR · CR · QA"], "tone": "verify" },
+    { "id": "coord", "name": "코디네이터", "tone": "coord" },
+    { "id": "harness", "name": "하네스 팀", "tone": "harness" }
+  ],
+  "nodes": [
+    { "id": "pm", "lane": "plan", "col": 0, "title": "BL 정리", "sub": "BL-0001~0012", "status": "done", "agent": "claude", "model": "opus", "effort": "medium" },
+    { "id": "adr", "lane": "plan", "col": 2, "bl": "BL-####", "title": "ADR-001", "sub": "샘플 결정 기록", "status": "done" },
+    { "id": "t1", "lane": "dev", "col": 1, "row": 0.5, "bl": "BL-0001", "title": "T1", "sub": "샘플 작업 A", "status": "done", "agent": "claude", "model": "opus", "effort": "high" },
+    { "id": "t2", "lane": "dev", "col": 1, "row": 1.5, "bl": "BL-0002", "title": "T2", "sub": "샘플 작업 B", "status": "done", "agent": "codex", "model": "gpt-6.1-sol", "effort": "medium" },
+    { "id": "t3", "lane": "dev", "col": 2, "row": 0.5, "bl": "BL-0012", "title": "T3", "sub": "샘플 쓰기 작업 A", "status": "done", "write": true },
+    { "id": "t5", "lane": "dev", "col": 2, "row": 1.5, "bl": "BL-####", "title": "T5", "sub": "샘플 작업 C", "status": "done" },
+    { "id": "t4", "lane": "dev", "col": 3, "bl": "BL-####", "title": "T4", "sub": "샘플 쓰기 작업 B", "status": "done", "write": true },
+    { "id": "t6", "lane": "dev", "col": 3, "bl": "BL-####", "title": "T6", "sub": "샘플 작업 D", "status": "done" },
+    { "id": "t7", "lane": "dev", "col": 3, "bl": "BL-####", "title": "T7", "sub": "샘플 작업 E", "status": "done" },
+    { "id": "t8", "lane": "dev", "col": 4, "row": 1, "bl": "BL-####", "title": "T8", "sub": "샘플 통합", "status": "done" },
+    { "id": "dr", "lane": "verify", "col": 5, "title": "디자인 리뷰", "sub": "BL-0002~0012", "status": "run" },
+    { "id": "cr", "lane": "verify", "col": 5, "title": "코드 리뷰", "sub": "High 3 · 수정 요청", "status": "done", "agent": "claude", "model": "opus", "effort": "medium" },
+    { "id": "qa", "lane": "verify", "col": 5, "title": "QA", "sub": "실제 쓰기 없음", "status": "run", "agent": "claude", "model": "opus", "effort": "medium" },
+    { "id": "fix", "lane": "dev", "col": 6, "row": 1, "title": "수정 루프", "sub": "같은 BL · ≤2회", "status": "wait" },
+    { "id": "report", "lane": "coord", "col": 7, "title": "보고·정산", "sub": "전체 테스트 1회", "status": "wait" },
+    { "id": "retro", "lane": "harness", "col": 8, "bl": "BL-0012", "title": "회고", "sub": "07_harness.md", "status": "wait" }
+  ],
+  "groups": [{ "id": "verify-all", "nodes": ["dr", "cr", "qa"] }],
+  "edges": [
+    { "from": "pm", "to": "t1" },
+    { "from": "pm", "to": "t2" },
+    { "from": "pm", "to": "adr" },
+    { "from": "t1", "to": "t3" },
+    { "from": "t1", "to": "t5" },
+    { "from": "t2", "to": "t5" },
+    { "from": "t3", "to": "t4" },
+    { "from": "t5", "to": "t6" },
+    { "from": "t5", "to": "t7" },
+    { "from": "t4", "to": "t8" },
+    { "from": "t6", "to": "t8" },
+    { "from": "t7", "to": "t8" },
+    { "from": "t8", "to": "dr" },
+    { "from": "t8", "to": "cr" },
+    { "from": "t8", "to": "qa" },
+    { "from": "report", "to": "retro" },
+    { "from": "verify-all", "to": "fix", "label": "High 이상" },
+    { "from": "fix", "to": "verify-all", "loop": true, "label": "재검" },
+    { "from": "verify-all", "to": "report", "label": "High 0" },
+    { "from": "adr", "to": "report", "merge": true, "label": "ADR 합류" }
+  ],
+  "notes": [
+    { "title": "같은 열은 동시에", "body": "웨이브 ①은 T1∥T2, ②는 T3∥T5(ADR-001도 같이), ③은 T4∥T6∥T7, 검증은 디자인·코드 리뷰·QA를 동시에 돌립니다." },
+    { "title": "<span class=\"key\"></span>쓰기 경로", "body": "빨간 테두리(T3·T4)만 쓰기 레이어를 건드립니다." },
+    { "title": "지금", "body": "코드 리뷰 끝(High 3 → 수정 요청). 디자인 리뷰·QA 진행 중. 셋이 끝나면 High를 모아 수정 루프로 갑니다." },
+    { "title": "QA의 실제 쓰기", "body": "QA는 확인 창의 취소까지만 실측합니다. 실제 쓰기는 사용자가 대상을 정해 승인할 때만." }
+  ]
+}

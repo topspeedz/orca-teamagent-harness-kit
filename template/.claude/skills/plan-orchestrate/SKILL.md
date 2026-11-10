@@ -1,0 +1,133 @@
+---
+name: plan-orchestrate
+description: "요구사항이 흐릿한 큰 작업을 설문부터 커밋과 PR까지 한 phase로 태우는 순서와 superpowers 덮어쓰기. 창구(사용자 세션)가 설문·설계·계획(1~3단계)을 진행하고 planner 워커를 띄울 때, planner가 설계서와 계획서를 쓸 때 로드한다. '계획부터 해서 끝까지', '기획부터 실행까지', '설계하고 워커로 돌려'. 백로그 항목과 수락 기준이 이미 있는 작업, 한 파일의 작은 수정, 계획 승인 뒤의 실행 감독(coordinator), 팀 안의 Task 나누기(team-lead, phase-planning)에는 쓰지 않는다."
+---
+
+# plan-orchestrate
+
+계획은 superpowers 절차로, 실행은 Orca로 한다. 이 스킬은 두 절차를 잇는 순서와 superpowers 기본값을 덮어쓰는 곳만 담는다. 각 단계의 세부는 해당 스킬이 정본이다.
+
+## 여덟 단계와 승인 세 곳
+
+```
+1 설문        창구가 사용자와 문답한다 (superpowers:brainstorming)
+2 설계        창구가 planner를 띄운다. 설계서          ✋ 설계 승인 (그림 2개)
+3 계획        창구가 planner를 띄운다. 계획서와 DAG    ✋ 계획 승인 (그림 2개)
+   ── 여기서 창구가 코디네이터를 띄운다 ──
+4 백로그 반영  코디네이터가 기획 워커를 띄운다. 계획의 Task를 백로그 항목에 연결한다
+5 실행        코디네이터: 기동, 정산, 중간 리뷰, 끝 검증, 수정 루프, 최종 테스트 1회
+6 완료 처리    기획이 백로그를 정리한다
+7 하네스 회고  harness-engineer가 이번 phase를 재고 하네스를 고친다
+8 커밋과 PR                                            ✋ 승인 뒤 코디네이터가 한 번에
+```
+
+- 1~3단계는 창구가 한다. planner 워커도 창구가 직접 띄우고 기다린다. 코디네이터는 계획 승인 뒤 4단계에서 새로 띄운다. 설계 단계에서 로드한 스킬이 압축 뒤에도 남아 코디네이터의 컨텍스트 바닥을 올리기 때문이다.
+- 4~8단계는 `coordinator` 스킬이 정본이다. 창구는 그 스킬의 `references/front-desk.md`대로 코디네이터를 띄우고 질문을 중계한다.
+- 8단계의 승인은 코디네이터가 `ask`로 올리고, 창구가 사용자에게 묻는다.
+
+## 건너뛰기
+
+- 백로그 항목과 수락 기준이 이미 있다 → 1~4단계를 생략한다. 창구가 브리프를 쓰고 코디네이터를 띄운다.
+- 승인된 설계가 있다 → 3단계부터 한다.
+- 이어서 할 때는 어떤 파일이 있는지로 단계를 판정한다.
+
+| 있는 것 | 이어서 할 단계 |
+| --- | --- |
+| `_workspace/_run/<phase>/brief.md` 없음 | 1 설문 |
+| 설계서 `docs/superpowers/specs/<날짜>-<주제>-design.md` 없음 | 2 설계 |
+| 설계서는 있으나 브리프의 `## 사용자 결정`에 설계 승인 없음 | 2의 승인 질문 |
+| 계획서 `docs/superpowers/plans/<날짜>-<주제>.md` 없음 | 3 계획 |
+| 계획서는 있으나 브리프에 계획 승인 없음 | 3의 승인 질문 |
+| 계획 승인이 있고 브리프의 Run ID 칸에 코디네이터가 없음 | 코디네이터 기동 |
+| 코디네이터가 떠 있음 | 코디네이터의 `references/recovery.md` |
+
+## 1. 설문 (창구)
+
+`superpowers:brainstorming`의 문답 절차로 사용자와 문답한다. 문서는 쓰지 않는다. 문서는 planner가 쓴다.
+
+- phase 이름은 `<YYYY-MM-DD>-<주제>`이다. 양식 `docs/harness/templates/brief.md`로 `_workspace/_run/<phase>/brief.md`를 쓴다. 문답과 사용자 결정 원문을 날짜와 함께 `## 사용자 결정`에 적는다.
+- **설문에서 반드시 묻는 것:** 새 의존성, 기술 결정 변경, 외부에 쓰는 행위, 비용. 이 넷은 이 단계에서 끝낸다. 뒤 단계에서 처음 나오면 설계가 아니라 사용자 결정으로 다시 묻는다.
+- 맥락 조사는 `AGENTS.md`의 정본 문서 목록과 `docs/backlog.md`부터 한다. 기존 결정과 충돌하면 설계로 정하지 않고 사용자에게 묻는다.
+
+## 2~3. 설계와 계획 (창구가 planner를 띄운다)
+
+### planner spec
+
+양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 쓴다. 담는 것은 다음 여섯 가지다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 목표 | 이번 문서가 답할 것 한두 문장 |
+| 브리프 경로 | `_workspace/_run/<phase>/brief.md`. 사용자 결정 원문은 여기서 읽는다 |
+| 범위와 금지 | 다룰 범위, 다루지 않을 것, 고치지 않을 파일 |
+| 산출물 경로 | 설계서 또는 계획서, 그림 입력 파일(`_workspace/_run/<phase>/dag.json`, `waterfall.json`) |
+| 문서 종류 | 설계 또는 계획 |
+| 리포트 경로 | `_workspace/_run/<phase>/NN_planner_<design 또는 plan>_v<N>.md`. `NN`은 이 스킬의 단계 번호(02 설계, 03 계획) |
+
+- 배정 줄은 모델 표에서 읽는다: `node .claude/scripts/model-selection.mjs lookup --agent planner --unit <설계 또는 계획>`. spec에는 `배정: planner / <작업 단위> (<런타임> <model>/<effort>)` 한 줄로 적는다.
+- 기동은 `node .claude/scripts/orca-launch.mjs worker --agent planner --unit <설계 또는 계획> --spec-file <spec> --bracket <phase> --does <하는 일>`만 쓴다. 영수증의 Run ID를 브리프에 적는다.
+- 띄운 뒤에는 아래 대기 계약대로 기다린다. 정산은 `worker_done`마다 기대한 Dispatch인가, 리포트 파일이 있는가, `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가를 본다.
+
+### `## 사용자 결정 필요` 왕복
+
+planner는 spec에 없는 결정을 정하지 않고 문서 끝 `## 사용자 결정 필요`에 추천 하나와 함께 적는다.
+
+1. 창구가 그 목록을 사용자에게 묻는다.
+2. 답을 원문과 날짜로 브리프의 `## 사용자 결정`에 더한다.
+3. planner를 새로 띄워 다시 맡긴다. 이전 문서 경로를 spec에 넣는다. 정산된 워커에 `send`로 일을 보태지 않는다.
+4. 목록이 비면 승인 질문으로 간다.
+
+planner는 문서를 쓸 수 없을 만큼 막혔을 때만 `ask`를 쓴다.
+
+### superpowers 기본값 덮어쓰기
+
+planner는 문서 형식을 위해 `superpowers:brainstorming`(설계서)과 `superpowers:writing-plans`(계획서)를 로드하고 아래 다섯 가지를 덮어쓴다. 문답 단계는 창구가 이미 했으므로 planner는 문서만 쓴다.
+
+1. 설계 문서를 바로 커밋하지 않는다.
+2. 계획에 Task마다 커밋 단계를 넣지 않는다. 워커는 커밋하지 않는다.
+3. 계획서 머리의 "서브에이전트로 실행" 안내 대신 `> 실행: Orca`를 적는다.
+4. 끝의 실행 방식 질문(서브에이전트 또는 인라인)을 하지 않는다. 계획 승인만 받는다.
+5. 실행은 Orca로만 한다. `superpowers:subagent-driven-development`, `superpowers:executing-plans`, 서브에이전트 도구로 실행하지 않는다.
+
+계획서의 `## DAG` 절 형식과 Task를 나누는 규칙은 `phase-planning`이 정본이다. 여기에 옮겨 적지 않는다.
+
+### 승인 그림
+
+설계가 끝났을 때와 계획이 끝났을 때 창구가 두 그림을 그려 사용자에게 승인받는다.
+
+| 단계 | 굵기 | 그림 |
+| --- | --- | --- |
+| 설계 승인 | 팀 단위의 굵은 흐름 | planner가 쓴 입력 파일로 `dag-swimlane`과 `waterfall-timeline` |
+| 계획 승인 | Task 단위 | 같은 두 스킬. 스윔레인 노드마다 런타임, model, effort가 보인다 |
+
+- 계획 승인 질문에 폭을 숫자로 넣는다: 작업 시간 합 ÷ 임계 경로 길이, 슬롯 수, 최대 동시 Task 수. 값은 계획서의 `## DAG` 절 끝에서 옮긴다.
+- 질문은 "계획을 승인하면 Orca로 실행합니다"로 한다. 사용자는 승인 화면에서 배정을 보고 고칠 수 있다. 고친 배정은 `사용자 예외: <원문>`으로 브리프에 적는다.
+- 승인 답은 원문과 날짜로 브리프의 `## 사용자 결정`에 적는다. 실행 중에는 코디네이터가 같은 파일 경로로 다시 게시해 같은 주소에서 진행을 보여 준다.
+
+## 4~8. 계획 승인 뒤
+
+창구는 브리프에 설계서와 계획서 경로, 슬롯 수를 더하고 `coordinator`의 `references/front-desk.md`대로 코디네이터를 띄운다. 그 뒤의 기동, 정산, 검증, 수정 루프는 `coordinator`가 정본이다.
+
+- **7단계 하네스 회고는 생략하지 않는다.** 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다.
+- **커밋은 8단계에서 코디네이터가 승인 뒤 한 번에 한다.** 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다.
+- **워커는 커밋하지 않는다.** 같은 작업 트리를 함께 쓰므로 서로의 변경이 섞인다. 커밋은 코디네이터가 경로를 지정해서 한다.
+
+## 대기 계약 (생략·요약 금지)
+대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
+1. 대기는 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 포그라운드 대기는
+   도구 한도(최대 10분)에 끊기고, `Start-Process`·`nohup` 분리 실행은 끝나도 아무도 못 깨운다. stderr keepalive를 Monitor로 보지 않는다.
+   결과는 stdout의 JSON만 읽고 `| head -c`로 자르지 않는다(keepalive 줄이 자를 몫을 다 먹어 본문이 사라진다 — 거르려면 `| grep -v _keepalive`).
+   **한 Run에 `check --wait`는 동시에 하나** — 앞 대기의 깨우기를 받은 뒤에만 다시 걸고, 추적을 잃은 앞 대기는 먼저 멈춘다.
+2. 깨우는 조건에서 heartbeat를 뺀다: `orca orchestration check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000 --json`.
+   heartbeat를 빼도 타임아웃마다 1회는 깨므로 짧게 잡으면 빈 깨움만 는다.
+   `status`는 빼지 않는다 — 사용자 지시가 대기 중인 코디네이터에게 전달되는 통로다(빼면 사용자 지시를 놓친다).
+3. 깨면 돌려받은 묶음 전체를 처리한다. `--types`는 깨우는 조건일 뿐 묶음에는 heartbeat도 섞여 온다. 소비하는 `check`가
+   묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않는다(그 표시를 하지 않는 구버전 Orca 전용 옵션이다).
+   이미 처리한 message id는 다시 정산하지 않는다 — `"replayed": true` 묶음(heartbeat뿐인 묶음의 재배달, 또는 겹쳐 건 대기가
+   거부 없이 받은 같은 `worker_done`)이 그 경우다. 같은 Dispatch의 `worker_done`이 id만 다르게 수 초 간격으로 두 번 오면 워커
+   재전송이다 — 첫 것으로만 정산한다. 소비하는 `check`는 대기를 건 쪽 본인만 실행한다(서브에이전트는 쓰지 않는다).
+4. 묶음에 heartbeat만 있으면 사용자에게 보고하지 않고 말없이 대기를 다시 건다.
+   "You have N orchestration messages" 알림도 같다 — 추적 중인 대기가 있으면 도구 호출 없이 턴을 끝낸다.
+5. 타임아웃은 실패가 아니다 — 다시 건다. 연속 3번 빈 대기면 `worker-list`로 워커 생존을 본다.
+   침묵·타임아웃·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
+   heartbeat는 워커가 보내는 것이지 코디네이터가 보내거나 답할 것이 아니다.

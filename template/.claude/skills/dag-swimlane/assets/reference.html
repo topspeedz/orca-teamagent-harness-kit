@@ -1,0 +1,121 @@
+<title>샘플 DAG</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one fixed-size swimlane SVG (lanes = teams, columns = stages) in a horizontal scroller, notes below. */
+:root {
+  --bg: #f6f7f8; --fg: #1d2329; --muted: #5c6670; --line: #c9d0d6; --node: #ffffff;
+  --plan: #eceefc; --dev: #e5f2fa; --verify: #fbf0e3; --coord: #eeeef2; --harness: #f8e9f1;
+  --plan-s: #4f5bd5; --dev-s: #1f7fb8; --verify-s: #b8741a; --coord-s: #6b6f80; --harness-s: #a8457f;
+  --done: #2f9e57;
+  --write: #c43d3d;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15191d; --fg: #e4e8ec; --muted: #9aa4ad; --line: #3a434b; --node: #1e242a;
+  --plan: #1f2240; --dev: #16262f; --verify: #2e2518; --coord: #23242b; --harness: #2f1d28;
+  --plan-s: #9aa2f5; --dev-s: #6fb6e3; --verify-s: #e3a75a; --coord-s: #a5a9bb; --harness-s: #e08bbd;
+  --done: #6ad08f;
+  --write: #f07a7a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15191d; --fg: #e4e8ec; --muted: #9aa4ad; --line: #3a434b; --node: #1e242a;
+  --plan: #1f2240; --dev: #16262f; --verify: #2e2518; --coord: #23242b; --harness: #2f1d28;
+  --plan-s: #9aa2f5; --dev-s: #6fb6e3; --verify-s: #e3a75a; --coord-s: #a5a9bb; --harness-s: #e08bbd;
+  --done: #6ad08f;
+  --write: #f07a7a; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 40px; }
+h1 { font-size: 22px; margin: 0 0 4px; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+.sub code { font-family: var(--mono); font-size: 13px; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+svg { display: block; }
+.band { stroke: none; }
+.lane-t { font: 700 16px var(--sans); fill: var(--fg); }
+.lane-r { font: 400 14px var(--mono); fill: var(--muted); }
+.stage { font: 600 14px var(--sans); fill: var(--muted); letter-spacing: .02em; }
+.n rect { fill: var(--node); stroke-width: 1.5; }
+.n .t { font: 700 15px var(--sans); fill: var(--fg); }
+.n .s { font: 400 14px var(--sans); fill: var(--muted); }
+.plan rect { stroke: var(--plan-s); } .dev rect { stroke: var(--dev-s); } .verify rect { stroke: var(--verify-s); }
+.coord rect { stroke: var(--coord-s); } .harness rect { stroke: var(--harness-s); }
+.write rect { stroke: var(--write); stroke-width: 2.5; }
+.write .s { fill: var(--write); }
+.e { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.e.loop { stroke-dasharray: 6 5; }
+.arrowhead { fill: var(--muted); }
+.el { font: 500 14px var(--sans); fill: var(--muted); }
+.grp { fill: none; stroke: var(--verify-s); stroke-dasharray: 3 4; stroke-width: 1.2; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 28px; margin-top: 20px; font-size: 14px; line-height: 1.55; }
+.notes div { min-width: 0; }
+.notes b { display: block; margin-bottom: 2px; }
+.key { display: inline-block; width: 22px; height: 12px; border: 2.5px solid var(--write); border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+
+.done rect { stroke-width: 2.5; stroke: var(--done); }
+.wait rect { stroke-dasharray: 5 4; } .wait { opacity: .6; }
+.run rect { stroke-width: 3; }
+.st { font: 700 13px var(--sans); }
+.done .st { fill: var(--done); } .run .st { fill: var(--verify-s); } .wait .st { fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 14px; font-size: 14px; line-height: 1.45; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.sw { flex: none; width: 22px; height: 14px; border: 2.5px solid; border-radius: 3px; }
+.colh { font: 600 14px var(--sans); fill: var(--muted); }
+.colline { stroke: var(--line); stroke-dasharray: 2 6; }
+</style>
+<style>.n .tag rect{stroke:none}.n .tag text{font:600 11px var(--sans);fill:var(--node)}.n .ag rect{stroke:none}.n .ag .bg{fill:var(--node);stroke:var(--line);stroke-width:1}.n .ag text{font:700 12px var(--sans)}.n .ag.claude text{fill:#d97757}.n .ag.codex text{fill:var(--fg)}.n .ag .ef{font:600 10px var(--sans);fill:var(--muted)}</style>
+<h1>샘플 기능 — 작업 DAG (스윔레인)</h1>
+<p class="sub"><b>샘플:</b> 레인 = 팀, 열 = 순서. <b>같은 열 = 병렬</b>. 화살표 = 선행 의존. 가로로 스크롤해서 보세요.</p>
+<div class="legend"><span><i class="sw" style="border-color:var(--plan-s);background:var(--plan)"></i>기획 — 무엇을 할지 정함(브리프·계획·백로그 분해) (기획 팀)</span><span><i class="sw" style="border-color:var(--dev-s);background:var(--dev)"></i>제작 — 산출물을 만듦(코드·문구·연출·3D) (개발 팀)</span><span><i class="sw" style="border-color:var(--verify-s);background:var(--verify)"></i>검증 — 만든 것을 확인(리뷰·QA·실측) (검증 팀)</span><span><i class="sw" style="border-color:var(--coord-s);background:var(--coord)"></i>조정 — Run 관리·사용자 승인 (코디네이터)</span><span><i class="sw" style="border-color:var(--harness-s);background:var(--harness)"></i>하네스 — 회고·스킬·규칙 개선 (하네스 팀)</span><span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX), 모델은 마우스 오버</span><span><i class="sw" style="border-color:var(--done);background:var(--node)"></i>완료 = 녹색 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node)"></i>진행 = 레인 색 굵은 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node);border-style:dashed;opacity:.6"></i>대기 = 점선·흐림</span></div>
+<div class="scroll"><svg viewBox="0 0 2420 910" style="width:2420px;height:910px" role="img" aria-label="같은 열은 병렬: PM 뒤 T1∥T2, T3∥T5∥ADR, T4∥T6∥T7, T8, 검증 3종 병렬, 수정, 보고, 회고 순.">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<text class="colh" x="265" y="26" text-anchor="middle">BL 정리</text><text class="colh" x="515" y="26" text-anchor="middle">웨이브 ①</text><line class="colline" x1="390" y1="40" x2="390" y2="900"/><text class="colh" x="765" y="26" text-anchor="middle">웨이브 ②</text><line class="colline" x1="640" y1="40" x2="640" y2="900"/><text class="colh" x="1015" y="26" text-anchor="middle">웨이브 ③</text><line class="colline" x1="890" y1="40" x2="890" y2="900"/><text class="colh" x="1265" y="26" text-anchor="middle">웨이브 ④</text><line class="colline" x1="1140" y1="40" x2="1140" y2="900"/><text class="colh" x="1515" y="26" text-anchor="middle">검증 (병렬)</text><line class="colline" x1="1390" y1="40" x2="1390" y2="900"/><text class="colh" x="1765" y="26" text-anchor="middle">수정</text><line class="colline" x1="1640" y1="40" x2="1640" y2="900"/><text class="colh" x="2015" y="26" text-anchor="middle">보고</text><line class="colline" x1="1890" y1="40" x2="1890" y2="900"/><text class="colh" x="2265" y="26" text-anchor="middle">회고</text><line class="colline" x1="2140" y1="40" x2="2140" y2="900"/>
+<g transform="translate(0,40)">
+<rect class="band" x="0" y="0" width="2420" height="100" fill="var(--plan)"/><rect class="band" x="0" y="110" width="2420" height="260" fill="var(--dev)"/><rect class="band" x="0" y="380" width="2420" height="260" fill="var(--verify)"/><rect class="band" x="0" y="650" width="2420" height="100" fill="var(--coord)"/><rect class="band" x="0" y="760" width="2420" height="100" fill="var(--harness)"/>
+<text class="lane-t" x="16" y="30">기획 팀</text><text class="lane-r" x="16" y="52">product-manager</text>
+<text class="lane-t" x="16" y="140">개발 팀</text><text class="lane-r" x="16" y="162">developer</text><text class="lane-r" x="16" y="182">· 리드 경유</text>
+<text class="lane-t" x="16" y="410">검증 팀</text><text class="lane-r" x="16" y="432">DR · CR · QA</text>
+<text class="lane-t" x="16" y="680">코디네이터</text>
+<text class="lane-t" x="16" y="790">하네스 팀</text>
+<rect class="grp" x="1410" y="390" width="210" height="236" rx="6" style="stroke:var(--verify-s)"/>
+<path class="e" marker-end="url(#ah)" d="M360 48 C389 48 389 198 418 198"/>
+<path class="e" marker-end="url(#ah)" d="M360 48 C389 48 389 278 418 278"/>
+<path class="e" marker-end="url(#ah)" d="M360 48 L640 48 L668 48"/>
+<path class="e" marker-end="url(#ah)" d="M610 198 C639 198 639 198 668 198"/>
+<path class="e" marker-end="url(#ah)" d="M610 198 C639 198 639 278 668 278"/>
+<path class="e" marker-end="url(#ah)" d="M610 278 C639 278 639 278 668 278"/>
+<path class="e" marker-end="url(#ah)" d="M860 198 C889 198 889 158 918 158"/>
+<path class="e" marker-end="url(#ah)" d="M860 278 C889 278 889 238 918 238"/>
+<path class="e" marker-end="url(#ah)" d="M860 278 C889 278 889 318 918 318"/>
+<path class="e" marker-end="url(#ah)" d="M1110 158 C1139 158 1139 238 1168 238"/>
+<path class="e" marker-end="url(#ah)" d="M1110 238 C1139 238 1139 238 1168 238"/>
+<path class="e" marker-end="url(#ah)" d="M1110 318 C1139 318 1139 238 1168 238"/>
+<path class="e" marker-end="url(#ah)" d="M1360 238 C1389 238 1389 428 1418 428"/>
+<path class="e" marker-end="url(#ah)" d="M1360 238 C1389 238 1389 508 1418 508"/>
+<path class="e" marker-end="url(#ah)" d="M1360 238 C1389 238 1389 588 1418 588"/>
+<path class="e" marker-end="url(#ah)" d="M2110 698 C2139 698 2139 808 2168 808"/>
+<path class="e" marker-end="url(#ah)" d="M1620 449 C1644 449 1644 238 1668 238"/><text class="el" x="1638" y="343.5" text-anchor="end">High 이상</text>
+<path class="e loop" marker-end="url(#ah)" d="M1765 266 L1765 508 L1624 508"/><text class="el" x="1773" y="387">재검</text>
+<path class="e" marker-end="url(#ah)" d="M1620 567 L1890 567 L1890 698 L1918 698"/><text class="el" x="1898" y="632.5">High 0</text>
+<path class="e" marker-end="url(#ah)" d="M860 48 L2015 48 L2015 668"/><text class="el" x="2023" y="358">ADR 합류</text>
+<g class="n plan done"><rect x="170" y="20" width="190" height="56" rx="6"/><text class="t" x="182" y="43">BL 정리</text><text class="s" x="182" y="65">BL-0001~0012</text><text class="st" x="350" y="43" text-anchor="end">✓ 완료</text><g class="ag claude"><title>Claude · opus · effort medium</title><rect class="bg" x="304" y="68" width="50" height="16" rx="3"/><text x="315" y="80" text-anchor="middle">✳</text><text class="ef" x="338" y="80" text-anchor="middle">M</text></g></g>
+<g class="n plan done"><rect x="670" y="20" width="190" height="56" rx="6"/><text class="t" x="682" y="43">ADR-001</text><text class="s" x="682" y="65">샘플 결정 기록</text><text class="st" x="850" y="43" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(670 20) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--plan-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n dev done"><rect x="420" y="170" width="190" height="56" rx="6"/><text class="t" x="432" y="193">T1</text><text class="s" x="432" y="215">샘플 작업 A</text><text class="st" x="600" y="193" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(420 170) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-0001</text></g><g class="ag claude"><title>Claude · opus · effort high</title><rect class="bg" x="554" y="218" width="50" height="16" rx="3"/><text x="565" y="230" text-anchor="middle">✳</text><text class="ef" x="588" y="230" text-anchor="middle">H</text></g></g>
+<g class="n dev done"><rect x="420" y="250" width="190" height="56" rx="6"/><text class="t" x="432" y="273">T2</text><text class="s" x="432" y="295">샘플 작업 B</text><text class="st" x="600" y="273" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(420 250) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-0002</text></g><g class="ag codex"><title>Codex · gpt-6.1-sol · effort medium</title><rect class="bg" x="554" y="298" width="50" height="16" rx="3"/><text x="565" y="310" text-anchor="middle">◎</text><text class="ef" x="588" y="310" text-anchor="middle">M</text></g></g>
+<g class="n dev write done"><rect x="670" y="170" width="190" height="56" rx="6"/><text class="t" x="682" y="193">T3</text><text class="s" x="682" y="215">샘플 쓰기 작업 A</text><text class="st" x="850" y="193" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(670 170) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-0012</text></g></g>
+<g class="n dev done"><rect x="670" y="250" width="190" height="56" rx="6"/><text class="t" x="682" y="273">T5</text><text class="s" x="682" y="295">샘플 작업 C</text><text class="st" x="850" y="273" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(670 250) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n dev write done"><rect x="920" y="130" width="190" height="56" rx="6"/><text class="t" x="932" y="153">T4</text><text class="s" x="932" y="175">샘플 쓰기 작업 B</text><text class="st" x="1100" y="153" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(920 130) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n dev done"><rect x="920" y="210" width="190" height="56" rx="6"/><text class="t" x="932" y="233">T6</text><text class="s" x="932" y="255">샘플 작업 D</text><text class="st" x="1100" y="233" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(920 210) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n dev done"><rect x="920" y="290" width="190" height="56" rx="6"/><text class="t" x="932" y="313">T7</text><text class="s" x="932" y="335">샘플 작업 E</text><text class="st" x="1100" y="313" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(920 290) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n dev done"><rect x="1170" y="210" width="190" height="56" rx="6"/><text class="t" x="1182" y="233">T8</text><text class="s" x="1182" y="255">샘플 통합</text><text class="st" x="1350" y="233" text-anchor="end">✓ 완료</text><g class="tag" transform="translate(1170 210) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--dev-s)"/><text x="0" y="4" text-anchor="middle">BL-####</text></g></g>
+<g class="n verify run"><rect x="1420" y="400" width="190" height="56" rx="6"/><text class="t" x="1432" y="423">디자인 리뷰</text><text class="s" x="1432" y="445">BL-0002~0012</text><text class="st" x="1600" y="423" text-anchor="end">▶ 진행</text></g>
+<g class="n verify done"><rect x="1420" y="480" width="190" height="56" rx="6"/><text class="t" x="1432" y="503">코드 리뷰</text><text class="s" x="1432" y="525">High 3 · 수정 요청</text><text class="st" x="1600" y="503" text-anchor="end">✓ 완료</text><g class="ag claude"><title>Claude · opus · effort medium</title><rect class="bg" x="1554" y="528" width="50" height="16" rx="3"/><text x="1565" y="540" text-anchor="middle">✳</text><text class="ef" x="1588" y="540" text-anchor="middle">M</text></g></g>
+<g class="n verify run"><rect x="1420" y="560" width="190" height="56" rx="6"/><text class="t" x="1432" y="583">QA</text><text class="s" x="1432" y="605">실제 쓰기 없음</text><text class="st" x="1600" y="583" text-anchor="end">▶ 진행</text><g class="ag claude"><title>Claude · opus · effort medium</title><rect class="bg" x="1554" y="608" width="50" height="16" rx="3"/><text x="1565" y="620" text-anchor="middle">✳</text><text class="ef" x="1588" y="620" text-anchor="middle">M</text></g></g>
+<g class="n dev wait"><rect x="1670" y="210" width="190" height="56" rx="6"/><text class="t" x="1682" y="233">수정 루프</text><text class="s" x="1682" y="255">같은 BL · ≤2회</text><text class="st" x="1850" y="233" text-anchor="end">대기</text></g>
+<g class="n coord wait"><rect x="1920" y="670" width="190" height="56" rx="6"/><text class="t" x="1932" y="693">보고·정산</text><text class="s" x="1932" y="715">전체 테스트 1회</text><text class="st" x="2100" y="693" text-anchor="end">대기</text></g>
+<g class="n harness wait"><rect x="2170" y="780" width="190" height="56" rx="6"/><text class="t" x="2182" y="803">회고</text><text class="s" x="2182" y="825">07_harness.md</text><text class="st" x="2350" y="803" text-anchor="end">대기</text><g class="tag" transform="translate(2170 780) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--harness-s)"/><text x="0" y="4" text-anchor="middle">BL-0012</text></g></g>
+</g></svg></div>
+<div class="notes">
+<div><b>같은 열은 동시에</b>웨이브 ①은 T1∥T2, ②는 T3∥T5(ADR-001도 같이), ③은 T4∥T6∥T7, 검증은 디자인·코드 리뷰·QA를 동시에 돌립니다.</div>
+<div><b><span class="key"></span>쓰기 경로</b>빨간 테두리(T3·T4)만 쓰기 레이어를 건드립니다.</div>
+<div><b>지금</b>코드 리뷰 끝(High 3 → 수정 요청). 디자인 리뷰·QA 진행 중. 셋이 끝나면 High를 모아 수정 루프로 갑니다.</div>
+<div><b>QA의 실제 쓰기</b>QA는 확인 창의 취소까지만 실측합니다. 실제 쓰기는 사용자가 대상을 정해 승인할 때만.</div>
+</div>

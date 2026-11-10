@@ -1,0 +1,12 @@
+{
+  "name": "orca-teamagent",
+  "owner": { "name": "Hans Koh" },
+  "description": "Orca 기반 멀티 에이전트 하네스 키트의 로컬 마켓플레이스",
+  "plugins": [
+    {
+      "name": "orca-teamagent-harness-kit",
+      "source": "./",
+      "description": "Orca 기반 멀티 에이전트 하네스 틀과 세팅 스킬"
+    }
+  ]
+}
