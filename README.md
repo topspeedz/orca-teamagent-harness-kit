@@ -1,231 +1,231 @@
 # orca-teamagent-harness-kit
 
-**Orca 위에서 여러 AI 에이전트를 팀으로 굴리는 하네스를, 새 프로젝트에 한 번에 까는 Claude Code 플러그인.**
+**Orca 기반 멀티 에이전트 하네스를 새 프로젝트에 한 번에 설치하는 Claude Code 플러그인.**
 
-창구, 코디네이터, 팀장, 팀원의 계층과 그 계층이 지킬 규칙(대기, 승인, 모델 배정, 검증, 문서)을 스킬, 훅, 스크립트, 양식으로 묶었다. 플러그인은 세팅 스킬 `setup` 하나만 내놓고, 프로젝트에 깔리는 파일은 `template/` 아래에 프로젝트 안의 경로 그대로 들어 있다.
+창구, 코디네이터, 팀장, 팀원으로 이어지는 역할 계층과 그 계층이 따르는 규칙(대기, 승인, 모델 배정, 검증, 문서화)을 skill, hook, 스크립트, 템플릿으로 패키징했다. 플러그인이 제공하는 skill은 `setup` 하나이고, 프로젝트에 설치되는 파일은 `template/` 아래에 대상 프로젝트와 같은 경로 구조로 들어 있다.
 
 ```
 사용자
   │
-창구 (사용자 세션)            설문과 승인, 요청 분류, 최종 보고
-  ├── planner                설계서와 계획서, DAG
-  └── 코디네이터 (별도 터미널)  워커 기동, 보고 정산, 장부 갱신, 커밋과 PR
+창구 (사용자 세션)            요구사항 인터뷰와 승인, 요청 분류, 최종 보고
+  ├── planner                설계 문서와 구현 계획, DAG
+  └── 코디네이터 (별도 터미널)  워커 실행, 결과 수집, ledger 갱신, commit과 PR
         ├── 팀장 ── 팀원 ×N
         ├── 팀장 ── 팀원 ×N
         └── 검증 팀장 ── QA, 코드 리뷰
 ```
 
-## 빠른 시작
+## Quick Start
 
 ```sh
 # 1. 플러그인 설치
 claude plugin marketplace add topspeedz/orca-teamagent-harness-kit
 claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
-# 2. 하네스를 깔 프로젝트의 루트에서 Claude Code를 열고
+# 2. 대상 프로젝트의 루트에서 Claude Code를 열고 실행
 /orca-teamagent-harness-kit:setup
 ```
 
-세팅이 끝나면 팀을 하나 추가하고([팀을 추가하는 방법](#팀을-추가하는-방법)) 창구 세션에 일을 요청한다.
+설치가 끝나면 팀을 하나 추가하고([팀 추가](#팀-추가)) 창구 세션에 작업을 요청한다.
 
 ## 특징
 
-**역할 계층과 규모별 경로**
+**역할 계층과 요청 규모별 라우팅**
 
-- 계층은 코디네이터 아래 두 단까지다. 팀원은 워커를 띄우지 않고, 워커는 커밋하지 않는다.
-- 요청의 크기에 따라 경로가 갈린다. 작은 수정은 창구가 직접 하고, Task 1~2개는 코디네이터가 워커를 바로 띄우고, 3개 이상이면 팀장을 세우고, 요구사항이 흐릿한 큰 작업은 설문부터 시작한다.
+- 계층은 코디네이터 아래 두 단계까지다. 팀원은 워커를 실행하지 않고, 워커는 commit하지 않는다.
+- 요청 규모에 따라 처리 경로가 달라진다. 작은 수정은 창구가 직접 처리하고, Task 1~2개는 코디네이터가 워커를 바로 실행하고, 3개 이상이면 팀장을 두고, 요구사항이 불명확한 큰 작업은 요구사항 인터뷰부터 시작한다.
 
-**한 phase의 정해진 흐름**
+**정해진 phase 워크플로**
 
 ```
-1 설문 → 2 설계 ✋ → 3 계획 ✋ → 4 백로그 반영 → 5 실행 → 6 완료 처리 → 7 하네스 회고 → 8 커밋과 PR ✋
+1 요구사항 인터뷰 → 2 설계 ✋ → 3 계획 ✋ → 4 백로그 반영 → 5 실행 → 6 완료 처리 → 7 하네스 회고 → 8 commit과 PR ✋
 ```
 
-- ✋는 사용자 승인이다. 설계와 계획 승인 때는 DAG 스윔레인과 워터폴 타임라인 그림을 함께 보여 준다.
-- 설계서와 계획서는 superpowers의 `brainstorming`, `writing-plans` 형식으로 planner가 쓴다.
-- 회고는 생략하지 않는다. 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다.
+- ✋는 사용자 승인 단계다. 설계와 계획을 승인받을 때는 DAG Swimlane 다이어그램과 Waterfall 다이어그램을 함께 제시한다.
+- 설계 문서와 구현 계획은 planner가 superpowers의 `brainstorming`, `writing-plans` 형식으로 작성한다.
+- 회고는 생략하지 않는다. 변경할 근거가 없으면 측정 결과와 "변경 없음"만 기록한다.
 
-**처음부터 들어 있는 공통 역할**
+**기본 제공 역할**
 
-| 팀 | 에이전트 | 맡는 일 |
+| 팀 | 에이전트 | 담당 |
 | --- | --- | --- |
-| (공용) | `planner` | 설계서, 계획서, DAG |
+| (공용) | `planner` | 설계 문서, 구현 계획, DAG |
 | 기획 | `product-manager` | 백로그, 수락 기준, 완료 처리 |
-| 검증 | `qa-inspector` | 실행해서 찾는 검증 |
-| 검증 | `code-reviewer` | 읽어서 찾는 검증 (읽기 전용) |
-| 하네스 | `harness-engineer` | phase 끝의 회고와 하네스 개선 |
+| 검증 | `qa-inspector` | 실행 기반 검증 |
+| 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
+| 하네스 | `harness-engineer` | phase 종료 시 회고와 하네스 개선 |
 
-개발, 디자인 같은 도메인 팀은 넣지 않았다. 양식으로 직접 추가한다.
+개발, 디자인 같은 도메인 팀은 포함하지 않는다. 템플릿으로 직접 추가한다.
 
-**규칙을 지키게 하는 훅과 스크립트**
+**규칙을 강제하는 hook과 스크립트**
 
-| 장치 | 하는 일 |
+| 구성 요소 | 역할 |
 | --- | --- |
-| `approval-gate` 훅 | 사람 승인이 필요한 명령(배포, push 등)을 승인 없이 도는 세션에서 거부하고 `ask`로 올리게 한다. 강제 push는 `permissions.deny`가 어느 세션에서도 막는다 |
-| `orca-wait-gate` 훅 | 대기 계약을 어긴 `check --wait`(셸 `&`로 띄운 것, `--timeout-ms`나 `--types`가 빠진 것)를 거부한다 |
-| `compact-gate` 훅 | 코디네이터가 도구를 잇달아 쓰는 중이면 자동 압축을 다음 턴 경계로 미룬다 |
-| `worker-intake-context` 훅 | 워커가 시작할 때 워커 쪽 규칙을 주입한다 |
-| `orca-launch.mjs` | 모델 표를 조회해 워커를 띄우고, 탭 이름을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 붙인다 |
-| `model-selection.mjs` | 모델 표의 형식을 검사한다 (없는 에이전트, 중복 줄, 쓸 수 없는 조합) |
-| `report-check.mjs` | 워커 리포트의 `## 검증` 절을 판정한다 |
-| `wait-contract-check.mjs` | 세 스킬에 들어간 대기 계약이 정본과 같은지 대조한다 |
-| `coordinator-settings.mjs` | 남길 목록을 읽어 코디네이터 전용 설정을 만든다 |
+| `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 `permissions.deny`로 모든 세션에서 차단한다 |
+| `orca-wait-gate` hook | 대기 규약을 위반한 `check --wait`(셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것)를 차단한다 |
+| `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
+| `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
+| `orca-launch.mjs` | 모델 배정표를 조회해 워커를 실행하고, 탭 제목을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 설정한다 |
+| `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
+| `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정한다 |
+| `wait-contract-check.mjs` | 세 skill에 포함된 대기 규약이 원본과 일치하는지 비교한다 |
+| `coordinator-settings.mjs` | allowlist를 읽어 코디네이터 전용 설정 파일을 생성한다 |
 
-모든 스크립트와 훅은 Node 내장 모듈만 쓰고, 각자 셀프테스트(`*.check.mjs`)를 갖는다.
+모든 스크립트와 hook은 Node 내장 모듈만 사용하고, 각각 self-test(`*.check.mjs`)를 갖는다.
 
 ## 특장점
 
-**코디네이터의 토큰을 아낀다**
+**코디네이터의 토큰 사용량을 줄인다**
 
-- 코디네이터는 플러그인과 스킬을 최소로 켠 전용 설정으로 뜬다. 남길 것은 `.claude/coordinator.keep.json`에서 사용자가 직접 고른다.
-- 코디네이터는 heartbeat마다 깨지 않는다. 대기는 백그라운드로 한 번만 걸고, 대기 계약 5줄과 훅이 이를 지키게 한다.
-- 코디네이터는 워커의 리포트 전문을 읽지 않고 워커의 검사도 다시 돌리지 않는다. 리포트 판정 스크립트의 결과만 본다.
-- 코디네이터는 계획 승인 뒤에 새 세션으로 뜬다. 설계 단계의 스킬이 컨텍스트에 남지 않는다.
+- 코디네이터는 플러그인과 skill을 최소로 활성화한 전용 설정으로 실행된다. 활성화할 항목은 `.claude/coordinator.keep.json`에서 사용자가 직접 지정한다.
+- 코디네이터는 heartbeat마다 깨어나지 않는다. 대기는 백그라운드 작업 하나로만 걸고, 대기 규약 5줄과 hook이 이를 강제한다.
+- 코디네이터는 워커 리포트의 전문을 읽지 않고 워커의 테스트를 다시 실행하지도 않는다. 리포트 판정 스크립트의 결과만 확인한다.
+- 코디네이터는 계획 승인 후 새 세션으로 실행된다. 설계 단계에서 로드한 skill이 컨텍스트에 남지 않는다.
 
-**모델과 effort를 표 하나로 직접 설계한다**
+**모델과 effort를 표 하나로 관리한다**
 
-- 에이전트와 작업 단위마다 한 줄을 `docs/harness/model-selection.md`에 적는다. planner는 model을 고르지 않고 작업 단위만 붙인다.
-- 기동 스크립트가 spec의 배정 줄, 표, 넘긴 인자를 대조하고 서로 다르면 기동을 거부한다. 예외는 사용자의 지시 원문을 사유로 남길 때만 통한다.
+- 에이전트와 작업 유형마다 한 행을 `docs/harness/model-selection.md`에 정의한다. planner는 모델을 고르지 않고 작업 유형만 지정한다.
+- 실행 스크립트가 spec의 배정 행, 배정표, 전달된 인자를 비교하고 불일치하면 실행을 거부한다. 예외는 사용자의 지시 원문을 사유로 기록할 때만 허용된다.
 
 **검증이 수렴한다**
 
-- 고치는 것은 High와 완료 기준 미달뿐이다. Medium 이하는 인박스로 보낸다.
-- 재검은 그 결함의 재현 확인만 한다. 수정 루프는 최대 2회이고, 그 뒤에도 High가 남으면 멈추고 사용자에게 보고한다.
-- 구현한 에이전트가 자기 결과를 승인하지 않는다. 구현 Task는 테스트를 먼저 쓴다.
+- 수정 대상은 High와 완료 기준 미달뿐이다. Medium 이하는 인박스로 넘긴다.
+- 재검증은 해당 결함의 재현 여부만 확인한다. fix loop는 최대 2회이고, 그 뒤에도 High가 남으면 중단하고 사용자에게 보고한다.
+- 구현한 에이전트가 자신의 결과를 승인하지 않는다. 구현 Task는 테스트를 먼저 작성한다(TDD).
 
-**승인이 뚫리지 않는다**
+**승인 절차를 우회할 수 없다**
 
-- 대화형 세션에서는 `permissions.ask`가 묻고, 승인 없이 도는 세션에서는 훅이 거부한다. 권한 모드와 상관없이 두 겹으로 걸린다.
-- 틀은 사용자 대신 팀이나 모델을 정하지 않는다. 결정이 필요하면 문서의 "사용자 결정 필요" 목록으로 올린다.
+- 대화형 세션에서는 `permissions.ask`가 확인을 요청하고, 비대화형 세션에서는 hook이 차단한다. 권한 모드와 무관하게 이중으로 적용된다.
+- 템플릿은 사용자 대신 팀이나 모델을 결정하지 않는다. 결정이 필요하면 문서의 "사용자 결정 필요" 목록으로 넘긴다.
 
-**문서가 불어나지 않는다**
+**문서가 무분별하게 늘어나지 않는다**
 
-- 작업 폴더는 `_workspace/<팀>/<phase>/`이고 git에 올리지 않는다. 파일 이름은 `NN_<에이전트>_<산출물>_v1.md` 한 가지 형식이다.
-- 같은 규칙을 두 곳에 적지 않는다. 대기 계약, 모델 표, 팀 명단은 각각 정본 파일이 하나다.
+- 작업 디렉터리는 `_workspace/<팀>/<phase>/`이고 `.gitignore`로 제외한다. 파일 이름은 `NN_<에이전트>_<산출물>_v1.md` 형식 하나로 통일한다.
+- 같은 규칙을 두 곳에 두지 않는다. 대기 규약, 모델 배정표, 팀 구성표는 각각 단일 원본(single source of truth) 파일을 갖는다.
 
-**Claude와 Codex를 함께 쓴다**
+**Claude와 Codex를 함께 사용한다**
 
-- 공통 규칙은 `AGENTS.md` 하나에 둔다. `CLAUDE.md`는 `@AGENTS.md`를 가리키고, Codex 쪽 스킬은 Claude 쪽 원본을 가리키는 포인터다.
-- Codex를 쓰지 않으면 세팅할 때 Codex 부분을 깔지 않는다.
+- 공통 규칙은 `AGENTS.md` 하나에 둔다. `CLAUDE.md`는 `@AGENTS.md`를 import하고, Codex용 skill은 Claude용 원본을 참조하는 포인터다.
+- Codex를 사용하지 않으면 설치할 때 Codex 관련 파일을 제외한다.
 
-**다시 실행해도 안전하다**
+**재실행해도 안전하다 (idempotent)**
 
-- 세팅 스킬은 같은 내용은 건너뛰고, 내용이 다른 기존 파일은 차이를 보여 준 뒤 승인받은 것만 덮어쓴다. 깐 뒤에 사용자가 고친 파일도 덮어쓰지 않는다.
-- `.claude/settings.json`과 `.gitignore`는 항목만 더한다.
+- `setup` skill은 내용이 같은 파일은 건너뛰고, 내용이 다른 기존 파일은 diff를 보여 준 뒤 승인받은 파일만 덮어쓴다. 설치 후 사용자가 수정한 파일도 덮어쓰지 않는다.
+- `.claude/settings.json`과 `.gitignore`는 덮어쓰지 않고 항목만 병합한다.
 
 ## 환경 구성
 
 | 항목 | 내용 |
 | --- | --- |
-| Orca | CLI 1.4.255에서 실측했다. 실행 절차의 정본은 `orca skills get orchestration`의 가이드다 |
-| Claude Code | 플러그인 설치와 세팅 스킬 실행에 쓴다 |
-| superpowers 플러그인 | `brainstorming`, `writing-plans` 스킬이 있어야 한다 |
-| Node | 스크립트와 훅을 돌린다. 따로 설치할 패키지는 없다 |
-| git | 대상 프로젝트가 git 저장소가 아니면 세팅 스킬이 알리고 계속할지 묻는다 |
-| 운영 체제 | Windows와 Git Bash에서만 검증했다 |
-| Codex | 함께 쓸 때만 필요하다. 세팅할 때 고른다 |
+| Orca | CLI 1.4.255에서 테스트했다. 실행 절차의 기준 문서는 `orca skills get orchestration`의 가이드다 |
+| Claude Code | 플러그인 설치와 `setup` skill 실행에 사용한다 |
+| superpowers 플러그인 | `brainstorming`, `writing-plans` skill이 필요하다 |
+| Node | 스크립트와 hook을 실행한다. 추가로 설치할 패키지는 없다 |
+| git | 대상 프로젝트가 git 저장소가 아니면 `setup` skill이 알리고 계속할지 확인한다 |
+| OS | Windows와 Git Bash에서만 테스트했다 |
+| Codex | 함께 사용할 때만 필요하다. 설치할 때 선택한다 |
 
-- 코디네이터는 100만 토큰 창 모델(`opus[1m]`)로 띄우는 것을 기본으로 한다. 압축 시작점 350,000과 상한 500,000이 이 창을 전제로 한다.
-- `worker-start`로 뜨는 워커의 권한 모드는 명령 옵션으로 정할 수 없고 Orca의 "새 에이전트 탭" 설정을 따른다.
-- 세팅 스킬은 빠진 전제를 알리기만 하고 대신 설치하지 않는다.
+- 코디네이터는 1M 컨텍스트 윈도우 모델(`opus[1m]`)로 실행하는 것이 기본값이다. 컨텍스트 압축 시작점 350,000과 상한 500,000이 이 윈도우를 전제로 한다.
+- `worker-start`로 실행되는 워커의 권한 모드는 명령 옵션으로 지정할 수 없고 Orca의 "새 에이전트 탭" 설정을 따른다.
+- `setup` skill은 누락된 요구 사항을 알리기만 하고 대신 설치하지 않는다.
 
 ## 설치
 
-GitHub에서 바로 설치한다.
+GitHub 저장소를 marketplace로 등록해 설치한다.
 
 ```sh
 claude plugin marketplace add topspeedz/orca-teamagent-harness-kit
 claude plugin install orca-teamagent-harness-kit@orca-teamagent
 ```
 
-또는 저장소를 받아 로컬 폴더를 마켓플레이스로 등록한다. 검증은 이 방식으로만 했다.
+또는 저장소를 clone해 로컬 디렉터리를 marketplace로 등록한다. 테스트는 이 방식으로만 했다.
 
 ```sh
 git clone https://github.com/topspeedz/orca-teamagent-harness-kit.git
-claude plugin marketplace add "<받은 폴더의 경로>"
+claude plugin marketplace add "<clone한 디렉터리 경로>"
 claude plugin install orca-teamagent-harness-kit@orca-teamagent
 ```
 
 ## 사용법
 
-### 1. 세팅 스킬 실행
+### 1. `setup` skill 실행
 
-하네스를 깔 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). 스킬은 여섯 단계로 진행한다.
+대상 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). skill은 여섯 단계로 진행된다.
 
-1. **점검**: git, Orca, Node, superpowers, 전역 그림 스킬, Codex, 이미 있는 지침 파일을 확인한다.
-2. **질문 다섯 개**: Codex 병용, 사람 승인이 필요한 행위, 코디네이터 터미널의 권한 모드, planner의 모델, 코디네이터에 남길 플러그인과 스킬.
-3. **깔기**: 같은 내용은 건너뛰고, 내용이 다른 기존 파일은 차이를 보여 주고 승인받은 것만 덮어쓴다.
-4. **생성**: 남길 목록 `.claude/coordinator.keep.json`을 고치고 코디네이터 설정을 만든다.
-5. **검증**: 깔린 셀프테스트, 모델 표 검사, 대기 계약 대조를 돌린다.
-6. **보고**: 깔린 것, 건너뛴 것, 실패한 검증, 다음 할 일.
+1. **환경 점검**: git, Orca, Node, superpowers, DAG Swimlane 다이어그램과 Waterfall 다이어그램 skill, Codex, 기존 지침 파일(`AGENTS.md`, `CLAUDE.md`)을 확인한다.
+2. **질문 5개**: Codex 사용 여부, 사용자 승인이 필요한 명령, 코디네이터 터미널의 권한 모드, planner의 모델, 코디네이터에서 활성화할 플러그인과 skill.
+3. **설치**: 내용이 같은 파일은 건너뛰고, 내용이 다른 기존 파일은 diff를 보여 준 뒤 승인받은 파일만 덮어쓴다.
+4. **설정 생성**: allowlist `.claude/coordinator.keep.json`을 수정하고 코디네이터 설정 파일을 생성한다.
+5. **검증**: 설치된 self-test, 모델 배정표 검증, 대기 규약 비교를 실행한다.
+6. **결과 보고**: 설치한 파일, 건너뛴 파일, 실패한 검증, 다음 단계.
 
-다시 실행하면 빠진 것만 채우고 검증을 다시 돌린다. 스크립트를 직접 부를 수도 있다.
+재실행하면 누락된 파일만 추가하고 검증을 다시 실행한다. 스크립트를 직접 호출할 수도 있다.
 
 ```sh
-node "<플러그인 폴더>/skills/setup/scripts/setup.mjs" inspect --target .
-node "<플러그인 폴더>/skills/setup/scripts/setup.mjs" install --target . --answers <답 파일> [--approve <경로,...>]
-node "<플러그인 폴더>/skills/setup/scripts/setup.mjs" verify --target .
+node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" inspect --target .
+node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" install --target . --answers <응답 파일> [--approve <경로,...>]
+node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --target .
 ```
 
-### 2. 프로젝트에 맞게 채우기
+### 2. 프로젝트 설정
 
-- `AGENTS.md`의 "명령"과 "기술 스택"을 채운다. 명령은 실제로 돌려 본 것만 적는다.
-- 모델 표 `docs/harness/model-selection.md`를 손본다. 들어 있는 값은 시작값이다.
-- 팀을 추가한다. 틀에는 구현 팀이 없어서 세팅 직후에는 구현 Task를 돌릴 수 없다.
+- `AGENTS.md`의 "명령"과 "기술 스택" 섹션을 작성한다. 명령은 실제로 실행해 확인한 것만 적는다.
+- 모델 배정표 `docs/harness/model-selection.md`를 조정한다. 들어 있는 값은 기본값이다.
+- 팀을 추가한다. 템플릿에는 구현 팀이 없어서 설치 직후에는 구현 Task를 실행할 수 없다.
 
-### 팀을 추가하는 방법
+### 팀 추가
 
-세팅 스킬은 팀과 에이전트를 만들지 않는다. 팀은 양식 두 개와 명단 하나로 직접 추가한다.
+`setup` skill은 팀과 에이전트를 생성하지 않는다. 팀은 템플릿 두 개와 팀 구성표로 직접 추가한다.
 
-1. 팀 스킬 양식 `docs/harness/templates/team-skill.md`를 `.claude/skills/team-<이름>/SKILL.md`로 복사해 채운다.
-2. 에이전트 양식 `docs/harness/templates/agent.md`를 `.claude/agents/<이름>.md`로 복사해 채운다.
-3. 명단 `docs/harness/team-org.md`에 팀 한 줄을 넣는다.
-4. 모델 표 `docs/harness/model-selection.md`에 새 에이전트의 줄을 넣고 `node .claude/scripts/model-selection.mjs check`로 확인한다.
+1. 팀 skill 템플릿 `docs/harness/templates/team-skill.md`를 `.claude/skills/team-<이름>/SKILL.md`로 복사해 작성한다.
+2. 에이전트 템플릿 `docs/harness/templates/agent.md`를 `.claude/agents/<이름>.md`로 복사해 작성한다.
+3. 팀 구성표 `docs/harness/team-org.md`에 팀 한 행을 추가한다.
+4. 모델 배정표 `docs/harness/model-selection.md`에 새 에이전트의 행을 추가하고 `node .claude/scripts/model-selection.mjs check`로 검증한다.
 
-팀이 무엇인지는 명단이, 팀이 어떻게 일하는지는 팀 스킬이 소유한다.
+팀의 정의는 팀 구성표가, 팀의 작업 방식은 팀 skill이 담당한다.
 
-채워진 본보기는 `examples/dev-team`에 있다. 의존성 없는 Node 프로젝트에서 `node --test`로 일하는 `developer` 하나로 된 팀이다. 세팅 스킬은 이 폴더를 깔지 않는다. 쓰려면 그 폴더의 `README.md`에 적힌 순서대로 프로젝트에 직접 넣는다.
+작성된 예제는 `examples/dev-team`에 있다. 의존성 없는 Node 프로젝트에서 `node --test`로 작업하는 `developer` 한 명으로 구성된 팀이다. `setup` skill은 이 디렉터리를 설치하지 않는다. 사용하려면 그 디렉터리의 `README.md`에 적힌 순서대로 프로젝트에 직접 추가한다.
 
-### 3. 일 시키기
+### 3. 작업 요청
 
-창구(평소의 Claude Code 세션)에 요청하면 `AGENTS.md`의 규모별 경로에 따라 갈린다.
+창구(평소의 Claude Code 세션)에 요청하면 `AGENTS.md`의 규모별 라우팅 규칙에 따라 처리된다.
 
-| 요청 | 경로 |
+| 요청 | 처리 경로 |
 | --- | --- |
-| 단순 질문, 한 파일의 작은 수정 | 창구가 직접 한다 |
-| 답이 정해진 작은 작업 (한 팀의 Task 1~2개) | 코디네이터가 팀장 없이 워커를 직접 띄운다 |
-| 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요 | 코디네이터가 팀장을 띄우고, 팀장이 팀원을 띄운다 |
-| 요구사항이 흐릿한 큰 작업 | 설문부터 시작하는 전체 흐름(`plan-orchestrate` 스킬)을 탄다 |
+| 단순 질문, 파일 하나의 작은 수정 | 창구가 직접 처리한다 |
+| 범위가 명확한 작은 작업 (한 팀의 Task 1~2개) | 코디네이터가 팀장 없이 워커를 직접 실행한다 |
+| 한 팀의 Task가 3개 이상이거나 분할에 도메인 판단이 필요 | 코디네이터가 팀장을 실행하고, 팀장이 팀원을 실행한다 |
+| 요구사항이 불명확한 큰 작업 | 요구사항 인터뷰부터 시작하는 전체 워크플로(`plan-orchestrate` skill)를 따른다 |
 
-## 프로젝트에 깔리는 것
+## 설치되는 파일
 
 ```
 AGENTS.md, CLAUDE.md             공통 지침과 라우팅
 .claude/
-  agents/                        공통 에이전트 5개
+  agents/                        기본 에이전트 5개
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
                                  team-product, team-qa, team-harness, dag-swimlane, waterfall-timeline
-  hooks/                         승인, 대기, 압축, 워커 규칙 주입
-  scripts/                       기동, 모델 표, 리포트 판정, 대기 계약 대조, 코디네이터 설정
-  settings.json                  훅 등록과 권한 (기존 파일에는 항목만 더한다)
-  coordinator.keep.json          코디네이터에 남길 플러그인과 스킬
+  hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입
+  scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정
+  settings.json                  hook 등록과 permissions (기존 파일에는 항목만 병합한다)
+  coordinator.keep.json          코디네이터에서 활성화할 플러그인과 skill의 allowlist
 docs/
   backlog.md, backlog-archive.md
-  harness/                       모델 표, 팀 명단, 변경 이력, 양식 8개
-.agents/skills/                  Codex용 포인터 (Codex 병용을 골랐을 때만)
+  harness/                       모델 배정표, 팀 구성표, changelog, 템플릿 8개
+.agents/skills/                  Codex용 포인터 (Codex 사용을 선택했을 때만)
 ```
 
-## 검증하지 않은 환경
+## 테스트하지 않은 환경
 
 - macOS, Linux
-- Git Bash 없이 PowerShell만 쓰는 환경
-- Orca 1.4.255가 아닌 버전
-- 로컬 폴더가 아닌 GitHub 마켓플레이스로 설치한 경우
+- Git Bash 없이 PowerShell만 사용하는 환경
+- Orca 1.4.255 이외의 버전
+- 로컬 디렉터리가 아닌 GitHub marketplace로 설치한 경우
 
-## 키트 개발
+## 개발
 
 ```sh
-claude plugin validate .                                  # 플러그인 매니페스트
-claude plugin validate .claude-plugin/marketplace.json    # 마켓플레이스 매니페스트
+claude plugin validate .                                  # plugin manifest
+claude plugin validate .claude-plugin/marketplace.json    # marketplace manifest
 ```
