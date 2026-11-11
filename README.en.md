@@ -200,7 +200,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ### 1. Run the `setup` skill
 
-Open Claude Code at the root of the target project and run `/orca-teamagent-harness-kit:setup`. The skill runs in seven steps.
+Open Claude Code at the root of the target project and run `/orca-teamagent-harness-kit:setup`. The skill runs in nine steps.
 
 1. **Environment check**: git, Orca, Node, superpowers, the DAG swimlane and waterfall diagram skills, Codex, and existing instruction files (`AGENTS.md`, `CLAUDE.md`).
 2. **Five questions**: whether to use Codex, which commands need user approval, the permission mode of the coordinator terminal, the planner's effort, and which plugins and skills stay enabled for the coordinator.
@@ -208,9 +208,11 @@ Open Claude Code at the root of the target project and run `/orca-teamagent-harn
 4. **Generate settings**: updates the allowlist `.claude/coordinator.keep.json` and generates the coordinator settings file.
 5. **Verify**: runs the installed self-tests, the model assignment table check, and the wait contract check.
 6. **Foundation design**: runs the project's verification commands and records only the passing ones in the instructions, then sets forbidden commands (`permissions.deny`), document routing, and a token baseline.
-7. **Report**: installed files, skipped files, failed checks, foundation design results, and next steps.
+7. **Team composition**: analyzes past session records and existing pipelines, recommends teams and team members with the evidence, then creates the team skills, agents, and role skills the user picks and adds them to the team roster and the model assignment table.
+8. **Model table**: shows every row of the model assignment table on a survey page (Artifact) and writes only the values the user saved.
+9. **Report**: installed files, skipped files, failed checks, foundation design results, teams created, and next steps.
 
-In a project that does not use Orca, only steps 1, 6, and 7 run (the template is not installed).
+In a project that does not use Orca, only steps 1, 6, and 9 run (the template is not installed).
 
 Rerunning it adds only the missing files and runs verification again. You can also call the script directly.
 
@@ -224,11 +226,11 @@ node "<plugin directory>/skills/setup/scripts/setup.mjs" verify --target .
 
 - Fill in the commands and tech stack sections of `AGENTS.md`. List only commands you have actually run.
 - Adjust the model assignment table `docs/harness/model-selection.md`. The values it ships with are defaults.
-- Add a team. The template has no implementation team, so you cannot run implementation tasks right after setup.
+- Teams are composed in step 7 of `setup`. The template has no implementation team, so if you created none in that step you cannot run implementation tasks.
 
 ### Adding a team
 
-The `setup` skill does not create teams or agents. You add a team with two templates and the team roster.
+Step 7 of the `setup` skill analyzes past work, recommends teams, and creates the ones you pick. To add one by hand later, follow these steps.
 
 1. Copy the team skill template `docs/harness/templates/team-skill.md` to `.claude/skills/team-<name>/SKILL.md` and fill it in.
 2. Copy the agent template `docs/harness/templates/agent.md` to `.claude/agents/<name>.md` and fill it in.
