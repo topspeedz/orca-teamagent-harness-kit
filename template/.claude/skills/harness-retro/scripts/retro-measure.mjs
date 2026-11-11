@@ -50,9 +50,16 @@ export function actual(list, wf) {
     return { id: r.id, s, e };
   });
   const t0 = Math.min(...ms.map((r) => r.s));
+  // ready→start: minutes a Task sat startable, from its last dependency's end to its own start. A Task with no
+  // dependency, or with one that was not measured, is left out rather than guessed.
+  const byId = new Map(ms.map((r) => [r.id, r]));
+  const delays = ms.filter((r) => deps[r.id].length && deps[r.id].every((d) => byId.has(d)))
+    .map((r) => ({ id: r.id, min: Math.max(0, r.s - Math.max(...deps[r.id].map((d) => byId.get(d).e))) / 60000 }));
+  const worst = delays.reduce((a, d) => (!a || d.min > a.min ? d : a), null);
   return {
     ...parallel(ms.map((r) => ({ id: r.id, start: (r.s - t0) / 60000, end: (r.e - t0) / 60000 })), deps),
     failed: list.filter((r) => r.status === 'failed').length, skipped: list.length - ms.length,
+    readyDelay: { tasks: delays.length, sum: round2(delays.reduce((a, d) => a + d.min, 0)), max: worst ? round2(worst.min) : 0, at: worst?.id ?? null },
   };
 }
 
@@ -154,6 +161,8 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const l = led.v;
   out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`, `| 재시도 합 | ${l ? l.retries : NA} |`,
     `| 실패 Task | ${act.v ? act.v.failed : NA} |`, `| 질문이 있던 Task | ${l ? l.questions : NA} |`);
+  const rd = act.v?.readyDelay;
+  out.push(`| 준비→기동 지연 합(분) | ${rd ? rd.sum : NA} |`, `| 준비→기동 지연 최대(분) | ${rd ? (rd.at ? `${rd.max} (${rd.at})` : 0) : NA} |`);
   // Coordinator sessions = 20+ orca commands (measure-token-usage rule); workers and leads get the same notices.
   const files = sessionFiles(arg('--sessions'), Number(arg('--days')) || 7);
   const coord = files.map((f) => wakes(readFileSync(f, 'utf8'))).filter((w) => w.orca >= 20);

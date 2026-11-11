@@ -1,6 +1,9 @@
 // Self-test for orca-launch.mjs — no Orca needed. `node .claude/scripts/orca-launch.check.mjs`
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { tabTitle, parseAssignLine, parseOverrideLine, verifyAssignment, workerStartArgs, coordinatorCommand, main } from './orca-launch.mjs';
 import { TABLE_PATH } from './model-selection.mjs';
 import { SETTINGS_PATH, KEEP_PATH } from './coordinator-settings.mjs';
@@ -539,6 +542,18 @@ await ta(async () => {
   const { code, out } = await main(['actual', ...M], f.deps);
   assert.equal(code, 0, JSON.stringify(out));
   assert.deepEqual(out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
+});
+
+// 40. run as a command: outside the project root it refuses before anything else; at the root it runs
+t(() => {
+  const script = fileURLToPath(new URL('./orca-launch.mjs', import.meta.url));
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const away = spawnSync(process.execPath, [script, 'codex-rules'], { cwd: tmpdir(), encoding: 'utf8' });
+  assert.equal(away.status, 1, away.stdout);
+  assert.match(JSON.parse(away.stdout).error, /저장소 루트/);
+  const home = spawnSync(process.execPath, [script, 'codex-rules'], { cwd: root, encoding: 'utf8' });
+  assert.equal(home.status, 0, home.stdout + home.stderr);
+  assert.match(home.stdout, /⑥/);
 });
 
 console.log(`orca-launch.check: ${passed} passed`);

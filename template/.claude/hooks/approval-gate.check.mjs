@@ -22,6 +22,23 @@ assert.ok(decide(bash('git status; git push'), P)?.deny); n++;
 assert.ok(decide(bash('git status\ngit push'), P)?.deny); n++;
 assert.ok(decide(bash('true | git push'), P)?.deny); n++;
 assert.equal(decide(bash('echo "git push"'), P), null); n++;
+// Force push needs a person in every project, whatever the prefix list holds: a worker is denied and told to ask,
+// an interactive mode is left to permissions.ask.
+for (const command of [
+  'git push --force', 'git push -f origin main', 'git push origin main --force', 'git push origin main --force-with-lease',
+  'git push origin main --force-with-lease=main:abc123', 'git push --force-if-includes origin main', 'git push origin +main',
+  'git -C repo push --force', 'cd repo && git push -fu origin main', 'git push "--force"', 'bash -c "git push -f"',
+]) {
+  assert.ok(decide(bash(command), [])?.deny.startsWith('force push'), command); n++;
+  assert.equal(decide(bash(command, 'default'), []), null, command); n++;
+}
+assert.ok(decide(bash('git push --force'), P)?.deny.startsWith('force push'), 'force push wins over the plain prefix'); n++;
+for (const command of ['git push origin main', 'git push origin feature-f', 'echo "git push --force"', 'git commit -m "+1 -f"', 'git status --force', 'git pull --force']) {
+  assert.equal(decide(bash(command), []), null, command); n++;
+}
+// with no project prefix and nothing readable there is still nothing to judge
+assert.equal(decide(null, []), null); n++;
+
 // R1 A-2: the 13 shapes a bypass worker writes in plain shell are all denied.
 for (const command of [
   '(git push)',

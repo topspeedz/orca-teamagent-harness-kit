@@ -389,7 +389,13 @@ const deps = {
 
 // realpath on both sides: run through a junction or symlink, main must still run
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  const { code, out } = await main(process.argv.slice(2), deps);
+  // Every path here is relative to the project root, and the current folder is what Orca gets as the worker's worktree.
+  // A shell that wandered into a subfolder would start workers there, so anywhere but the root is refused.
+  const root = realpathSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..'));
+  const here = realpathSync(process.cwd());
+  const same = process.platform === 'win32' ? here.toLowerCase() === root.toLowerCase() : here === root;
+  const { code, out } = same ? await main(process.argv.slice(2), deps)
+    : fail(`저장소 루트에서 돌린다 — 지금 폴더는 ${here}, 루트는 ${root}`);
   console.log(typeof out === 'string' ? out : JSON.stringify(out));
   process.exitCode = code;
 }

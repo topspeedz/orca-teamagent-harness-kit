@@ -24,6 +24,7 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 수정 루프 횟수 | `ledger.md`의 예산 줄 |
 | 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
 | 실패 Task | `actual.json`의 `status` (Orca의 기록) |
+| 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
 | 작업 폴더의 크기 | `_workspace/` |
 
 ### 명령

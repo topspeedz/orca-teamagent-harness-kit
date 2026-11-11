@@ -45,7 +45,8 @@ export function inspect(target, { run, exists, globalSkillsDir }) {
   };
 }
 
-// Adds only hooks and permissions entries; a hook already registered with the same matcher and command is not added again.
+// Adds only hooks, permissions entries and missing env keys; a hook already registered with the same matcher and command
+// is not added again, and an env value the project already set stays.
 export function mergeSettings(existing, add) {
   const out = structuredClone(existing);
   for (const [event, groups] of Object.entries(add.hooks ?? {})) {
@@ -62,6 +63,7 @@ export function mergeSettings(existing, add) {
     const cur = ((out.permissions ??= {})[key] ??= []);
     for (const v of list) if (!cur.includes(v)) cur.push(v);
   }
+  for (const [k, v] of Object.entries(add.env ?? {})) (out.env ??= {})[k] ??= v;
   return out;
 }
 

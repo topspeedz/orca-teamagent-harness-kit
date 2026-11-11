@@ -87,17 +87,19 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 | 구성 요소 | 역할 |
 | --- | --- |
-| `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 `permissions.deny`로 모든 세션에서 차단한다 |
+| `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 프로젝트 설정과 무관하게 항상 승인 대상이다. 무조건 막지 않고 사용자에게 묻는다 |
 | `orca-wait-gate` hook | 대기 규약을 위반한 `check --wait`(셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것, 다른 명령과 한 줄에 묶어 백그라운드로 건 것)를 차단한다 |
 | `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
 | `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
+| `secret-gate` hook | Playwright MCP 입력에 쿠키, 토큰, 비밀번호가 들어가거나 쿠키를 읽으려 하면 차단한다. 넣은 값이 대화 기록에 남는 것을 막는다 |
 | `orca-launch.mjs` | 모델 배정표를 조회해 워커를 실행하고, 탭 제목을 `[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증` 형식으로 설정한다. 코디네이터가 실행하는 Task를 의존 관계와 함께 Orca에 등록하고, 준비된 Task 조회, 결정 대기 게이트, 판정 실패 처리, 재시도를 하위 명령으로 제공한다 |
 | `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
-| `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정한다 |
+| `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정하고, 그 Task의 산출물 파일이 실제로 있는지 확인한다 |
 | `wait-contract-check.mjs` | 세 skill에 포함된 대기 규약이 원본과 일치하는지 비교한다 |
 | `coordinator-settings.mjs` | allowlist를 읽어 코디네이터 전용 설정 파일을 생성한다 |
+| `browser/launch.cjs`, `browser/probe-fps.cjs` | 화면 캡처, 3D·WebGL 실측, 로그인이 필요한 검증을 Playwright MCP 밖에서 돌리는 런처와 GPU 실측 스크립트. 비밀값은 dotenv 파일에서만 읽고 로그에서 가린다 |
 
-모든 스크립트와 hook은 Node 내장 모듈만 사용하고, 각각 self-test(`*.check.mjs`)를 갖는다.
+스크립트와 hook은 Node 내장 모듈만 사용하고, 각각 self-test(`*.check.mjs`)를 갖는다. 브라우저 런처만 예외로 Playwright를 쓴다(프로젝트에 설치된 것, 없으면 Playwright MCP가 받아 둔 복사본).
 
 ## 특장점
 
@@ -124,8 +126,10 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **검증이 수렴한다**
 
 - 수정 대상은 High와 완료 기준 미달뿐이다. Medium 이하는 인박스로 넘긴다.
-- 재검증은 해당 결함의 재현 여부만 확인한다. fix loop는 최대 2회이고, 그 뒤에도 High가 남으면 중단하고 사용자에게 보고한다.
+- 재검증은 해당 결함의 재현 여부만 확인한다. 재검증 중에 새로 찾은 High도 남은 High로 센다. fix loop는 최대 2회이고, 그 뒤에도 High가 남아 3회째가 필요해지면 중단하고 사용자에게 묻는다.
 - 구현한 에이전트가 자신의 결과를 승인하지 않는다. 구현 Task는 테스트를 먼저 작성한다(TDD).
+- 끝 검증의 QA는 영역별 워커로 동시에 돈다. 브라우저를 쓰는 QA도 같다. `.claude/settings.json`의 `PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS` 두 줄이 워커마다 브라우저를 따로 띄우게 한다.
+- 이 두 줄은 프로젝트의 모든 세션에 적용된다. 직접 여는 세션(창구 포함)에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 연다.
 
 **승인 절차를 우회할 수 없다**
 
@@ -253,9 +257,10 @@ AGENTS.md, CLAUDE.md             공통 지침과 라우팅
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
                                  team-product, team-qa, team-harness, dag-swimlane, waterfall-timeline
-  hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입
-  scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정
-  settings.json                  hook 등록과 permissions (기존 파일에는 항목만 병합한다)
+  hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입, 브라우저 비밀값 차단
+  scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정, 브라우저 런처
+  settings.json                  hook 등록, permissions, 브라우저 병렬용 env 두 줄 (기존 파일에는 항목만 병합한다)
+  front-desk.settings.json       직접 여는 세션에서 그 env 두 줄을 끄는 설정
   coordinator.keep.json          코디네이터에서 활성화할 플러그인과 skill의 allowlist
 docs/
   backlog.md, backlog-archive.md

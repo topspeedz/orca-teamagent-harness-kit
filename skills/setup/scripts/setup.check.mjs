@@ -24,6 +24,7 @@ put(tpl, 'gitignore.add', '_workspace/\n.claude/coordinator.settings.local.json\
 put(tpl, '.claude/settings.json', JSON.stringify({
   hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [hook('orca-wait-gate')] }], UserPromptSubmit: [{ hooks: [hook('worker-intake-context')] }] },
   permissions: { deny: ['Bash(git push --force:*)'], ask: [] },
+  env: { PLAYWRIGHT_MCP_ISOLATED: 'true', PLAYWRIGHT_MCP_HEADLESS: 'true' },
 }, null, 2));
 put(tpl, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
 put(tpl, '.claude/hooks/approval-gate.config.json', '{ "prefixes": [] }\n');
@@ -80,11 +81,21 @@ test('installed self-tests pass when settings.json already has user hooks', () =
   const real = (dir) => fileURLToPath(new URL(`../../../${dir}`, import.meta.url));
   const r = applyInstall(planInstall(real('template'), real('template-codex'), t, ANSWERS, INS), { approve: [] });
   assert.deepEqual(r.conflicts, []);
-  for (const check of ['.claude/hooks/orca-wait-gate.check.mjs', '.claude/scripts/coordinator-settings.check.mjs']) {
+  for (const check of ['.claude/hooks/orca-wait-gate.check.mjs', '.claude/hooks/secret-gate.check.mjs', '.claude/scripts/coordinator-settings.check.mjs']) {
     const run = spawnSync(process.execPath, [join(t, check)], { cwd: t, encoding: 'utf8' });
     assert.equal(run.status, 0, `${check}
 ${run.stdout}${run.stderr}`);
   }
+});
+
+test('template env is installed; a value the user already set is kept', () => {
+  const fresh = target('env-fresh');
+  install(fresh);
+  assert.deepEqual(JSON.parse(read(fresh, '.claude/settings.json')).env, { PLAYWRIGHT_MCP_ISOLATED: 'true', PLAYWRIGHT_MCP_HEADLESS: 'true' });
+  const t = target('env-user');
+  put(t, '.claude/settings.json', JSON.stringify({ env: { PLAYWRIGHT_MCP_HEADLESS: 'false', MINE: '1' } }));
+  install(t);
+  assert.deepEqual(JSON.parse(read(t, '.claude/settings.json')).env, { PLAYWRIGHT_MCP_HEADLESS: 'false', MINE: '1', PLAYWRIGHT_MCP_ISOLATED: 'true' });
 });
 
 // R1 A-8: through the CLI with the real template, so the exit code is the one the setup skill sees

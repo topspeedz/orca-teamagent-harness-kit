@@ -89,17 +89,19 @@ Domain teams such as development or design are not included. You add them from t
 
 | Component | What it does |
 | --- | --- |
-| `approval-gate` hook | Blocks commands that need user approval (deploy, push, and so on) in non-interactive sessions and tells the worker to escalate with `ask`. Force pushes are blocked in every session by `permissions.deny` |
+| `approval-gate` hook | Blocks commands that need user approval (deploy, push, and so on) in non-interactive sessions and tells the worker to escalate with `ask`. A force push always needs approval, whatever the project lists: it is not blocked outright, the user is asked |
 | `orca-wait-gate` hook | Blocks any `check --wait` that violates the wait contract (started with a shell `&`, missing `--timeout-ms` or `--types`, or chained to other commands in one background line) |
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
+| `secret-gate` hook | Blocks Playwright MCP calls that carry cookies, tokens or passwords, or that try to read cookies, so those values never land in the conversation log |
 | `orca-launch.mjs` | Looks up the model assignment table, starts the worker, and sets the tab title in the form `[BL-0012] qa-inspector : opus/medium - verify checkout flow`. It also registers the coordinator's Tasks in Orca with their dependencies, and provides subcommands to list ready Tasks, hold a Task behind a decision gate, handle a failed verdict, and retry |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
-| `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report |
+| `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
 | `wait-contract-check.mjs` | Checks that the wait contract embedded in three skills matches its source file |
 | `coordinator-settings.mjs` | Reads the allowlist and generates the coordinator-only settings file |
+| `browser/launch.cjs`, `browser/probe-fps.cjs` | A launcher and a GPU probe for work that stays outside Playwright MCP: screenshot batches, 3D and WebGL measurement, and checks that need a login. Secrets are read only from a dotenv file and masked in logs |
 
-Every script and hook uses Node built-in modules only and ships with its own self-test (`*.check.mjs`).
+Scripts and hooks use Node built-in modules only and ship with their own self-test (`*.check.mjs`). The browser launcher is the one exception: it uses Playwright (the project's copy, or the one Playwright MCP has already downloaded).
 
 ## Why use it
 
@@ -126,8 +128,10 @@ Every script and hook uses Node built-in modules only and ships with its own sel
 **Verification converges**
 
 - Only High findings and unmet completion criteria get fixed. Medium and below go to the inbox.
-- A recheck only confirms whether that defect still reproduces. The fix loop runs at most twice. If a High finding remains after that, the run stops and reports to the user.
+- A recheck only confirms whether that defect still reproduces. A High finding first seen during a recheck still counts as open. The fix loop runs at most twice. If a High finding remains after that and a third round would be needed, the run stops and asks the user.
 - The agent that implemented a change does not approve it. Implementation tasks write the test first (TDD).
+- End-of-run QA runs as one worker per area, at the same time, and browser QA does too. Two lines in `.claude/settings.json` (`PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS`) give each worker its own browser.
+- Those two lines apply to every session in the project. To use a visible browser that keeps its profile (logins) in a session you open yourself, including the front desk, start it with `claude --settings .claude/front-desk.settings.json`.
 
 **Approval gates cannot be bypassed**
 
@@ -255,10 +259,13 @@ AGENTS.md, CLAUDE.md             shared instructions and routing
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
                                  team-product, team-qa, team-harness, dag-swimlane, waterfall-timeline
-  hooks/                         approval, waiting, context compaction, worker rule injection
+  hooks/                         approval, waiting, context compaction, worker rule injection,
+                                 browser secret blocking
   scripts/                       worker launch, model assignment table, report evaluation,
-                                 wait contract check, coordinator settings
-  settings.json                  hook registration and permissions (merged into an existing file)
+                                 wait contract check, coordinator settings, browser launcher
+  settings.json                  hook registration, permissions, and the two env lines for parallel
+                                 browsers (merged into an existing file)
+  front-desk.settings.json       turns those two env lines off in a session you open yourself
   coordinator.keep.json          allowlist of plugins and skills enabled for the coordinator
 docs/
   backlog.md, backlog-archive.md

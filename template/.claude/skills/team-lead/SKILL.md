@@ -42,11 +42,14 @@ description: "팀장의 절차. Orca Task spec 첫 줄이 `[역할: <에이전�
 
 ## 정산
 
-`worker_done`마다 세 가지를 본다.
+`worker_done`마다 네 가지를 본다.
 
 1. 기대한 Dispatch인가
 2. 리포트 파일이 있는가
-3. `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가
+3. 그 Task의 산출물이 실제로 있는가
+4. 리포트의 검증 절이 통과하는가
+
+3과 4는 한 명령으로 본다: `node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`. 리포트의 ✅는 팀원이 스스로 적은 것이라, 만들지 않은 파일은 이 확인에서만 걸린다.
 
 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 팀원의 검사를 다시 돌리지 않는다.
 

@@ -51,6 +51,18 @@ t('actual: ISO times to minutes, deps from waterfall', () => {
   assert.equal(r.sum, 57); assert.equal(r.critical, 50); assert.equal(r.maxConcurrent, 2); assert.equal(r.elapsed, 50);
 });
 
+t('actual: ready→start delay is the gap between the last dependency ending and the Task starting', () => {
+  // B starts the minute A ends (0), C one minute later (1), D waits 3 minutes after B, its last dependency (3). A has no dependency.
+  const r = actual([
+    { id: 'A', start: at(0), end: at(12) }, { id: 'B', start: at(12), end: at(42) },
+    { id: 'C', start: at(13), end: at(20) }, { id: 'D', start: at(45), end: at(50) },
+  ], wf);
+  assert.deepEqual(r.readyDelay, { tasks: 3, sum: 4, max: 3, at: 'D' });
+  // a dependency that was not measured (not in actual.json) leaves that Task out instead of guessing
+  assert.deepEqual(actual([{ id: 'A', start: at(0), end: at(12) }, { id: 'D', start: at(45), end: at(50) }], wf).readyDelay,
+    { tasks: 0, sum: 0, max: 0, at: null });
+});
+
 t('actual: a Task that is not in the plan (a team Task, a phase step) is left out and counted; end before start throws', () => {
   const r = actual([{ id: 'A', start: at(0), end: at(12) }, { id: 'Z', start: at(0), end: at(1) }], wf);
   assert.equal(r.tasks, 1); assert.equal(r.skipped, 1);
@@ -137,6 +149,14 @@ t('CLI: prints all sections, approximation note, missing inputs as 측정 불가
   assert.match(r.stdout, /수정 루프 \| 1/);
   assert.match(r.stdout, /T3 \| 2 \| 기동 실패/);
   assert.match(r.stdout, /heartbeat만 든 깸의 근사/);
+  assert.match(r.stdout, /\| 준비→기동 지연 합\(분\) \| 측정 불가 \|/);
+  writeFileSync(join(root, 'actual.json'), JSON.stringify([
+    { id: 'A', start: at(0), end: at(12) }, { id: 'B', start: at(12), end: at(42) },
+    { id: 'C', start: at(13), end: at(20) }, { id: 'D', start: at(45), end: at(50) },
+  ]));
+  const withActual = spawnSync(process.execPath, [script, '--waterfall', join(root, 'wf.json'), '--actual', join(root, 'actual.json')], { encoding: 'utf8' });
+  assert.match(withActual.stdout, /\| 준비→기동 지연 합\(분\) \| 4 \|/);
+  assert.match(withActual.stdout, /\| 준비→기동 지연 최대\(분\) \| 3 \(D\) \|/);
   assert.match(r.stdout, /작업 폴더 \| 8 bytes · 2 files/);
 });
 

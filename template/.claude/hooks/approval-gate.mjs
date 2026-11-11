@@ -1,5 +1,6 @@
 // PreToolUse(Bash|PowerShell): commands that need human approval. Interactive modes are asked by permissions.ask;
 // any other mode (bypass etc.) is denied here. Verdict goes to stdout JSON; exit code is always 0.
+// The project's list is approval-gate.config.json `prefixes`; force push is always on it (see FORCE below).
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -79,14 +80,33 @@ function matches(command, prefix) {
   });
 }
 
+// Force push is asked in every project, whatever the prefix list holds: it rewrites history others may already have.
+// A flag anywhere after `git push` counts (`--force`, `--force-with-lease[=…]`, `--force-if-includes`, `-f` alone or in a
+// cluster like `-fu`), and so does a `+refspec`.
+const FORCE = /^(?:--force(?:-with-lease|-if-includes)?(?:=.*)?|-[A-Za-z]*f[A-Za-z]*|\+\S+)$/;
+function forcePush(command) {
+  return pieces(command).some((piece) => {
+    const p = bare(piece);
+    const inner = p.match(SHELL_C);
+    if (inner && forcePush(inner[1].trim().replace(/^(["'])([\s\S]*)\1$/, '$2'))) return true;
+    const m = /^git\s+push(?:\s+([\s\S]*))?$/.exec(p.replace(GIT_OPTS, 'git'));
+    return !!m && (m[1] ?? '').split(/\s+/).some((w) => FORCE.test(w.replace(/^(["'])(.*)\1$/, '$2')));
+  });
+}
+
+const ASK = 'Orca 워커면 orca orchestration ask로 코디네이터에게 올리고, 아니면 사용자에게 묻는다.';
+
 export function decide(payload, prefixes) {
-  if (!prefixes?.length) return null;
+  // no project prefix and no readable command: nothing to judge, as before the force-push rule
+  if (!prefixes?.length && typeof payload?.tool_input?.command !== 'string') return null;
   if (!payload || typeof payload !== 'object') return { deny: 'approval-gate: 입력을 해석하지 못했다(fail-closed).' };
   const command = payload.tool_input?.command;
   if (typeof command !== 'string') return { deny: 'approval-gate: tool_input.command가 문자열이 아니다(fail-closed).' };
-  const prefix = prefixes.find((p) => matches(command, p));
-  if (!prefix || ASKED_MODES.includes(payload.permission_mode)) return null;
-  return { deny: `${prefix}는 사람 승인이 필요하다. Orca 워커면 orca orchestration ask로 코디네이터에게 올리고, 아니면 사용자에게 묻는다.` };
+  const asked = ASKED_MODES.includes(payload.permission_mode);
+  if (forcePush(command)) return asked ? null : { deny: `force push는 사람 승인이 필요하다. ${ASK}` };
+  const prefix = (prefixes ?? []).find((p) => matches(command, p));
+  if (!prefix || asked) return null;
+  return { deny: `${prefix}는 사람 승인이 필요하다. ${ASK}` };
 }
 
 // realpath on both sides: run through a junction or symlink, the gate must still run

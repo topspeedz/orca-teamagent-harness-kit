@@ -1,6 +1,7 @@
 {
   "permissions": {
-    "deny": [
+    "deny": [],
+    "ask": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)",
@@ -15,8 +16,7 @@
       "PowerShell(git push * -f)",
       "PowerShell(git push * -f *)",
       "PowerShell(git push * +*)"
-    ],
-    "ask": []
+    ]
   },
   "hooks": {
     "PreToolUse": [
@@ -36,6 +36,17 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/approval-gate.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "^(functions\\.|tools\\.)?mcp__.*[Pp]laywright.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/secret-gate.mjs\"",
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       }
@@ -60,5 +71,9 @@
         ]
       }
     ]
+  },
+  "env": {
+    "PLAYWRIGHT_MCP_ISOLATED": "true",
+    "PLAYWRIGHT_MCP_HEADLESS": "true"
   }
 }

@@ -14,11 +14,12 @@
 | `status` | 창구가 전한 사용자 지시다. 실행 Run으로 온다. 장부의 `## 결정`에 원문을 적고 따른다. |
 | heartbeat만 | 보고 없이 다시 대기를 건다. |
 
-## 2. worker_done의 세 가지 확인
+## 2. worker_done의 네 가지 확인
 
 1. **기대한 Dispatch인가.** 장부에 적은 그 Task의 Dispatch ID와 같아야 한다. 같은 Dispatch의 `worker_done`이 id만 다르게 두 번 오면 첫 것으로만 정산한다.
 2. **리포트 파일이 있는가.** `worker_done`에 실린 리포트 경로의 파일이 실제로 있어야 한다.
-3. **`node .claude/scripts/report-check.mjs <리포트 경로>`가 코드 0인가.** 표준 출력의 JSON 한 줄만 읽는다. `failed` 줄은 장부의 재시도(원인) 열로, `notes`(`(참고)` 줄)는 최종 보고의 남은 것으로 옮긴다.
+3. **계획서가 적은 산출물이 있는가.** 리포트의 ✅는 워커가 스스로 적은 것이고, 만들지 않은 파일은 git에도 흔적이 남지 않는다. 아래 명령에 `--expect <산출물 경로>`를 붙여 함께 본다. 산출물이 여럿이면 `--expect`를 그만큼 붙인다. 팀장에게 준 팀 Task는 통합 보고가 산출물이므로 붙이지 않는다.
+4. **`node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`가 코드 0인가.** 표준 출력의 JSON 한 줄만 읽는다. `failed` 줄은 장부의 재시도(원인) 열로, `notes`(`(참고)` 줄)는 최종 보고의 남은 것으로 옮긴다.
 
 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 코디네이터는 리포트 전문을 읽지 않고, 워커의 검사를 다시 돌리지 않는다.
 
@@ -46,7 +47,7 @@ phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/t
 
 | 상황 | 처리 |
 | --- | --- |
-| 세 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `fail` 명령을 돌리고 원인을 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
+| 네 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `fail` 명령을 돌리고 원인을 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
 | 팀장의 통합 보고가 실패 | 위와 같은 방법으로 처리한다. 메모에는 통합 보고의 미달 Task만 적는다. 다시 뜬 팀장은 그것만 한다. |
 | 기동 영수증의 `turnStarted: false` | 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 턴이 시작되지 않은 것을 확인한 뒤에만 사람이 복구한다. 장부에 그 상태를 적는다. |
 | 등록이 배정 불일치로 거부 | spec의 `배정:` 줄을 계획서와 모델 표에 맞게 고친다. 팀장(`--lead`)이면 배정 줄의 작업 단위가 `리드`이고 값이 표의 `리드` 줄과 같은지 본다. 표에 맞는 작업 단위가 없으면 정하지 않고 `ask --wait`로 올린다. |

@@ -54,8 +54,8 @@
 | 막으려는 것 | 수단 |
 |---|---|
 | 끝났다고 하기 전에 검증 누락 | T0 규칙 "완료 흐름"([templates.md §3](templates.md)). 반복해서 빠진 증거가 생기면 `Stop` 훅으로 올린다 |
-| 어느 세션에서도 금지(force push, 운영 배포, 대량 삭제) | `permissions.deny`. bypass 모드에서도 막힌다. Orca 틀은 force push를 이미 막아 두었으므로 1단계에서 답받은 것만 더한다 |
-| 사람 승인이 필요(배포, 유료 API) | `permissions.ask`. 대화형 세션은 실제로 묻는다. bypass 세션(무인 워커)에는 ask가 적용되지 않으므로 훅 deny를 함께 둔다([templates.md §4](templates.md)) |
+| 어느 세션에서도 금지(운영 배포, 대량 삭제) | `permissions.deny`. bypass 모드에서도 막힌다. 1단계에서 답받은 것만 넣는다 |
+| 사람 승인이 필요(force push, 배포, 유료 API) | Orca 틀은 force push를 이미 승인 대상으로 두었다. `permissions.ask`. 대화형 세션은 실제로 묻는다. bypass 세션(무인 워커)에서도 ask 규칙은 확인 화면을 띄우고, 워커는 그 화면에서 멈춘다. 그래서 훅 deny를 함께 둔다. 훅이 먼저 막고 `ask`로 올리게 해야 워커가 멈추지 않는다([templates.md §4](templates.md)) |
 | 정본과 문서의 드리프트 | 코드 옆 `*.check` 스크립트와 `verify-*` 명령. 정본을 옮기는 작업에는 그 정본을 읽는 check 갱신을 포함한다 |
 | 조용한 실패 | fallback과 필터로 누락을 감추는 코드를 리뷰 대상으로 지정한다 |
 
@@ -93,7 +93,7 @@
 |---|---|---|
 | V1 | 1단계 명령 표를 구축 뒤 다시 돌린다 | 완료 게이트 명령이 기준선과 같은 결과 |
 | V2 | 새 세션에서 `/memory`와 `/context` | 설계안의 파일만 로드. 범위 모드 파일은 그 폴더 파일을 읽기 전엔 없다 |
-| V3 | deny와 ask 대상을 무해한 형태로 하나씩 시도(예: `git push --force --dry-run`) | deny는 막히고 ask는 묻는다. bypass 세션에서는 훅이 막는다 |
+| V3 | deny와 ask 대상을 무해한 형태로 하나씩 시도(예: ask 대상인 `git push --force --dry-run`) | deny는 막히고 ask는 묻는다. bypass 세션에서는 훅이 막는다 |
 | V4 | 새 세션에서 대표 작업 2~3개를 주고 `required / actual / forbidden` 문서를 기록 | required 전부 읽힘, forbidden 0. 데이터 작업에 UI 이력이 읽히면 라우팅 실패 |
 
 V2와 V4는 새 세션이 필요하므로 사용자에게 방법을 알리고 결과를 받아 적는다. 실패하면 해당 라우터와 설정을 고치고 그 항목만 다시 돌린다. 최대 2회, 그래도 실패면 증거와 함께 보고한다.

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Settle a worker report's verification lines — the coordinator judges the report instead of re-running the worker's checks.
-// Usage: node .claude/scripts/report-check.mjs <report-path>
+// Usage: node .claude/scripts/report-check.mjs <report-path> [--expect <artifact-path>]... [--round-cap <N>]
 // stdout: one JSON line {ok, checked, failed:[…], notes:[…], error?}. exit 0 = ok, 1 = not ok (treat the worker_done as failed).
+// --expect: a file or folder the Task must have produced. A missing one fails the verdict whatever the report says —
+// the ✅ lines are the worker's own word, and an untracked file that was never written leaves no trace in git.
 // A ✅/❌ line counts unless it starts with `(참고)` (outside the acceptance criteria) — those ❌ go to notes ("남은 것").
 // `❌ (참고)`·`❌(참고, …)` count as `(참고)` too: workers write the mark first.
 // ok = at least one counted ✅ and no counted ❌. Fenced code blocks are skipped (quoted templates like "✅/❌").
@@ -9,12 +11,13 @@
 // reports mark found defects with ❌ in defect/acceptance tables, a finding rather than a worker failure.
 // A report with no such heading fails ("검증 절 없음").
 // Re-checks are the next version file (NN_<agent>_<output>_v<N>.md), so an older version fails when a higher one sits next to it,
-// and a `재검 회차: N` line with N ≥ 3 fails the cap of two re-checks.
-import { readFileSync, readdirSync, realpathSync } from 'node:fs';
+// and a `재검 회차: N` line with N above the cap fails. The cap is two re-checks; `--round-cap <N>` raises it for a round
+// the user approved after being asked.
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export function check(text) {
+export function check(text, { roundCap = 2 } = {}) {
   const out = { ok: false, checked: 0, failed: [], notes: [] };
   const lines = [];
   let fenced = false;
@@ -42,7 +45,7 @@ export function check(text) {
     if (line.includes('❌')) out.failed.push(line);
   }
   const round = lines.map((l) => /재검 회차:\s*(\d+)/.exec(l)?.[1]).find(Boolean);
-  if (Number(round) >= 3) out.failed.unshift('❌ 재검 상한 2회 초과');
+  if (Number(round) > roundCap) out.failed.unshift(`❌ 재검 상한 ${roundCap}회 초과`);
   out.ok = out.failed.length === 0 && out.checked > out.failed.length;
   return out;
 }
@@ -61,12 +64,16 @@ export function newerVersion(path) {
 
 // realpath on both sides: run through a junction or symlink, main must still run
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  const path = process.argv[2];
+  const [path, ...rest] = process.argv.slice(2);
+  const expected = rest.flatMap((a, i) => (a === '--expect' && rest[i + 1] ? [rest[i + 1]] : []));
+  const cap = Number(rest[rest.indexOf('--round-cap') + 1]);
   let out;
   try {
-    out = check(readFileSync(path, 'utf8'));
+    out = check(readFileSync(path, 'utf8'), rest.includes('--round-cap') && Number.isInteger(cap) ? { roundCap: cap } : {});
     const newer = newerVersion(path);
     if (newer) out = { ...out, ok: false, error: `더 높은 버전이 있음: ${newer}` };
+    const missing = expected.filter((p) => !existsSync(p));
+    if (missing.length) out = { ...out, ok: false, failed: [...out.failed, ...missing.map((p) => `❌ 산출물 없음: ${p}`)] };
   } catch (e) { out = { ok: false, checked: 0, failed: [], notes: [], error: path ? e.message : 'usage: report-check.mjs <report-path>' }; }
   console.log(JSON.stringify(out));
   process.exit(out.ok ? 0 : 1);
