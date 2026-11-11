@@ -5,9 +5,10 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { addRows, applyChoices, validate } from './model-table.mjs';
+import { addRows, applyChoices, buildPage, EFFORTS, MODELS, validate } from './model-table.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./model-table.mjs', import.meta.url));
+const TEMPLATE_HTML = fileURLToPath(new URL('../assets/model-survey.html', import.meta.url));
 const root = mkdtempSync(join(tmpdir(), 'model-table-check-'));
 const cli = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
 let n = 0;
@@ -105,6 +106,51 @@ test('CLI rows prints the six cells as they are', () => {
     { agent: '*', unit: '리드', runtime: 'claude', model: 'opus', effort: 'high', note: '' },
     { agent: '*', unit: '기본', runtime: 'claude', model: 'opus', effort: 'medium', note: '' },
   ]);
+});
+
+test('buildPage puts the data in the one placeholder', () => {
+  const html = buildPage('<script>const DATA = /*__DATA__*/null;</script>', { rows: [], models: MODELS, efforts: EFFORTS, codex: false });
+  assert.ok(html.includes('const DATA = {"rows":[]'));
+});
+
+test('a </script> in the data does not break the page', () => {
+  assert.ok(!buildPage('<script>const DATA = /*__DATA__*/null;</script>', { rows: [{ note: '</script>' }], models: [], efforts: [], codex: false }).includes('"</script>"'));
+});
+
+test('a template without the placeholder is an error', () => {
+  assert.throws(() => buildPage('<html></html>', {}), /__DATA__/);
+  assert.throws(() => buildPage('/*__DATA__*/null /*__DATA__*/null', {}), /__DATA__/);
+});
+
+test('CLI page: new rows start at the recommendation, existing rows at the table value', () => {
+  const table = join(root, 'page.md');
+  const rec = join(root, 'recommend.json');
+  const out = join(root, 'page.html');
+  writeFileSync(table, addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]), 'utf8');
+  writeFileSync(rec, JSON.stringify([
+    { agent: 'developer', unit: '구현', isNew: true, model: 'sonnet', effort: 'high', reason: 'r' },
+    { agent: 'planner', unit: '설계, 계획', isNew: false, model: 'fable', effort: 'max', reason: 'r' },
+  ]), 'utf8');
+  const r = cli('page', '--table', table, '--recommend', rec, '--out', out, '--codex');
+  assert.equal(r.status, 0, r.stderr);
+  const data = JSON.parse(readFileSync(out, 'utf8').match(/const DATA = (.*);/)[1]);
+  const dev = data.rows.find((x) => x.agent === 'developer');
+  const planner = data.rows.find((x) => x.agent === 'planner');
+  assert.equal(dev.model, 'sonnet');
+  assert.equal(dev.isNew, true);
+  assert.equal(planner.model, 'opus');
+  assert.equal(planner.recommend.model, 'fable');
+  assert.equal(data.rows.find((x) => x.agent === 'qa-inspector').recommend, null);
+  assert.deepEqual([data.models, data.efforts, data.codex], [MODELS, EFFORTS, true]);
+  // a recommendation for a row the table does not have is an error
+  writeFileSync(rec, JSON.stringify([{ agent: 'ghost', unit: '구현', isNew: true, model: 'opus', effort: 'high', reason: 'r' }]), 'utf8');
+  const g = cli('page', '--table', table, '--recommend', rec, '--out', out);
+  assert.equal(g.status, 1);
+  assert.match(g.stderr, /ghost/);
+});
+
+test('the shipped template has the placeholder exactly once', () => {
+  assert.equal(readFileSync(TEMPLATE_HTML, 'utf8').split('/*__DATA__*/null').length, 2);
 });
 
 console.log(`model-table.check: ${n} cases passed`);

@@ -3,6 +3,7 @@
 // Usage: node model-table.mjs rows --table <path>
 //        node model-table.mjs add --table <path> --rows <json file>        exit 1 and the table untouched on an error
 //        node model-table.mjs apply --table <path> --choices <json file>  exit 1 and the table untouched on an error
+//        node model-table.mjs page --table <path> --recommend <json file> --out <html path> [--codex]   the survey page
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -85,6 +86,35 @@ export function applyChoices(tableText, choices) {
   return lines.join('\n');
 }
 
+const PLACEHOLDER = '/*__DATA__*/null';
+const TEMPLATE = new URL('../assets/model-survey.html', import.meta.url);
+
+export function buildPage(templateHtml, data) {
+  if (templateHtml.split(PLACEHOLDER).length !== 2) throw new Error(`틀에 ${PLACEHOLDER} 자리표가 정확히 한 번 있어야 함`);
+  // a function replacement, so '$' in the data is not read as a pattern
+  return templateHtml.replace(PLACEHOLDER, () => JSON.stringify(data).replaceAll('</', '<\\/'));
+}
+
+const listRows = (text) => open(text).rows.map((r) => ({ agent: r.agent, unit: norm(r.cells[2]), runtime: r.runtime, model: r.model, effort: r.effort ?? '', note: r.note }));
+
+// new rows start at the recommendation; existing rows keep the table's value and show the recommendation beside it
+function pageData(tableText, recommend, codex) {
+  const rows = listRows(tableText);
+  for (const r of recommend) {
+    if (!rows.some((x) => x.agent === r.agent && x.unit === norm(r.unit))) throw new Error(`${r.agent} (${r.unit}): 표에 줄이 없음`);
+  }
+  return {
+    rows: rows.map((x) => {
+      const r = recommend.find((y) => y.agent === x.agent && norm(y.unit) === x.unit);
+      const rec = r ? { model: r.model, effort: r.effort ?? '', reason: r.reason ?? '' } : null;
+      return { ...x, ...(r?.isNew ? { model: rec.model, effort: rec.effort } : {}), isNew: Boolean(r?.isNew), recommend: rec };
+    }),
+    models: MODELS,
+    efforts: EFFORTS,
+    codex,
+  };
+}
+
 function main(argv) {
   const [cmd, ...rest] = argv;
   const opt = (k) => (rest.includes(k) ? rest[rest.indexOf(k) + 1] : undefined);
@@ -92,9 +122,12 @@ function main(argv) {
   const readJson = (k) => JSON.parse(readFileSync(opt(k), 'utf8'));
   try {
     if (cmd === 'rows' && table) {
-      const { rows } = open(readFileSync(table, 'utf8'));
-      const out = rows.map((r) => ({ agent: r.agent, unit: norm(r.cells[2]), runtime: r.runtime, model: r.model, effort: r.effort ?? '', note: r.note }));
-      console.log(JSON.stringify(out, null, 2));
+      console.log(JSON.stringify(listRows(readFileSync(table, 'utf8')), null, 2));
+      return 0;
+    }
+    if (cmd === 'page' && table && opt('--out')) {
+      const data = pageData(readFileSync(table, 'utf8'), readJson('--recommend'), rest.includes('--codex'));
+      writeFileSync(opt('--out'), buildPage(readFileSync(TEMPLATE, 'utf8'), data), 'utf8');
       return 0;
     }
     if ((cmd === 'add' || cmd === 'apply') && table) {
@@ -107,7 +140,7 @@ function main(argv) {
     console.error(`model-table: ${e.message}`);
     return 1;
   }
-  console.error('usage: model-table.mjs rows|add|apply --table <path> [--rows <json>] [--choices <json>]');
+  console.error('usage: model-table.mjs rows|add|apply|page --table <path> [--rows <json>] [--choices <json>] [--recommend <json> --out <html> [--codex]]');
   return 1;
 }
 
