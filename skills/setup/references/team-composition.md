@@ -18,7 +18,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 - `commands`, `skills`: 많이 쓴 셸 명령과 스킬 상위 30개와 횟수.
 - `pipelines`: 기존 파이프라인 파일(CI workflow, `Makefile`, `package.json`, `scripts/`, `_workspace/_run/`의 Run 폴더, 명단). 직접 읽는다.
 
-`prompts`의 `ok` 한 줄은 setup이 목록을 조사하며 띄운 세션이라 요청으로 세지 않는다. 한 일을 알려 주는 요청이 없으면 "세션 기록 없음"이라고 알린다. 그런 요청이 없고 `pipelines`에 명단 `docs/harness/team-org.md`밖에 없으면 추천 없이 3절의 "직접 적어서 구성"만 보여 준다.
+`prompts`의 `ok` 한 줄은 setup이 목록을 조사하며 띄운 세션이라 요청으로 세지 않는다. 지금 setup을 돌리는 세션에서 오간 말도 요청으로 세지 않는다. 한 일을 알려 주는 요청이 없으면 "세션 기록 없음"이라고 알린다. 그런 요청이 없고 `pipelines`에 명단 `docs/harness/team-org.md`밖에 없으면 추천 없이 3절의 "직접 적어서 구성"만 보여 준다.
 
 비밀 값 가림은 토큰 접두어와 긴 16진수만 잡는다. 그래서 요청 원문은 어디에도 옮기지 않는다.
 
@@ -36,7 +36,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 - 역할 스킬: 기존 이름 또는 "새로 만듦"(4절).
 - 근거: 요약과 위치(세션 날짜·파일 이름, 파이프라인 파일 경로)만 적는다. 요청 원문을 옮기지 않는다.
 
-팀원마다 모델 표의 작업 단위 이름과 model·effort 추천도 정한다(기준은 7절). 5절에서 넣는 줄의 초기값이다.
+팀원마다 모델 표의 작업 단위 이름과 model·effort 추천도 정한다(기준은 7절). 추천은 표에 쓰지 않고 7절의 추천 파일에만 적는다.
 
 ## 3. 설문
 
@@ -63,17 +63,21 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
 1. 에이전트 `.claude/agents/<에이전트>.md`(양식 `docs/harness/templates/agent.md`).
 2. 팀 스킬 `.claude/skills/team-<팀>/SKILL.md`(양식 `docs/harness/templates/team-skill.md`).
 3. 명단 `docs/harness/team-org.md`에 팀 한 줄.
-4. 모델 표에 그 에이전트의 줄. 줄을 `_workspace/setup/model-rows.json`에 쓰고 넣는다.
+4. 모델 표에 그 에이전트의 줄. runtime·model·effort는 표의 `*` 기본 줄(agent `*`, unit `기본`) 값을 그대로 쓴다(`rows` 명령으로 읽는다. `*` 리드 줄이 아니다). 추천값은 넣지 않는다. 사용자가 8단계 설문에서 저장할 때만 표에 쓰인다. 줄을 `_workspace/setup/model-rows.json`에 쓰고 넣는다.
+
+   ```sh
+   node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" rows --table docs/harness/model-selection.md
+   ```
 
    ```json
-   [{ "agent": "developer", "unit": "구현", "runtime": "claude", "model": "opus", "effort": "medium", "note": "" }]
+   [{ "agent": "developer", "unit": "구현", "runtime": "<* 줄의 runtime>", "model": "<* 줄의 model>", "effort": "<* 줄의 effort>", "note": "" }]
    ```
 
    ```sh
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" add --table docs/harness/model-selection.md --rows _workspace/setup/model-rows.json
    ```
 
-   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, 목록 밖의 값(model `opus`·`sonnet`·`haiku`·`fable`, effort `low`·`medium`·`high`·`xhigh`·`max`, runtime `claude`·`codex`, effort를 단 `haiku`)을 거절한다. 이미 있는 (에이전트, 작업 단위) 줄도 거절한다.
+   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. 이미 있는 (에이전트, 작업 단위) 줄도 거절한다.
 5. 검사.
 
    ```sh
@@ -82,7 +86,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
 
 ## 6. 되묻기
 
-만든 것을 표로 보여 주고 "더 필요한 팀이나 팀원이 있는지" 묻는다. 있으면 3절로 돌아간다.
+만든 것을 표로 보여 주고 "더 필요한 팀이나 팀원이 있는지" 묻는다. 있으면 2절의 추천 표를 다시 만들고(방금 만든 팀은 "있음") 3절로 간다.
 
 기존 팀에 팀원만 더할 때는 에이전트 파일, 팀 스킬의 에이전트 구성 표, 명단의 팀원 칸, 모델 표 줄을 고친다. 기존 팀 3개의 팀 스킬과 명단 줄은 이 경우에도 고치지 않는다.
 
@@ -94,7 +98,12 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    [{ "agent": "developer", "unit": "구현", "isNew": true, "model": "opus", "effort": "medium", "reason": "여러 파일을 고치는 구현" }]
    ```
 
-   기준은 모델 표 머리말이 가리키는 모델 선택 가이드(복잡도, 예상 기간, 필요한 자율성, 응답 속도)다. `isNew`는 이번 실행에서 넣은 줄만 참이다. 줄 목록은 `model-table.mjs rows --table docs/harness/model-selection.md`로 본다.
+   기준은 모델 표 머리말이 가리키는 모델 선택 가이드(복잡도, 예상 기간, 필요한 자율성, 응답 속도)다. `isNew`는 이번 실행에서 넣은 줄만 참이다. 새 줄의 추천은 2절에서 정한 값이다. 줄 목록은 이 명령으로 본다.
+
+   ```sh
+   node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" rows --table docs/harness/model-selection.md
+   ```
+
 2. 페이지를 만든다. 파일 이름에 날짜와 시각을 넣어 설문마다 새 이름으로 만든다(Codex를 골랐으면 `--codex`를 붙인다).
 
    ```sh
@@ -110,6 +119,6 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    ```
 
    바뀐 줄을 표로 보여 준다.
-5. 문서가 없으면 사용자가 저장하지 않은 것이다. 표를 건드리지 않고 그렇게 알린다.
+5. 문서가 없으면 사용자가 저장하지 않은 것이다. 표를 건드리지 않고 그렇게 알린다. 새 줄은 `*` 기본 줄 값 그대로다.
 6. 저장이 실패하면 페이지가 같은 `choices` 배열을 복사 칸에 보여 준다. 사용자가 채팅에 붙여 넣은 배열을 `_workspace/setup/model-choices.json`으로 써서 4의 `apply`를 돌린다.
-7. Artifact를 쓸 수 없으면 같은 줄을 채팅에 표로 보여 준다(새 줄은 추천값, 기존 줄은 지금 값과 추천). 고칠 줄만 받아 같은 `apply`로 반영한다. `choices`에는 바꿀 칸만 적는다. 없는 `model`, `effort`, `runtime` 키는 지금 값을 둔다.
+7. Artifact를 쓸 수 없으면 같은 줄을 채팅에 표로 보여 준다(새 줄은 추천값, 기존 줄은 지금 값과 추천). 고칠 줄만 받아 같은 `apply`로 반영한다. `choices`에는 바꿀 칸만 적는다. 새 줄은 사용자가 받아들인 추천값도 바꿀 칸이다. 없는 `model`, `effort`, `runtime` 키는 지금 값을 둔다.
