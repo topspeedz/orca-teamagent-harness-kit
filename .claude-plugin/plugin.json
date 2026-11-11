@@ -1,6 +1,6 @@
 {
   "name": "orca-teamagent-harness-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Orca 기반 멀티 에이전트 하네스 틀과 세팅 스킬",
   "author": { "name": "Hans Koh" }
 }

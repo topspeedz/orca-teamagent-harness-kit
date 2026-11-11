@@ -7,7 +7,7 @@
 
 | 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |
 | --- | --- | --- | --- | --- | --- |
-| `coordinator` | 실행 감독 | claude | opus[1m] | high | 100만 토큰 창 전제 |
+| `coordinator` | 실행 감독 | claude | opus | high | 100만 토큰 창 전제 |
 | `planner` | 설계, 계획 | claude | opus | max | effort는 세팅에서 고른 값. 작업량이 매우 방대하면 띄우기 전에 `fable`로 띄울지 사용자에게 묻는다 |
 | `product-manager` | 수락 기준, 항목화 | claude | opus | medium | |
 | `product-manager` | 장부 정리, 완료 처리 | claude | sonnet | medium | |

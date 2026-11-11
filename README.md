@@ -38,7 +38,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-설치가 끝나면 팀을 하나 추가하고([팀 추가](#팀-추가)) 창구 세션에 작업을 요청한다.
+설치가 끝나면 창구 세션에 작업을 요청한다. 팀은 `setup`의 7단계에서 고르고, 나중에 직접 추가할 수도 있다([팀 추가](#팀-추가)).
 
 ## 특징
 
@@ -54,7 +54,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 - 기획, 개발, 검증, 하네스처럼 역할이 다른 팀이 하나의 phase 안에서 함께 동작한다.
 - 팀마다 팀 skill을 갖고, 팀장이 자기 팀의 Task를 분할하고 팀원을 감독한다.
-- 팀은 템플릿으로 직접 추가한다.
+- 팀은 `setup`의 7단계가 지난 작업을 보고 추천해 고른 대로 만든다. 나중에 템플릿으로 직접 추가할 수도 있다.
 
 **역할 계층과 요청 규모별 라우팅**
 
@@ -81,7 +81,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
 | 하네스 | `harness-engineer` | phase 종료 시 회고와 하네스 개선 |
 
-개발, 디자인 같은 도메인 팀은 포함하지 않는다. 템플릿으로 직접 추가한다.
+개발, 디자인 같은 도메인 팀은 포함하지 않는다. `setup`의 7단계가 지난 작업을 보고 추천해 고른 대로 만들고, 템플릿으로 직접 추가할 수도 있다.
 
 **규칙을 강제하는 hook과 스크립트**
 
@@ -173,7 +173,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | OS | Windows와 Git Bash에서만 테스트했다 |
 | Codex | 함께 사용할 때만 필요하다. 설치할 때 선택한다 |
 
-- 코디네이터는 1M 컨텍스트 윈도우 모델(`opus[1m]`)로 실행하는 것이 기본값이다. 컨텍스트 압축 시작점 350,000과 상한 500,000이 이 윈도우를 전제로 한다.
+- 코디네이터는 1M 컨텍스트 윈도우 모델(`opus`)로 실행하는 것이 기본값이다. 컨텍스트 압축 시작점 350,000과 상한 500,000이 이 윈도우를 전제로 한다.
 - `worker-start`로 실행되는 워커의 권한 모드는 명령 옵션으로 지정할 수 없고 Orca의 "새 에이전트 탭" 설정을 따른다.
 - `setup` skill은 누락된 요구 사항을 알리기만 하고 대신 설치하지 않는다.
 
@@ -198,7 +198,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 ### 1. `setup` skill 실행
 
-대상 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). skill은 일곱 단계로 진행된다.
+대상 프로젝트의 루트에서 Claude Code를 열고 `/orca-teamagent-harness-kit:setup`을 실행한다(또는 "하네스 키트 세팅해줘"). skill은 아홉 단계로 진행된다.
 
 1. **환경 점검**: git, Orca, Node, superpowers, DAG Swimlane 다이어그램과 Waterfall 다이어그램 skill, Codex, 기존 지침 파일(`AGENTS.md`, `CLAUDE.md`)을 확인한다.
 2. **질문 5개**: Codex 사용 여부, 사용자 승인이 필요한 명령, 코디네이터 터미널의 권한 모드, planner의 effort, 코디네이터에서 활성화할 플러그인과 skill.
@@ -206,9 +206,11 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 4. **설정 생성**: allowlist `.claude/coordinator.keep.json`을 수정하고 코디네이터 설정 파일을 생성한다.
 5. **검증**: 설치된 self-test, 모델 배정표 검증, 대기 규약 비교를 실행한다.
 6. **기반 설계**: 프로젝트의 검증 명령을 실제로 실행해 통과한 것만 지침에 기록하고, 금지 명령(`permissions.deny`), 문서 라우팅, 토큰 기준선을 정한다.
-7. **결과 보고**: 설치한 파일, 건너뛴 파일, 실패한 검증, 기반 설계 결과, 다음 단계.
+7. **팀 구성**: 지난 세션 기록과 기존 파이프라인을 분석해 팀과 팀원을 근거와 함께 추천하고, 사용자가 고른 대로 팀 skill, 에이전트, 역할 skill을 만들어 팀 구성표와 모델 배정표에 올린다.
+8. **모델 표**: 모델 배정표의 모든 행을 설문 페이지(Artifact)로 띄우고, 사용자가 저장한 값만 표에 반영한다.
+9. **결과 보고**: 설치한 파일, 건너뛴 파일, 실패한 검증, 기반 설계 결과, 만든 팀, 다음 단계.
 
-Orca를 사용하지 않는 프로젝트에서는 1, 6, 7단계만 실행한다(템플릿은 설치하지 않는다).
+Orca를 사용하지 않는 프로젝트에서는 1, 6, 9단계만 실행한다(템플릿은 설치하지 않는다).
 
 재실행하면 누락된 파일만 추가하고 검증을 다시 실행한다. 스크립트를 직접 호출할 수도 있다.
 
@@ -222,11 +224,11 @@ node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --targe
 
 - `AGENTS.md`의 "명령"과 "기술 스택" 섹션을 작성한다. 명령은 실제로 실행해 확인한 것만 적는다.
 - 모델 배정표 `docs/harness/model-selection.md`를 조정한다. 들어 있는 값은 기본값이다.
-- 팀을 추가한다. 템플릿에는 구현 팀이 없어서 설치 직후에는 구현 Task를 실행할 수 없다.
+- 팀은 `setup`의 7단계에서 구성한다. 템플릿에는 구현 팀이 없으므로, 그 단계에서 팀을 만들지 않았으면 구현 Task를 실행할 수 없다.
 
 ### 팀 추가
 
-`setup` skill은 팀과 에이전트를 생성하지 않는다. 팀은 템플릿 두 개와 팀 구성표로 직접 추가한다.
+`setup` skill의 7단계가 지난 작업을 분석해 팀을 추천하고 고른 대로 만든다. 나중에 직접 넣을 때는 아래 순서로 한다.
 
 1. 팀 skill 템플릿 `docs/harness/templates/team-skill.md`를 `.claude/skills/team-<이름>/SKILL.md`로 복사해 작성한다.
 2. 에이전트 템플릿 `docs/harness/templates/agent.md`를 `.claude/agents/<이름>.md`로 복사해 작성한다.
