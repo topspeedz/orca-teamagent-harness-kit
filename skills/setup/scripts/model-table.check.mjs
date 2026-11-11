@@ -29,6 +29,11 @@ test('only the chosen row changes, only its two cells', () => {
   const crlf = `﻿${T.replaceAll('\n', '\r\n')}`;
   const out2 = applyChoices(crlf, [{ agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' }]);
   assert.equal(out2, crlf.replace(QA, '| `qa-inspector` | 재검 | claude | opus | high | |'));
+  // a choice without an effort key keeps the current effort
+  assert.ok(applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', model: 'opus' }]).includes('| `qa-inspector` | 재검 | claude | opus | medium | |'));
+  // padded cells: only the model cell changes, the rest of the row stays byte for byte
+  const spaced = T.replace(QA, '| `qa-inspector` |  재검  |  claude  | sonnet |  medium  |  메모  |');
+  assert.equal(applyChoices(spaced, [{ agent: 'qa-inspector', unit: '재검', model: 'opus' }]), spaced.replace('| sonnet |', '| opus |'));
 });
 
 test('a row missing from the table is an error', () => {
@@ -58,9 +63,14 @@ test('new rows go before the first `*` row, duplicates are errors', () => {
   const added = addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]);
   assert.ok(added.indexOf('`developer`') < added.indexOf('`*`') && added.indexOf('`developer`') > added.indexOf('`qa-inspector`'));
   assert.throws(() => addRows(added, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]), /developer/);
+  assert.throws(() => addRows(T, [{ agent: '', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]));
+  assert.throws(() => addRows(T, [{ agent: 'developer', unit: '', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]));
+  assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: 'a | b' }]));
+  assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: 'a\nb' }]));
+  assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'gpt-4', effort: 'medium', note: '' }]), /gpt-4/);
 });
 
-test('CLI apply: a failure leaves the table as it was and exits 1', () => {
+test('CLI apply and add: a failure leaves the table as it was and exits 1', () => {
   const table = join(root, 'apply.md');
   const choices = join(root, 'choices.json');
   writeFileSync(table, T, 'utf8');
@@ -75,6 +85,13 @@ test('CLI apply: a failure leaves the table as it was and exits 1', () => {
   writeFileSync(choices, JSON.stringify([{ agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' }]), 'utf8');
   assert.equal(cli('apply', '--table', table, '--choices', choices).status, 0);
   assert.ok(readFileSync(table, 'utf8').includes('| `qa-inspector` | 재검 | claude | opus | high | |'));
+  const rows = join(root, 'rows.json');
+  writeFileSync(table, T, 'utf8');
+  writeFileSync(rows, JSON.stringify([{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'gpt-4', effort: 'medium', note: '' }]), 'utf8');
+  const a = cli('add', '--table', table, '--rows', rows);
+  assert.equal(a.status, 1);
+  assert.match(a.stderr, /gpt-4/);
+  assert.equal(readFileSync(table, 'utf8'), T);
 });
 
 test('CLI rows prints the six cells as they are', () => {

@@ -46,6 +46,9 @@ export function addRows(tableText, rows) {
   const add = [];
   for (const r of rows) {
     const name = `${r.agent} (${r.unit})`;
+    if (!r.agent || !r.unit) throw new Error(`${name}: agent와 unit은 비울 수 없음`);
+    // a '|' or a line break in any cell would break the table
+    if ([r.agent, r.unit, r.runtime, r.model, r.effort, r.note].some((v) => /[|\r\n]/.test(v ?? ''))) throw new Error(`${name}: 칸 값에 \`|\`나 줄바꿈이 있음`);
     const err = validate(r, r.runtime);
     if (err) throw new Error(`${name}: ${err}`);
     for (const u of r.unit.split(',').map((x) => x.trim()).filter(Boolean)) {
@@ -67,7 +70,8 @@ export function applyChoices(tableText, choices) {
     if (!row) throw new Error(`${name}: 표에 줄이 없음`);
     const cells = lines[row.line - 1].split('|');
     const cur = { runtime: norm(cells[3]), model: norm(cells[4]), effort: norm(cells[5]) === '-' ? '' : norm(cells[5]) };
-    const next = { runtime: c.runtime ?? cur.runtime, model: c.model, effort: c.effort ?? '' };
+    // a key the choice leaves out keeps the current value
+    const next = { runtime: c.runtime ?? cur.runtime, model: c.model ?? cur.model, effort: c.effort ?? cur.effort };
     const changed = (k) => next[k] !== cur[k];
     // only changed cells are checked: an old or pinned value the user keeps stays as it is
     const err = (c.runtime !== undefined ? runtimeError(c.runtime) : null)
