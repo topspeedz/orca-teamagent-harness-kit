@@ -75,7 +75,7 @@ export function workerStartArgs({ row, specFile, run, task, displayName, worktre
   ];
 }
 
-// Quote only what a shell (bash or PowerShell) would split or glob, e.g. a path with spaces or `opus[1m]`.
+// Quote only what a shell (bash or PowerShell) would split or glob, e.g. a path with spaces or `opus[x]`.
 const q = (s) => (/^[\w.:/\\-]+$/.test(s) ? s : `"${s}"`);
 
 const MODES = ['default', 'acceptEdits', 'bypassPermissions'];

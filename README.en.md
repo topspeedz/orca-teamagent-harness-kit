@@ -175,7 +175,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 | OS | Tested only on Windows with Git Bash |
 | Codex | Needed only if you use it alongside Claude. You choose during setup |
 
-- By default the coordinator runs on a 1M context window model (`opus[1m]`). The compaction start point of 350,000 and the ceiling of 500,000 assume that window.
+- By default the coordinator runs on a 1M context window model (`opus`). The compaction start point of 350,000 and the ceiling of 500,000 assume that window.
 - The permission mode of workers started with `worker-start` cannot be set with a command option. It follows Orca's "new agent tab" setting.
 - The `setup` skill reports missing requirements. It does not install them for you.
 

@@ -87,7 +87,7 @@ const ta = async (fn) => { await fn(); passed++; };
 const TABLE = [
   '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |',
   '| --- | --- | --- | --- | --- | --- |',
-  '| `coordinator` | 실행 감독 | claude | opus[1m] | high | |',
+  '| `coordinator` | 실행 감독 | claude | opus | high | |',
   '| `qa-inspector` | 흐름 검증 | claude | opus | medium | |',
   '| `code-reviewer` | 리뷰 | codex | gpt-6.1-sol | high | |',
   '| `*` | 리드 | claude | sonnet | high | |',
@@ -189,10 +189,10 @@ await ta(async () => {
   assert.deepEqual(order, ['run-list', 'run-create', 'terminal create', 'worker-start']);
   assert.equal(val(f.calls.find((a) => a[1] === 'run-create'), '--objective'), 'phase-a [BL-0001, BL-0002]');
   const cmd = val(f.calls.find((a) => a[0] === 'terminal' && a[1] === 'create'), '--command');
-  assert.equal(cmd, coordinatorCommand({ model: 'opus[1m]', effort: 'high', settingsPath: SETTINGS_PATH, permissionMode: 'default' }));
+  assert.equal(cmd, coordinatorCommand({ model: 'opus', effort: 'high', settingsPath: SETTINGS_PATH, permissionMode: 'default' }));
   const ws = f.calls.find((a) => a[1] === 'worker-start');
   assert.deepEqual([val(ws, '--run'), val(ws, '--terminal')], ['run_new', 'term_c']);
-  assert.deepEqual(out.applied, { model: 'opus[1m]', effort: 'high' });
+  assert.deepEqual(out.applied, { model: 'opus', effort: 'high' });
   assert.equal(out.run, 'run_new');
 });
 
@@ -295,19 +295,19 @@ await ta(async () => {
 
 // 25. model with shell syntax → code 1, orca never called
 await ta(async () => {
-  const f = fake({ fileOver: { [TABLE_PATH]: TABLE.replace('opus[1m]', 'opus$(id)') } });
+  const f = fake({ fileOver: { [TABLE_PATH]: TABLE.replace('claude | opus | high', 'claude | opus$(id) | high') } });
   const { code, out } = await main(coordArgv, f.deps);
   assert.equal(code, 1);
   assert.match(out.error, /model/);
   assert.equal(f.calls.length, 0);
 });
 
-// 26. `opus[1m]` sits inside quotes in the launch line, so the shell does not read it as a glob
+// 26. `opus[x]` sits inside quotes in the launch line, so the shell does not read it as a glob
 await ta(async () => {
-  const f = fake();
+  const f = fake({ fileOver: { [TABLE_PATH]: TABLE.replace('claude | opus | high', 'claude | opus[x] | high') } });
   await main(coordArgv, f.deps);
   const cmd = val(f.calls.find((a) => a[0] === 'terminal' && a[1] === 'create'), '--command');
-  assert.ok(cmd.includes('--model "opus[1m]" '), cmd);
+  assert.ok(cmd.includes('--model "opus[x]" '), cmd);
 });
 
 // 27. coordinatorCommand refuses a bad effort and a path with `"`, `$` or a backtick
