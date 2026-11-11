@@ -25,13 +25,13 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--li
 tr:last-child td { border-bottom: 0; }
 th { font-size: 0.75rem; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 code, .mono { font-family: var(--mono); font-size: 0.9em; }
-select, input[type="text"] { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-width: 7.5em; }
+select, input[type="text"] { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; min-width: 7.5em; }
 select:disabled { color: var(--muted); background: var(--chip); border-style: dashed; }
-.pill { display: inline-block; font-size: 0.75rem; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+.pill { display: inline-block; font-size: 0.75rem; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--muted); }
 .pill.new { background: var(--new-bg); color: var(--new); font-weight: 600; }
 .rec { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .reason { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
-button { font: inherit; border-radius: 6px; padding: 4px 10px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+button { font: inherit; border-radius: 6px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); padding: 8px 20px; font-weight: 600; }
 button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -66,7 +66,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 12em; font: 0.85rem/
 <script>
 const DATA = /*__DATA__*/null;
 const COLLECTION = 'model-selection', DOC_ID = 'choices';
-const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, effort: r.model === 'haiku' ? '' : r.effort }));
+// the same condition locks the effort select and clears it
+const noEffort = (s) => s.runtime === 'claude' && s.model === 'haiku';
+const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, effort: noEffort(r) ? '' : r.effort }));
 let touched = false;
 const dbReady = window.claude && window.claude.use ? window.claude.use('db').catch(() => null) : Promise.resolve(null);
 
@@ -84,7 +86,11 @@ function select(id, values, value, labels) {
   s.value = value;
   return s;
 }
-const noEffort = (i) => state[i].runtime === 'claude' && state[i].model === 'haiku';
+function td(...children) {
+  const cell = el('td');
+  cell.append(...children);
+  return cell;
+}
 const recText = (rec) => `추천: ${rec.model}${rec.effort ? ' / ' + rec.effort : ''}`;
 
 function render() {
@@ -92,12 +98,19 @@ function render() {
   body.replaceChildren();
   DATA.rows.forEach((r, i) => {
     const s = state[i], tr = el('tr');
-    tr.append(el('td', {}, '').appendChild(el('code', {}, r.agent)).parentNode, el('td', {}, r.unit));
+    tr.append(td(el('code', {}, r.agent)), el('td', {}, r.unit));
     const rt = el('td');
     if (DATA.codex) {
       const sel = select(`runtime-${i}`, ['claude', 'codex'], s.runtime);
       sel.setAttribute('aria-label', `${r.agent} ${r.unit} 런타임`);
-      sel.onchange = () => { s.runtime = sel.value; if (noEffort(i)) s.effort = ''; change(); };
+      sel.onchange = () => {
+        s.runtime = sel.value;
+        // claude keeps only a model from its list; codex starts from an empty box the user fills
+        if (s.runtime === 'codex') s.model = '';
+        else if (!DATA.models.includes(s.model)) s.model = DATA.models[0];
+        if (noEffort(s)) s.effort = '';
+        change(sel.id);
+      };
       rt.append(sel);
     } else rt.textContent = s.runtime;
     const md = el('td');
@@ -107,14 +120,14 @@ function render() {
       model.oninput = () => { s.model = model.value.trim(); touched = true; };
     } else {
       model = select(`model-${i}`, DATA.models, s.model);
-      model.onchange = () => { s.model = model.value; if (noEffort(i)) s.effort = ''; change(); };
+      model.onchange = () => { s.model = model.value; if (noEffort(s)) s.effort = ''; change(model.id); };
     }
     model.setAttribute('aria-label', `${r.agent} ${r.unit} model`);
     md.append(model);
     const ef = select(`effort-${i}`, ['', ...DATA.efforts], s.effort, { '': '(없음)' });
     ef.setAttribute('aria-label', `${r.agent} ${r.unit} effort`);
-    ef.disabled = noEffort(i);
-    ef.onchange = () => { s.effort = ef.value; change(); };
+    ef.disabled = noEffort(s);
+    ef.onchange = () => { s.effort = ef.value; change(ef.id); };
     const recTd = el('td'), line = el('div', { className: 'rec' });
     if (r.isNew) {
       line.append(el('span', { className: 'pill new' }, '새 팀'));
@@ -123,23 +136,31 @@ function render() {
       if (r.recommend) {
         line.append(el('span', {}, recText(r.recommend)));
         const b = el('button', { type: 'button', id: `rec-${i}` }, '추천값으로');
-        b.onclick = () => { s.model = r.recommend.model; s.effort = noEffort(i) ? '' : r.recommend.effort; change(); };
+        b.onclick = () => { s.model = r.recommend.model; s.effort = noEffort(s) ? '' : r.recommend.effort; change(b.id); };
         line.append(b);
       }
     }
     recTd.append(line);
     if (r.recommend && r.recommend.reason) recTd.append(el('div', { className: 'reason' }, r.recommend.reason));
-    tr.append(rt, md, el('td', {}, '').appendChild(ef).parentNode, recTd);
+    tr.append(rt, md, td(ef), recTd);
     body.append(tr);
   });
 }
-function change() { touched = true; render(); }
+// the table is drawn again, so focus goes back to the control the user just changed
+function change(id) { touched = true; render(); document.getElementById(id)?.focus(); }
 
 const choices = () => DATA.rows.map((r, i) => ({ agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
 
 async function save() {
   const status = document.getElementById('status'), fallback = document.getElementById('fallback');
   const button = document.getElementById('save');
+  const empty = DATA.rows.findIndex((r, i) => state[i].runtime === 'codex' && !state[i].model);
+  if (empty >= 0) {
+    status.className = 'err';
+    status.textContent = `${DATA.rows[empty].agent} (${DATA.rows[empty].unit}) 줄은 codex라 model을 직접 적어야 합니다. 적은 뒤 다시 저장하세요.`;
+    document.getElementById(`model-${empty}`).focus();
+    return;
+  }
   button.disabled = true;
   status.className = '';
   status.textContent = '저장하는 중…';
