@@ -49,7 +49,10 @@ export function digest(files, { since, limit }) {
       if (o.type === 'assistant' && Array.isArray(content)) for (const b of content) {
         if (b.type !== 'tool_use') continue;
         if (b.name === 'Bash' || b.name === 'PowerShell') {
-          const bin = String(b.input?.command ?? '').trim().split(/\s+/)[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+          // skip `cd`/`export` segments and leading VAR=value so the bin names the real work
+          const words = String(b.input?.command ?? '').split(/&&|;|\|/).map((s) => s.trim().split(/\s+/).filter((w) => !/^\w+=/.test(w)))
+            .find((w) => w[0] && !/^(cd|export)$/i.test(w[0])) ?? [];
+          const bin = (words[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
           if (bin) tally(commands, bin);
         }
         if (b.name === 'Skill' && b.input?.skill) tally(skills, b.input.skill);
