@@ -49,7 +49,7 @@ export function digest(files, { since, limit }) {
       if ((o.type === 'user' || o.type === 'assistant') && !o.isSidechain && !counted) { counted = true; sessions++; }
       const content = o.message?.content;
       if (o.type === 'assistant' && Array.isArray(content)) for (const b of content) {
-        if (b.type !== 'tool_use') continue;
+        if (b?.type !== 'tool_use') continue;
         if (b.name === 'Bash' || b.name === 'PowerShell') {
           // skip `cd`/`export` segments and leading VAR=value so the bin names the real work
           const words = String(b.input?.command ?? '').split(/&&|;|\|/).map((s) => s.trim().split(/\s+/).filter((w) => !/^\w+=/.test(w)))
@@ -61,7 +61,7 @@ export function digest(files, { since, limit }) {
       }
       if (o.type !== 'user' || o.isSidechain || o.isMeta) continue;
       const text = (typeof content === 'string' ? content
-        : Array.isArray(content) ? content.filter((b) => b.type === 'text').map((b) => b.text).join('\n') : '').trim();
+        : Array.isArray(content) ? content.filter((b) => b?.type === 'text').map((b) => b.text).join('\n') : '').trim();
       if (!text || text.startsWith('<') || text.includes(WORKER_MARK)) continue;
       found.push({ date: ts.slice(0, 10), session: basename(file), text: clean(text), t: Date.parse(ts) || 0 });
     }

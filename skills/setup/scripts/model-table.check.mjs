@@ -69,6 +69,10 @@ test('new rows go before the first `*` row, duplicates are errors', () => {
   assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: 'a | b' }]));
   assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: 'a\nb' }]));
   assert.throws(() => addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'gpt-4', effort: 'medium', note: '' }]), /gpt-4/);
+  // a row equal to the `*` 기본 row is the owner's own default, even outside the list
+  const pinned = T.replace('| `*` | 기본 | claude | opus | medium | |', '| `*` | 기본 | claude | claude-opus-4-7 | medium | |');
+  assert.ok(addRows(pinned, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'claude-opus-4-7', effort: 'medium', note: '' }]).includes('| `developer` | 구현 | claude | claude-opus-4-7 | medium | |'));
+  assert.throws(() => addRows(pinned, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'claude-sonnet-4-5', effort: 'medium', note: '' }]), /claude-sonnet-4-5/);
 });
 
 test('CLI apply and add: a failure leaves the table as it was and exits 1', () => {
@@ -115,6 +119,8 @@ test('buildPage puts the data in the one placeholder', () => {
 
 test('a </script> in the data does not break the page', () => {
   assert.ok(!buildPage('<script>const DATA = /*__DATA__*/null;</script>', { rows: [{ note: '</script>' }], models: [], efforts: [], codex: false }).includes('"</script>"'));
+  const html = buildPage('<script>const DATA = /*__DATA__*/null;</script>', { rows: [{ note: '<!--<script>' }], models: [], efforts: [], codex: false });
+  assert.ok(!html.includes('<!--') && !html.includes('<script>"') && html.includes('\\u003c!--\\u003cscript>'));
 });
 
 test('a template without the placeholder is an error', () => {

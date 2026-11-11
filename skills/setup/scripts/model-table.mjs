@@ -42,6 +42,7 @@ export function addRows(tableText, rows) {
   const { lines, rows: have } = open(tableText);
   const star = have.find((r) => r.agent === '*');
   if (!star) throw new Error('표에 `*` 줄이 없음');
+  const base = have.find((r) => r.agent === '*' && r.units.includes('기본'));
   const taken = new Set(have.flatMap((r) => r.units.map((u) => `${r.agent}\u0000${u}`)));
   const cr = tableText.includes('\r\n') ? '\r' : '';
   const add = [];
@@ -50,7 +51,9 @@ export function addRows(tableText, rows) {
     if (!r.agent || !r.unit) throw new Error(`${name}: agent와 unit은 비울 수 없음`);
     // a '|' or a line break in any cell would break the table
     if ([r.agent, r.unit, r.runtime, r.model, r.effort, r.note].some((v) => /[|\r\n]/.test(v ?? ''))) throw new Error(`${name}: 칸 값에 \`|\`나 줄바꿈이 있음`);
-    const err = validate(r, r.runtime);
+    // a row equal to the `*` 기본 row carries the owner's own default (a pinned model ID, say), so the lists do not apply
+    const isDefault = r.runtime === base.runtime && r.model === base.model && (r.effort ?? '') === (base.effort ?? '');
+    const err = isDefault ? null : validate(r, r.runtime);
     if (err) throw new Error(`${name}: ${err}`);
     for (const u of r.unit.split(',').map((x) => x.trim()).filter(Boolean)) {
       const key = `${r.agent}\u0000${u}`;
@@ -91,8 +94,8 @@ const TEMPLATE = new URL('../assets/model-survey.html', import.meta.url);
 
 export function buildPage(templateHtml, data) {
   if (templateHtml.split(PLACEHOLDER).length !== 2) throw new Error(`틀에 ${PLACEHOLDER} 자리표가 정확히 한 번 있어야 함`);
-  // a function replacement, so '$' in the data is not read as a pattern
-  return templateHtml.replace(PLACEHOLDER, () => JSON.stringify(data).replaceAll('</', '<\\/'));
+  // every '<' as \u003c, so no </script> or <!-- in the data can end or confuse the script; a function replacement, so '$' in the data is not read as a pattern
+  return templateHtml.replace(PLACEHOLDER, () => JSON.stringify(data).replaceAll('<', '\\u003c'));
 }
 
 const listRows = (text) => open(text).rows.map((r) => ({ agent: r.agent, unit: norm(r.cells[2]), runtime: r.runtime, model: r.model, effort: r.effort ?? '', note: r.note }));

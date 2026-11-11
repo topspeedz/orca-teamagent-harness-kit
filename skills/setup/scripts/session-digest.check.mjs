@@ -45,7 +45,10 @@ const subFile = put('home/.claude/projects/D--proj/s1/subagents/agent-a.jsonl', 
 ].join('\n') + '\n');
 const HEX = 'abcdef0123456789abcdef0123456789';
 const longFile = put('long.jsonl', user(1, `${HEX} ${'가'.repeat(400)}`) + '\n');
-const oddFile = put('odd.jsonl', ['null', '42', '"x"', JSON.stringify({ type: 'user', timestamp: 5, message: { content: '숫자 시각' } })].join('\n') + '\n');
+const oddFile = put('odd.jsonl', ['null', '42', '"x"', JSON.stringify({ type: 'user', timestamp: 5, message: { content: '숫자 시각' } }),
+  // null and non-object blocks inside content
+  JSON.stringify({ type: 'user', message: { content: [null, 7, 'x', { type: 'text', text: '널 섞임' }] } }),
+  JSON.stringify({ type: 'assistant', message: { content: [null, 7, { type: 'tool_use', name: 'Bash', input: { command: 'make' } }] } })].join('\n') + '\n');
 
 let n = 0;
 const test = (name, fn) => { try { fn(); n++; } catch (e) { console.error(`FAIL ${name}`); throw e; } };
@@ -78,7 +81,9 @@ test('human prompts only, newest first, once each; broken lines skipped; limit k
   // valid JSON that is not an object is skipped; a non-string timestamp counts as none
   const odd = digest([oddFile], { since: 0 });
   assert.equal(odd.skipped, 3);
-  assert.deepEqual(odd.prompts, [{ date: '', session: 'odd.jsonl', text: '숫자 시각' }]);
+  assert.deepEqual(odd.prompts.map((p) => p.text), ['숫자 시각', '널 섞임']);
+  assert.deepEqual(odd.prompts[0], { date: '', session: 'odd.jsonl', text: '숫자 시각' });
+  assert.deepEqual(odd.commands, [{ bin: 'make', count: 1 }]);
 });
 
 test('300 character cut', () => {
