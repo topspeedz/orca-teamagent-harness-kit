@@ -57,7 +57,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .
 1. Codex를 함께 쓰는가 (예 / 아니오).
 2. 사람 승인이 필요한 행위는 무엇인가. 명령의 접두어로 받는다(예: `git push`, `gh pr create`, 배포 명령). 여러 개를 고를 수 있게 하고 직접 적을 수 있게 한다.
 3. 코디네이터 터미널의 권한 모드: `default` / `acceptEdits` / `bypassPermissions`. `default`와 `acceptEdits`에서는 승인 목록에 없는 셸 명령마다 코디네이터가 승인 화면에서 멈추고, 사용자가 그 터미널에서 직접 승인해야 이어진다(멈추면 Orca가 창구에 `escalation`으로 알린다). 지켜보지 않고 돌릴 것이면 `bypassPermissions`를 고르라고 함께 알린다. 승인이 필요한 명령은 권한 질문이 실제로 뜨는 세션만 실행한다는 것을 함께 알린다. 승인 없이 도는 모드면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 넘긴다.
-4. planner의 모델: `opus` / `max` (권장), `fable` / `max`.
+4. planner의 effort: `max` (권장) / `high`. `max`는 설계와 계획에 1~2시간이 걸리지만 한 번에 완전한 워크플로와 검증이 되므로 권장한다고 함께 알린다. model은 묻지 않는다. 표의 `opus`가 기본값이다.
 
 **두 번째 (코디네이터에 남길 플러그인과 스킬).** 이 기계의 목록을 읽는다.
 
@@ -78,7 +78,7 @@ node "${CLAUDE_PLUGIN_ROOT}/template/.claude/scripts/coordinator-settings.mjs" i
   "codex": false,
   "approvalPrefixes": ["git push"],
   "coordinatorPermissionMode": "default",
-  "planner": { "model": "opus", "effort": "max" }
+  "planner": { "effort": "max" }
 }
 ```
 
@@ -95,7 +95,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 - 없는 파일은 복사하고, 같은 내용의 파일은 건너뛴다.
 - `.claude/settings.json`은 훅, `permissions` 항목, 없는 `env` 키만 더한다. 프로젝트가 이미 정한 `env` 값은 바꾸지 않는다. `.gitignore`는 없는 줄만 덧붙인다. 둘은 충돌로 올리지 않는다.
 - 승인 접두어를 `permissions.ask`(`Bash(<접두어>:*)`, `PowerShell(<접두어>:*)`)와 `.claude/hooks/approval-gate.config.json`에 넣는다. 둘은 늘 같이 고친다. `permissions.ask`에만 있으면 무인 워커가 확인 화면에서 멈춘다.
-- 모델 표 `docs/harness/model-selection.md`의 planner 줄에 고른 model과 effort를 넣는다.
+- 모델 표 `docs/harness/model-selection.md`의 planner 줄에 고른 effort를 넣는다. model은 표의 값을 그대로 둔다.
 - 전역에 있는 그림 스킬은 건너뛴다(사유 `전역에 있음`).
 - `.claude/coordinator.keep.json`이 없으면 `coordinator-settings.mjs init-keep`으로 만들고, `permissionMode`에 고른 권한 모드를 넣는다.
 
@@ -149,7 +149,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 - 건너뛴 것: `skipped`와 사유, 승인받지 못한 `conflicts`.
 - 실패한 검증: 5단계 표의 ❌ 줄.
 - 6단계의 산출물: V1 표(검증 명령이 없으면 없다고), 게이트 표(deny, ask, 훅), 라우팅 표, 토큰 기준선(또는 측정하지 못한 사유), 하지 않기로 한 것.
-- 다음 할 일: 팀 추가(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`), 모델 표 `docs/harness/model-selection.md` 손보기.
+- 다음 할 일: 팀 추가(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`), 모델 표 `docs/harness/model-selection.md` 손보기. 모델 표의 값은 사용자가 정한다. 사용자가 어떤 모델을 쓸지 묻거나 추천을 원하면 그 표의 머리말이 가리키는 모델 선택 가이드를 참고해 추천 표를 만들어 보여 주고, 승인받은 값만 표에 넣는다.
 - 브라우저 설정: 이 프로젝트의 세션은 기본으로 Playwright 브라우저를 창 없이, 세션마다 따로 띄운다(QA를 병렬로 돌리기 위한 값이다). 직접 여는 세션에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 열어야 한다고 전한다.
 - 워커의 깊이: 이 틀은 워커를 세 단(코디네이터, 팀장, 팀원)까지 띄운다. Orca는 워커가 워커를 띄우는 깊이에 한도를 두므로, 팀장이 팀원을 띄우지 못하면 Orca 설정에서 그 한도를 확인해야 한다고 전한다.
 - force push: 막지 않고 항상 사용자 승인을 거친다. 대화형 세션은 확인 질문을 받고, 무인 워커는 승인 훅이 막은 뒤 `ask`로 올린다. 어느 세션에서도 막아야 하는 명령이 따로 있으면 `permissions.deny`에 넣으라고 전한다.

@@ -34,7 +34,7 @@ put(tpl, '.claude/skills/waterfall-timeline/SKILL.md', '---\nname: waterfall-tim
 put(codex, '.codex/hooks.json', '{}\n');
 put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 
-const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { model: 'opus', effort: 'max' } };
+const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'max' } };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
 const ALL = ['.claude/hooks/approval-gate.config.json', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', 'docs/harness/model-selection.md'];
 let n = 0;
@@ -150,11 +150,20 @@ test('codex false installs no codex files', () => {
   assert.ok(existsSync(join(root, 'codex', '.codex/hooks.json')));
 });
 
-test('planner row gets the chosen model', () => {
+test('planner row gets the chosen effort and keeps the table model', () => {
   const t = target('planner');
-  install(t, { planner: { model: 'fable', effort: 'max' } });
+  // a model left in an older answers file is ignored: setup no longer asks for it
+  install(t, { planner: { model: 'fable', effort: 'high' } });
   const row = read(t, 'docs/harness/model-selection.md').split('\n').find((l) => l.startsWith('| `planner`'));
-  assert.deepEqual(row.split('|').map((c) => c.trim()).slice(4, 6), ['fable', 'max']);
+  assert.deepEqual(row.split('|').map((c) => c.trim()).slice(4, 6), ['opus', 'high']);
+});
+
+test('install refuses a planner effort other than high or max', () => {
+  put(root, 'bad-effort.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'medium' } }));
+  const setup = fileURLToPath(new URL('./setup.mjs', import.meta.url));
+  const r = spawnSync(process.execPath, [setup, 'install', '--target', target('bad effort'), '--answers', join(root, 'bad-effort.json')], { encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /planner\.effort/);
 });
 
 test('approval prefixes go to permissions.ask and the gate config', () => {

@@ -203,7 +203,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 Open Claude Code at the root of the target project and run `/orca-teamagent-harness-kit:setup`. The skill runs in seven steps.
 
 1. **Environment check**: git, Orca, Node, superpowers, the DAG swimlane and waterfall diagram skills, Codex, and existing instruction files (`AGENTS.md`, `CLAUDE.md`).
-2. **Five questions**: whether to use Codex, which commands need user approval, the permission mode of the coordinator terminal, the planner's model, and which plugins and skills stay enabled for the coordinator.
+2. **Five questions**: whether to use Codex, which commands need user approval, the permission mode of the coordinator terminal, the planner's effort, and which plugins and skills stay enabled for the coordinator.
 3. **Install**: skips files with identical content. For existing files that differ, shows a diff and overwrites only the approved ones.
 4. **Generate settings**: updates the allowlist `.claude/coordinator.keep.json` and generates the coordinator settings file.
 5. **Verify**: runs the installed self-tests, the model assignment table check, and the wait contract check.

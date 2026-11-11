@@ -28,7 +28,7 @@ description: "실행해서 결함을 찾는 검증 담당. 수락 기준의 흐�
 ## 입력과 출력
 
 - 입력: Orca Task spec. 브리프 경로, 검사 범위, 백로그 항목의 수락 기준, 실행 방법. 영역이 나뉘면 결함 ID 접두어.
-- 출력: `_workspace/qa/<phase>/NN_qa-inspector_qa_v<N>.md`. 결함 표, 미검사 항목과 그 이유.
+- 출력: `_workspace/qa/<phase>/NN_qa-inspector_qa_v<N>.md`. 결함 표, 경계면 대조 결과, 미검사 항목과 그 이유.
 - 보고는 spec의 `보고` 줄을 따른다. 제목에 High 개수를 넣는다.
 
 ## 다시 호출될 때

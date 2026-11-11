@@ -59,6 +59,12 @@ assert.equal(r.code, 0);
 assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
 ok();
 
+// QA boundary sections: ❌ under "## 경계면 대조" and "## 점검표 후보" are findings too, and only the 검증 lines are counted
+r = run('boundary.md', '# QA\n## 결함\n| H-1 | High | ❌ 발견 |\n## 경계면 대조\n| 응답 구조 | a.js:1 | b.js:2 | ❌ H-1 |\n- ❌ 응답 구조와 기대 형태가 같은가 → H-1\n- (해당 없음) 상태 전이\n## 점검표 후보\n- ❌ 날짜 형식이 양쪽에서 같은가\n## 검증\n- ✅ 흐름 실행\n- ✅ 경계면 대조: 점검표 항목마다 결과를 적음\n');
+assert.equal(r.code, 0);
+assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
+ok();
+
 // a ❌ inside the 검증 section (sub-heading included) still fails; ✅ outside it is not counted
 r = run('verify-fail.md', '# 리포트\n## 결함\n- ✅ 범위 밖\n## 검증\n- ✅ check\n### 재검\n- ❌ npm test 미실행\n');
 assert.equal(r.code, 1);

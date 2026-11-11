@@ -65,6 +65,7 @@ description: "요구사항이 흐릿한 큰 작업을 설문부터 커밋과 PR�
 | 리포트 경로 | `_workspace/_run/<phase>/NN_planner_<design 또는 plan>_v<N>.md`. `NN`은 이 스킬의 단계 번호(02 설계, 03 계획) |
 
 - 배정 줄은 모델 표에서 읽는다: `node .claude/scripts/model-selection.mjs lookup --agent planner --unit <설계 또는 계획>`. spec에는 `배정: planner / <작업 단위> (<런타임> <model>/<effort>)` 한 줄로 적는다.
+- planner는 표의 값(`opus`)으로 띄우는 것이 기본이다. 맡길 설계나 계획의 작업량이 매우 방대하면 띄우기 전에 사용자에게 `fable`로 띄울지 묻는다(판단 기준은 모델 표 머리말이 가리키는 모델 선택 가이드). 그러라고 한 경우에만 spec의 배정 줄을 `(claude fable/<표의 effort>)`로 적고 `사용자 예외: <답 원문>` 줄을 넣어 `--override-reason "<답 원문>"`과 함께 띄운다. 그 밖에는 표대로 띄운다.
 - 기동은 `node .claude/scripts/orca-launch.mjs worker --agent planner --unit <설계 또는 계획> --spec-file <spec> --bracket <phase> --does <하는 일>`만 쓴다. 영수증의 Run ID를 브리프의 `창구 Run` 칸에 적는다.
 - 띄운 뒤에는 아래 대기 계약대로 기다린다. 정산은 `worker_done`마다 기대한 Dispatch인가, 리포트 파일이 있는가, `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가를 본다.
 
