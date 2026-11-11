@@ -43,7 +43,9 @@ const subFile = put('home/.claude/projects/D--proj/s1/subagents/agent-a.jsonl', 
   JSON.stringify({ type: 'api-request', timestamp: at(12) }),
   user(12, '서브에이전트 지시', { isSidechain: true }),
 ].join('\n') + '\n');
-const longFile = put('long.jsonl', user(1, '가'.repeat(400)) + '\n');
+const HEX = 'abcdef0123456789abcdef0123456789';
+const longFile = put('long.jsonl', user(1, `${HEX} ${'가'.repeat(400)}`) + '\n');
+const oddFile = put('odd.jsonl', ['null', '42', '"x"', JSON.stringify({ type: 'user', timestamp: 5, message: { content: '숫자 시각' } })].join('\n') + '\n');
 
 let n = 0;
 const test = (name, fn) => { try { fn(); n++; } catch (e) { console.error(`FAIL ${name}`); throw e; } };
@@ -73,14 +75,21 @@ test('human prompts only, newest first, once each; broken lines skipped; limit k
   assert.deepEqual(lim.prompts.map((p) => p.text), ['로그인 화면 만들어줘']);
   assert.equal(lim.promptsTotal, 2);
   assert.equal(digest([file, subFile], { since: 0 }).sessions, 1);
+  // valid JSON that is not an object is skipped; a non-string timestamp counts as none
+  const odd = digest([oddFile], { since: 0 });
+  assert.equal(odd.skipped, 3);
+  assert.deepEqual(odd.prompts, [{ date: '', session: 'odd.jsonl', text: '숫자 시각' }]);
 });
 
 test('300 character cut', () => {
-  assert.equal(digest([longFile], { since: 0 }).prompts[0].text.length, 300);
+  const cut = digest([longFile], { since: 0 }).prompts[0].text;
+  assert.equal(cut.length, 300);
+  assert.ok(!cut.includes(HEX));
 });
 
 test('command and skill counts', () => {
   assert.deepEqual(d.commands[0], { bin: 'npm', count: 2 });
+  assert.deepEqual(d.commands, [{ bin: 'npm', count: 2 }, { bin: 'git', count: 1 }]);
   assert.deepEqual(d.skills, [{ name: 'superpowers:brainstorming', count: 1 }]);
   assert.equal(digest([file], { since: Date.parse(at(9)) }).commands.length, 1);
 });
@@ -100,6 +109,11 @@ test('pipelines: existing ones only', () => {
   put('proj/.github/workflows/ci.yml', 'on: push\n');
   put('proj/package.json', '{}\n');
   assert.deepEqual(pipelineFiles(proj), ['.github/workflows/ci.yml', 'package.json']);
+  // _workspace/_run lists folders only
+  const runProj = join(root, 'run-proj');
+  mkdirSync(join(runProj, '_workspace', '_run', 'phase-1'), { recursive: true });
+  put('run-proj/_workspace/_run/notes.md', 'x\n');
+  assert.deepEqual(pipelineFiles(runProj), ['_workspace/_run/phase-1']);
 });
 
 console.log(`session-digest.check: ${n} cases passed`);

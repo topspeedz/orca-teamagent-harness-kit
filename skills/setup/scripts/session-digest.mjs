@@ -42,7 +42,9 @@ export function digest(files, { since, limit }) {
       if (!ln.trim()) continue;
       let o;
       try { o = JSON.parse(ln); } catch { skipped++; continue; }
-      if (o.timestamp && Date.parse(o.timestamp) < since) continue;
+      if (typeof o !== 'object' || o === null || Array.isArray(o)) { skipped++; continue; }
+      const ts = typeof o.timestamp === 'string' ? o.timestamp : '';
+      if (ts && Date.parse(ts) < since) continue;
       // subagent files carry user/assistant lines only as sidechain, so they do not count as sessions
       if ((o.type === 'user' || o.type === 'assistant') && !o.isSidechain && !counted) { counted = true; sessions++; }
       const content = o.message?.content;
@@ -61,7 +63,7 @@ export function digest(files, { since, limit }) {
       const text = (typeof content === 'string' ? content
         : Array.isArray(content) ? content.filter((b) => b.type === 'text').map((b) => b.text).join('\n') : '').trim();
       if (!text || text.startsWith('<') || text.includes(WORKER_MARK)) continue;
-      found.push({ date: o.timestamp?.slice(0, 10) ?? '', session: basename(file), text: clean(text), t: Date.parse(o.timestamp) || 0 });
+      found.push({ date: ts.slice(0, 10), session: basename(file), text: clean(text), t: Date.parse(ts) || 0 });
     }
   }
   const seen = new Set();
@@ -70,12 +72,14 @@ export function digest(files, { since, limit }) {
 }
 
 export function pipelineFiles(target) {
-  const list = (dir, max = Infinity) => (existsSync(join(target, dir)) ? readdirSync(join(target, dir)).slice(0, max).map((f) => `${dir}/${f}`) : []);
+  // sorted so the same entries are kept on every platform
+  const list = (dir, max = Infinity, dirsOnly = false) => (existsSync(join(target, dir))
+    ? readdirSync(join(target, dir), { withFileTypes: true }).filter((e) => !dirsOnly || e.isDirectory()).map((e) => e.name).sort().slice(0, max).map((f) => `${dir}/${f}`) : []);
   return [
     ...list('.github/workflows'),
     ...['.gitlab-ci.yml', 'Jenkinsfile', 'Makefile', 'package.json'].filter((f) => existsSync(join(target, f))),
     ...list('scripts', 30),
-    ...list('_workspace/_run'),
+    ...list('_workspace/_run', Infinity, true),
     ...['docs/harness/team-org.md'].filter((f) => existsSync(join(target, f))),
   ];
 }
