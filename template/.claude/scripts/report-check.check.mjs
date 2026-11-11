@@ -59,6 +59,12 @@ assert.equal(r.code, 0);
 assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
 ok();
 
+// QA boundary sections: ❌ under "## 경계면 대조" and "## 점검표 후보" are findings too, and only the 검증 lines are counted
+r = run('boundary.md', '# QA\n## 결함\n| H-1 | High | ❌ 발견 |\n## 경계면 대조\n| 응답 구조 | a.js:1 | b.js:2 | ❌ H-1 |\n- ❌ 응답 구조와 기대 형태가 같은가 → H-1\n- (해당 없음) 상태 전이\n## 점검표 후보\n- ❌ 날짜 형식이 양쪽에서 같은가\n## 검증\n- ✅ 흐름 실행\n- ✅ 경계면 대조: 점검표 항목마다 결과를 적음\n');
+assert.equal(r.code, 0);
+assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
+ok();
+
 // a ❌ inside the 검증 section (sub-heading included) still fails; ✅ outside it is not counted
 r = run('verify-fail.md', '# 리포트\n## 결함\n- ✅ 범위 밖\n## 검증\n- ✅ check\n### 재검\n- ❌ npm test 미실행\n');
 assert.equal(r.code, 1);
@@ -110,6 +116,19 @@ ok();
 r = run('cap2.md', `${head}재검 회차: 2\n- ✅ check\n`);
 assert.equal(r.code, 0);
 ok();
+// --round-cap: a third round the user approved passes with the cap raised to 3, and the fourth still fails
+{
+  const capped = (name, cap) => {
+    const r2 = spawnSync(process.execPath, [script, join(dir, name), '--round-cap', cap], { encoding: 'utf8' });
+    return { code: r2.status, out: JSON.parse(r2.stdout) };
+  };
+  assert.equal(capped('cap3.md', '3').code, 0);
+  writeFileSync(join(dir, 'cap4.md'), `${head}재검 회차: 4\n- ✅ check\n`, 'utf8');
+  const fourth = capped('cap4.md', '3');
+  assert.equal(fourth.code, 1);
+  assert.match(fourth.out.failed[0], /재검 상한 3회 초과/);
+  ok();
+}
 
 // CRLF gives the same result as LF
 const body = '# 리포트\n## 결함\n- ❌ 발견\n## 검증\n- ✅ check\n- (참고) ❌ 미실행\n```\n- ❌ 양식\n```\n';
@@ -125,6 +144,24 @@ mkdirSync(spaced);
 r = run('01_planner_plan_v1.md', `${head}- ✅ check\n`, spaced);
 assert.equal(r.code, 0);
 ok();
+
+// --expect: the Task's artifact must exist. A report that passes on its own fails when an expected file is missing,
+// and every missing path is named; with all of them present the verdict is unchanged.
+{
+  writeFileSync(join(dir, 'artifact.txt'), 'made', 'utf8');
+  const withExpect = (...paths) => {
+    const r2 = spawnSync(process.execPath, [script, join(dir, 'pass.md'), ...paths.flatMap((p) => ['--expect', p])], { encoding: 'utf8' });
+    return { code: r2.status, out: JSON.parse(r2.stdout) };
+  };
+  const present = withExpect(join(dir, 'artifact.txt'));
+  assert.equal(present.code, 0);
+  assert.deepEqual(present.out.failed, []);
+  const missing = withExpect(join(dir, 'artifact.txt'), join(dir, 'never-made.txt'), join(dir, 'also-missing'));
+  assert.equal(missing.code, 1);
+  assert.equal(missing.out.ok, false);
+  assert.deepEqual(missing.out.failed, [`❌ 산출물 없음: ${join(dir, 'never-made.txt')}`, `❌ 산출물 없음: ${join(dir, 'also-missing')}`]);
+  ok();
+}
 
 // R1 A-3: run through a junction or symlink to the scripts folder — main must still run (exit 1 and JSON for a failing report)
 const link = join(dir, 'linked scripts');

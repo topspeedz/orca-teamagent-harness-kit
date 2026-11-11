@@ -21,6 +21,7 @@ const INSTALL_RECORD = '.claude/harness-install.json';
 const DIAGRAM = ['dag-swimlane', 'waterfall-timeline'];
 const EXISTING = ['AGENTS.md', 'CLAUDE.md', '.claude', '.gitignore', '.agents', '.codex', 'package.json', 'Makefile'];
 const MODES = ['default', 'acceptEdits', 'bypassPermissions'];
+const PLANNER_EFFORTS = ['high', 'max'];
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'worktrees']);
 
 function walk(dir, base = dir, out = []) {
@@ -45,7 +46,8 @@ export function inspect(target, { run, exists, globalSkillsDir }) {
   };
 }
 
-// Adds only hooks and permissions entries; a hook already registered with the same matcher and command is not added again.
+// Adds only hooks, permissions entries and missing env keys; a hook already registered with the same matcher and command
+// is not added again, and an env value the project already set stays.
 export function mergeSettings(existing, add) {
   const out = structuredClone(existing);
   for (const [event, groups] of Object.entries(add.hooks ?? {})) {
@@ -62,6 +64,7 @@ export function mergeSettings(existing, add) {
     const cur = ((out.permissions ??= {})[key] ??= []);
     for (const v of list) if (!cur.includes(v)) cur.push(v);
   }
+  for (const [k, v] of Object.entries(add.env ?? {})) (out.env ??= {})[k] ??= v;
   return out;
 }
 
@@ -74,10 +77,10 @@ export function mergeGitignore(text, lines) {
   return (text && !text.endsWith('\n') ? text + eol : text) + add.map((l) => l + eol).join('');
 }
 
-export function setPlannerRow(tableText, model, effort) {
+// Setup asks only for the planner's effort; the model stays what the table says.
+export function setPlannerRow(tableText, effort) {
   return tableText.replace(/^\|\s*`planner`\s*\|.*$/gm, (line) => {
     const cells = line.split('|');
-    cells[4] = ` ${model} `;
     cells[5] = ` ${effort} `;
     return cells.join('|');
   });
@@ -124,7 +127,7 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     } else if (rel === GATE_CONFIG) {
       content = json({ ...JSON.parse(src), prefixes: answers.approvalPrefixes });
     } else if (rel === MODEL_TABLE) {
-      content = setPlannerRow(src, answers.planner.model, answers.planner.effort);
+      content = setPlannerRow(src, answers.planner.effort);
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
     if (cur && !merged) {
@@ -210,7 +213,8 @@ function main(argv) {
   if (cmd === 'install') {
     const answers = JSON.parse(readFileSync(opt('--answers'), 'utf8'));
     if (!MODES.includes(answers.coordinatorPermissionMode)) throw new Error(`coordinatorPermissionMode는 ${MODES.join(', ')} 중 하나다`);
-    if (!Array.isArray(answers.approvalPrefixes) || !answers.planner?.model || !answers.planner?.effort) throw new Error('answers에 approvalPrefixes 배열과 planner.model, planner.effort가 있어야 한다');
+    if (!Array.isArray(answers.approvalPrefixes)) throw new Error('answers에 approvalPrefixes 배열이 있어야 한다');
+    if (!PLANNER_EFFORTS.includes(answers.planner?.effort)) throw new Error(`planner.effort는 ${PLANNER_EFFORTS.join(', ')} 중 하나다`);
     const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
     r.keep = initKeep(target, answers.coordinatorPermissionMode);

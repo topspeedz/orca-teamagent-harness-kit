@@ -22,7 +22,9 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 병렬 지표: 작업 시간 합 ÷ 임계 경로, 최대 동시 Task 수, 계획값과 실제값 | 계획값 `waterfall.json`의 likely 일정, 실제값 `actual.json` |
 | 코디네이터가 깬 턴 수와 그 가운데 heartbeat만 든 깸 | Claude Code 세션 기록(`.jsonl`) |
 | 수정 루프 횟수 | `ledger.md`의 예산 줄 |
-| 재시도와 원인, 실패 Task, 질문이 있던 Task | `ledger.md`의 표 |
+| 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
+| 실패 Task | `actual.json`의 `status` (Orca의 기록) |
+| 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
 | 작업 폴더의 크기 | `_workspace/` |
 
 ### 명령
@@ -44,7 +46,13 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 
 ### `actual.json` 만드는 법
 
-코디네이터가 Run 폴더에 `[{"id":"<Task ID>","start":"<ISO 시각>","end":"<ISO 시각>"}]` 배열로 적는다. `start`는 그 Task의 기동 영수증에 찍힌 시각, `end`는 그 Task의 `worker_done`을 받은 시각을 옮겨 적는다. `id`는 `waterfall.json`의 Task ID와 같아야 하고, 의존은 `waterfall.json`에서 가져온다. 재시도한 Task는 마지막 기동의 시각을 적고 재시도 자체는 장부에 남는다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
+코디네이터가 7단계를 띄우기 전에 아래 명령으로 만든다. 손으로 적지 않는다.
+
+```bash
+node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-tasks.json > _workspace/_run/<phase>/actual.json
+```
+
+`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
 
 ### heartbeat만 든 깸은 근사다
 
@@ -81,6 +89,7 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 - 근거가 있는 항목만, 원인이 있는 가장 가까운 파일 하나에서 최소로 고친다. 사실은 한 줄도 잃지 않는다.
 - 안내 문구로 실행 제약을 대신하지 않는다. 막아야 하면 훅 차단이고, 그것은 사용자 승인 대상이다.
 - 항상 로드되는 파일(`AGENTS.md`, `CLAUDE.md`, description)이 늘면 어디서 줄였는지 적는다. 세부는 스킬과 참조 문서로 내린다.
+- QA 리포트의 `## 점검표 후보`는 `qa-verification`의 `references/boundary-checklist.md`의 "이 프로젝트에서 겪은 것"에 옮긴다. 출처(phase 이름과 결함 ID)를 붙이고, 같은 뜻의 항목이 있으면 더하지 않는다. 점검 항목은 규칙이 아니라서 한 번 겪은 것도 옮긴다.
 - 고친 하네스 파일마다 `docs/harness/changelog.md`에 한 줄(변경 내용 · 대상 · 사유)을 적는다.
 - 고친 하네스 파일은 같은 PR의 **별도 커밋**으로 들어간다. 커밋은 코디네이터가 한다. 워커는 커밋하지 않는다.
 - **모델 표 `docs/harness/model-selection.md`는 직접 고치지 않는다.** 바꿀 배정과 근거(재시도, 실패, 적용값)를 리포트에 제안으로 적고 사용자 승인을 받는다.

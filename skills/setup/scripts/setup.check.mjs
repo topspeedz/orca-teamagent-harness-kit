@@ -24,6 +24,7 @@ put(tpl, 'gitignore.add', '_workspace/\n.claude/coordinator.settings.local.json\
 put(tpl, '.claude/settings.json', JSON.stringify({
   hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [hook('orca-wait-gate')] }], UserPromptSubmit: [{ hooks: [hook('worker-intake-context')] }] },
   permissions: { deny: ['Bash(git push --force:*)'], ask: [] },
+  env: { PLAYWRIGHT_MCP_ISOLATED: 'true', PLAYWRIGHT_MCP_HEADLESS: 'true' },
 }, null, 2));
 put(tpl, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
 put(tpl, '.claude/hooks/approval-gate.config.json', '{ "prefixes": [] }\n');
@@ -33,7 +34,7 @@ put(tpl, '.claude/skills/waterfall-timeline/SKILL.md', '---\nname: waterfall-tim
 put(codex, '.codex/hooks.json', '{}\n');
 put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 
-const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { model: 'opus', effort: 'max' } };
+const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'max' } };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
 const ALL = ['.claude/hooks/approval-gate.config.json', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', 'docs/harness/model-selection.md'];
 let n = 0;
@@ -80,11 +81,21 @@ test('installed self-tests pass when settings.json already has user hooks', () =
   const real = (dir) => fileURLToPath(new URL(`../../../${dir}`, import.meta.url));
   const r = applyInstall(planInstall(real('template'), real('template-codex'), t, ANSWERS, INS), { approve: [] });
   assert.deepEqual(r.conflicts, []);
-  for (const check of ['.claude/hooks/orca-wait-gate.check.mjs', '.claude/scripts/coordinator-settings.check.mjs']) {
+  for (const check of ['.claude/hooks/orca-wait-gate.check.mjs', '.claude/hooks/secret-gate.check.mjs', '.claude/scripts/coordinator-settings.check.mjs']) {
     const run = spawnSync(process.execPath, [join(t, check)], { cwd: t, encoding: 'utf8' });
     assert.equal(run.status, 0, `${check}
 ${run.stdout}${run.stderr}`);
   }
+});
+
+test('template env is installed; a value the user already set is kept', () => {
+  const fresh = target('env-fresh');
+  install(fresh);
+  assert.deepEqual(JSON.parse(read(fresh, '.claude/settings.json')).env, { PLAYWRIGHT_MCP_ISOLATED: 'true', PLAYWRIGHT_MCP_HEADLESS: 'true' });
+  const t = target('env-user');
+  put(t, '.claude/settings.json', JSON.stringify({ env: { PLAYWRIGHT_MCP_HEADLESS: 'false', MINE: '1' } }));
+  install(t);
+  assert.deepEqual(JSON.parse(read(t, '.claude/settings.json')).env, { PLAYWRIGHT_MCP_HEADLESS: 'false', MINE: '1', PLAYWRIGHT_MCP_ISOLATED: 'true' });
 });
 
 // R1 A-8: through the CLI with the real template, so the exit code is the one the setup skill sees
@@ -139,11 +150,20 @@ test('codex false installs no codex files', () => {
   assert.ok(existsSync(join(root, 'codex', '.codex/hooks.json')));
 });
 
-test('planner row gets the chosen model', () => {
+test('planner row gets the chosen effort and keeps the table model', () => {
   const t = target('planner');
-  install(t, { planner: { model: 'fable', effort: 'max' } });
+  // a model left in an older answers file is ignored: setup no longer asks for it
+  install(t, { planner: { model: 'fable', effort: 'high' } });
   const row = read(t, 'docs/harness/model-selection.md').split('\n').find((l) => l.startsWith('| `planner`'));
-  assert.deepEqual(row.split('|').map((c) => c.trim()).slice(4, 6), ['fable', 'max']);
+  assert.deepEqual(row.split('|').map((c) => c.trim()).slice(4, 6), ['opus', 'high']);
+});
+
+test('install refuses a planner effort other than high or max', () => {
+  put(root, 'bad-effort.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'medium' } }));
+  const setup = fileURLToPath(new URL('./setup.mjs', import.meta.url));
+  const r = spawnSync(process.execPath, [setup, 'install', '--target', target('bad effort'), '--answers', join(root, 'bad-effort.json')], { encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /planner\.effort/);
 });
 
 test('approval prefixes go to permissions.ask and the gate config', () => {

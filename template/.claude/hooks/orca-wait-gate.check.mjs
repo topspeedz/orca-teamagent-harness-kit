@@ -98,6 +98,20 @@ const cases = [
   [bash(`${C} --wait --body "--types x --timeout-ms 1"`), 'deny'],
   [bash(`${C} --wait --timeout-ms-x 1 --types x`), 'deny'],
   [bash(`${C} --wait --timeout-ms 1 --types-x x`), 'deny'],
+  // a background wait stays alone on its line: a leading cd and a pipe into a filter are part of it
+  [bash(`cd /d/repo; ${W} | grep -v _keepalive`, true), null],
+  [bash(`cd "/d/my repo" && ${W}`, true), null],
+  [bash(`${W} | grep -v _keepalive`, true), null],
+  [bash(`node x.mjs; ${W}`, true), 'deny'],
+  [bash(`cd /d/repo; R=_w; node x.mjs --map $R; ${W} | grep -v _keepalive`, true), 'deny'],
+  [bash(`cat > /tmp/l.md <<'EOF'\nrow\nEOF\n${W}`, true), 'deny'],
+  [bash(`orca orchestration reply --id msg_1 --body "ok"; cd /d/repo; ${W}`, true), 'deny'],
+  [bash(`${W}; echo after`, true), 'deny'],
+  [bash(`${W} && ${W}`, true), 'deny'],
+  // foreground lines return their whole output at once, so only background lines are judged
+  [bash(`node x.mjs; ${W}`), null],
+  // `ask --wait` is not a check
+  [bash('cd /d/repo; orca orchestration ask --question q --wait --timeout-ms 1800000 --json > a.json', true), null],
 ];
 for (const [payload, want] of cases) assert.equal(run(payload), want, JSON.stringify(payload).slice(0, 160));
 
@@ -113,6 +127,8 @@ for (const [command, missing] of [
 }
 const shellReason = reasonOf(bash(`${C} --wait &`));
 assert.ok(shellReason.includes('waiter_exists') && !shellReason.includes('빠진 옵션'), shellReason);
+const chainReason = reasonOf(bash(`node x.mjs; ${W}`, true));
+assert.ok(chainReason.includes('단독') && !chainReason.includes('빠진 옵션') && !chainReason.includes('waiter_exists'), chainReason);
 
 // settings.json routes Bash (only Bash) here and the command string runs from root and a nested cwd.
 const entry = JSON.parse(readFileSync(new URL('../settings.json', import.meta.url), 'utf8'))

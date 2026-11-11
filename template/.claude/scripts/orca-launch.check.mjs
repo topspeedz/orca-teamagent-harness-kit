@@ -1,6 +1,9 @@
 // Self-test for orca-launch.mjs — no Orca needed. `node .claude/scripts/orca-launch.check.mjs`
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { tabTitle, parseAssignLine, parseOverrideLine, verifyAssignment, workerStartArgs, coordinatorCommand, main } from './orca-launch.mjs';
 import { TABLE_PATH } from './model-selection.mjs';
 import { SETTINGS_PATH, KEEP_PATH } from './coordinator-settings.mjs';
@@ -313,6 +316,244 @@ await ta(async () => {
   assert.throws(() => coordinatorCommand({ ...base, effort: 'high; id' }), /effort/);
   for (const settingsPath of ['a"b.json', 'a$(id).json', 'a`id`.json']) assert.throws(() => coordinatorCommand({ ...base, settingsPath }), /경로/, settingsPath);
   for (const permissionMode of ['acceptEdits', 'bypassPermissions']) assert.ok(coordinatorCommand({ ...base, permissionMode }).includes(`--permission-mode ${permissionMode} `));
+});
+
+// ---- Tasks registered in Orca (fake orca that keeps Task state the way Orca 1.4.255 was measured to) ----
+const T0 = new Date(Date.UTC(2000, 0, 1)).toISOString();
+const T10 = new Date(Date.UTC(2000, 0, 1, 0, 10)).toISOString();
+function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
+  const calls = [];
+  const tasks = new Map(); // Orca id → { status, deps }
+  const gates = new Map();
+  let n = 0;
+  const fs = files({
+    'a.md': '[역할: qa-inspector]\nTask: T01 로그인 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    'b.md': '[역할: qa-inspector]\nTask: T02 결제 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    ...fileOver,
+  });
+  const refuse = (code, message, data = {}) => ({ ok: false, error: { code, message, data } });
+  const replies = {
+    'orchestration run-create': () => ({ ok: true, result: { run: { id: 'run_exec' } } }),
+    'orchestration task-create': (a) => {
+      const id = `task_${++n}`;
+      const deps = JSON.parse(val(a, '--deps') ?? '[]');
+      tasks.set(id, { status: deps.length ? 'pending' : 'ready', deps });
+      return { ok: true, result: { task: { id, status: tasks.get(id).status } } };
+    },
+    'orchestration task-list': () => ({ ok: true, result: { tasks: [...tasks].map(([id, t]) => (
+      { id, status: t.status, deps: JSON.stringify(t.deps), completed_at: ['completed', 'failed'].includes(t.status) ? T10 : null })) } }),
+    'orchestration task-update': (a) => { tasks.get(val(a, '--id')).status = val(a, '--status'); return { ok: true, result: { taskId: val(a, '--id'), status: val(a, '--status') } }; },
+    'orchestration gate-create': (a) => { tasks.get(val(a, '--task')).status = 'blocked'; gates.set('gate_1', val(a, '--task')); return { ok: true, result: { gate: { id: 'gate_1', status: 'pending' } } }; },
+    // measured: resolving sets the Task ready even when a dependency is unfinished
+    'orchestration gate-resolve': (a) => { tasks.get(gates.get(val(a, '--id'))).status = 'ready'; return { ok: true, result: { gate: { id: val(a, '--id'), status: 'resolved' } } }; },
+    'orchestration dispatch-show': () => ({ ok: true, result: { dispatch: { id: 'ctx_old', status: dispatchStatus } } }),
+    // measured: only a ready Task starts; --retry-of restarts a failed one
+    'orchestration worker-start': (a) => {
+      const t = tasks.get(val(a, '--task'));
+      const retry = a.includes('--retry-of') && t.status === 'failed';
+      if (t.status !== 'ready' && !retry) return refuse('task_not_startable', `Task ${val(a, '--task')} is ${t.status}; only a ready Task can start.`, { unmetDependencies: t.deps.filter((d) => tasks.get(d).status !== 'completed') });
+      t.status = 'dispatched';
+      return { ok: true, result: { taskId: val(a, '--task'), dispatchId: 'ctx_new', runId: val(a, '--run'), turnStart: 'observed',
+        launch: { effective: { model: val(a, '--model') ?? null, effort: val(a, '--effort') ?? null } }, effects: [{ kind: 'terminal', id: 'term_w' }] } };
+    },
+    'terminal rename': () => ({ ok: true, result: {} }),
+  };
+  const deps = {
+    orca: (args) => { calls.push(args); return { status: 0, stdout: JSON.stringify(replies[args.slice(0, 2).join(' ')](args)), stderr: '' }; },
+    read: (p) => { if (fs[p] === undefined) throw new Error(`ENOENT ${p}`); return fs[p]; },
+    write: (p, text) => { fs[p] = text; },
+    now: () => T0,
+    run: inventory(['coordinator']),
+    hookLines: () => RULES,
+  };
+  const count = (name) => calls.filter((a) => a[1] === name).length;
+  return { calls, deps, tasks, fs, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) };
+}
+const M = ['--map', 'm.json'];
+const reg = (id, spec, ...more) => ['register', ...M, '--id', id, '--spec-file', spec, ...more];
+const go = (id, ...more) => ['worker', ...M, '--id', id, '--bracket', 'BL-0012', '--does', '흐름 검증', ...more];
+async function registered(opts) {
+  const f = fakeDag(opts);
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await main(reg('T01', 'a.md'), f.deps);
+  await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps);
+  return f;
+}
+
+// 28. exec-run creates the execution Run once and keeps it in the map
+await ta(async () => {
+  const f = fakeDag();
+  const a = await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  assert.equal(a.code, 0, JSON.stringify(a.out));
+  assert.equal(a.out.run, 'run_exec');
+  assert.equal(f.map().run, 'run_exec');
+  assert.match(val(f.call('run-create'), '--objective'), /^phase-a /);
+  const b = await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  assert.equal(b.out.run, 'run_exec');
+  assert.equal(f.count('run-create'), 1);
+});
+
+// 29. register needs exec-run first; then one task-create in that Run, titled from the spec's Task line; the same id twice makes one Task
+await ta(async () => {
+  const f = fakeDag();
+  assert.equal((await main(reg('T01', 'a.md'), f.deps)).code, 1);
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  const c = f.call('task-create');
+  assert.equal(val(c, '--run'), 'run_exec');
+  assert.equal(val(c, '--task-title'), 'T01 로그인 흐름');
+  assert.equal(val(c, '--spec-file'), 'a.md');
+  assert.equal(f.map().tasks.T01.orca, out.orca);
+  assert.equal(f.map().tasks.T01.model, 'opus');
+  await main(reg('T01', 'a.md'), f.deps);
+  assert.equal(f.count('task-create'), 1);
+});
+
+// 30. register: an assignment that differs from the table → code 1, nothing created
+await ta(async () => {
+  const f = fakeDag({ fileOver: { 'a.md': '[역할: qa-inspector]\nTask: T01 x\n배정: qa-inspector / 흐름 검증 (claude opus/high)' } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+  assert.equal(code, 1);
+  assert.match(out.error, /배정/);
+  assert.equal(f.count('task-create'), 0);
+});
+
+// 31. register with deps: plan ids become Orca ids; a dependency that is not registered yet → code 1
+await ta(async () => {
+  const f = fakeDag();
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  assert.equal((await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps)).code, 1);
+  await main(reg('T01', 'a.md'), f.deps);
+  const { code, out } = await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(JSON.parse(val(f.call('task-create'), '--deps')), [f.map().tasks.T01.orca]);
+  assert.deepEqual(f.map().tasks.T02.deps, ['T01']);
+  assert.equal(out.status, 'pending');
+});
+
+// 32. register a codex row: the six lines are appended to the spec Orca stores
+await ta(async () => {
+  const f = fakeDag();
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  const { code } = await main(reg('T09', 'codex.md'), f.deps);
+  assert.equal(code, 0);
+  const p = val(f.call('task-create'), '--spec-file');
+  assert.notEqual(p, 'codex.md');
+  assert.ok(readFileSync(p, 'utf8').endsWith(`${RULES}\n`));
+});
+
+// 33. worker by plan id: starts the registered Task in the execution Run with the registered model, records dispatch and start time
+await ta(async () => {
+  const f = await registered();
+  const { code, out } = await main(go('T01'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  const c = f.call('worker-start');
+  assert.equal(val(c, '--task'), f.map().tasks.T01.orca);
+  assert.equal(val(c, '--run'), 'run_exec');
+  assert.equal(val(c, '--model'), 'opus');
+  assert.ok(!c.includes('--spec-file'));
+  assert.equal(out.title, '[BL-0012] qa-inspector : opus/medium - 흐름 검증');
+  assert.equal(f.map().tasks.T01.dispatch, 'ctx_new');
+  assert.equal(f.map().tasks.T01.started, T0);
+});
+
+// 34. worker by plan id on a Task Orca will not start → code 1 with Orca's reason and the unmet plan ids; the status is never forced
+await ta(async () => {
+  const f = await registered();
+  const { code, out } = await main(go('T02'), f.deps);
+  assert.equal(code, 1);
+  assert.match(out.error, /pending/);
+  assert.deepEqual(out.unmet, ['T01']);
+  assert.equal(f.count('task-update'), 0);
+  assert.equal(f.map().tasks.T02.dispatch, null);
+});
+
+// 35. ready: only this map's Tasks, in registration order, with every status
+await ta(async () => {
+  const f = await registered();
+  f.tasks.set('task_other', { status: 'ready', deps: [] });
+  const { code, out } = await main(['ready', ...M], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(out.ready, ['T01']);
+  assert.deepEqual(out.status, { T01: 'ready', T02: 'pending' });
+});
+
+// 36. fail: the Task goes back to failed with the cause, and dependents Orca already made ready go back to pending
+await ta(async () => {
+  const f = await registered();
+  const { T01, T02 } = f.map().tasks;
+  f.tasks.get(T01.orca).status = 'completed';
+  f.tasks.get(T02.orca).status = 'ready';
+  const { code, out } = await main(['fail', ...M, '--id', 'T01', '--cause', 'report-check 실패'], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.equal(f.tasks.get(T01.orca).status, 'failed');
+  assert.equal(f.tasks.get(T02.orca).status, 'pending');
+  assert.deepEqual(out.demoted, ['T02']);
+  assert.equal(val(f.calls.find((a) => a[1] === 'task-update' && val(a, '--id') === T01.orca), '--result'), 'report-check 실패');
+});
+
+// 37. gate then resolve: with a dependency unfinished the Task goes back to pending; with it finished the Task stays ready
+await ta(async () => {
+  const f = await registered();
+  const { T01, T02 } = f.map().tasks;
+  const g = await main(['gate', ...M, '--id', 'T02', '--question', '진행할까?'], f.deps);
+  assert.equal(g.code, 0, JSON.stringify(g.out));
+  assert.equal(f.tasks.get(T02.orca).status, 'blocked');
+  assert.equal(f.map().tasks.T02.gate, 'gate_1');
+  const early = await main(['resolve', ...M, '--id', 'T02', '--resolution', '진행'], f.deps);
+  assert.equal(early.code, 0, JSON.stringify(early.out));
+  assert.equal(f.tasks.get(T02.orca).status, 'pending');
+  assert.deepEqual(early.out.waitingOn, ['T01']);
+  assert.equal(f.map().tasks.T02.gate, null);
+  await main(['gate', ...M, '--id', 'T02', '--question', '진행할까?'], f.deps);
+  f.tasks.get(T01.orca).status = 'completed';
+  const late = await main(['resolve', ...M, '--id', 'T02', '--resolution', '진행'], f.deps);
+  assert.equal(f.tasks.get(T02.orca).status, 'ready');
+  assert.deepEqual(late.out.waitingOn, []);
+  // resolve without a gate → code 1
+  assert.equal((await main(['resolve', ...M, '--id', 'T01', '--resolution', 'x'], f.deps)).code, 1);
+});
+
+// 38. retry: a failed attempt restarts with --retry-of; an attempt the worker called a success is reopened first
+await ta(async () => {
+  const a = await registered({ dispatchStatus: 'failed' });
+  await main(go('T01'), a.deps);
+  a.tasks.get(a.map().tasks.T01.orca).status = 'failed';
+  const r1 = await main(go('T01', '--retry'), a.deps);
+  assert.equal(r1.code, 0, JSON.stringify(r1.out));
+  assert.equal(val(a.call('worker-start'), '--retry-of'), 'ctx_old');
+  assert.equal(a.count('task-update'), 0);
+  const b = await registered({ dispatchStatus: 'completed' });
+  await main(go('T01'), b.deps);
+  b.tasks.get(b.map().tasks.T01.orca).status = 'failed';
+  const r2 = await main(go('T01', '--retry'), b.deps);
+  assert.equal(r2.code, 0, JSON.stringify(r2.out));
+  assert.ok(!b.call('worker-start').includes('--retry-of'));
+  assert.equal(val(b.call('task-update'), '--status'), 'ready');
+});
+
+// 39. actual: start from the map, end and status from Orca, settled Tasks only
+await ta(async () => {
+  const f = await registered();
+  await main(go('T01'), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const { code, out } = await main(['actual', ...M], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
+});
+
+// 40. run as a command: outside the project root it refuses before anything else; at the root it runs
+t(() => {
+  const script = fileURLToPath(new URL('./orca-launch.mjs', import.meta.url));
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const away = spawnSync(process.execPath, [script, 'codex-rules'], { cwd: tmpdir(), encoding: 'utf8' });
+  assert.equal(away.status, 1, away.stdout);
+  assert.match(JSON.parse(away.stdout).error, /저장소 루트/);
+  const home = spawnSync(process.execPath, [script, 'codex-rules'], { cwd: root, encoding: 'utf8' });
+  assert.equal(home.status, 0, home.stdout + home.stderr);
+  assert.match(home.stdout, /⑥/);
 });
 
 console.log(`orca-launch.check: ${passed} passed`);

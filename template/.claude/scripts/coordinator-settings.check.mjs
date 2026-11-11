@@ -61,13 +61,22 @@ t(() => {
     { permissionMode: 'default', plugins: { 'a@m': 'off' }, skills: { coordinator: 'keep', x: 'off', 'p:s': 'off' } });
 });
 
-// 7. the four template hooks are registered in settings.json (user hooks may sit beside them) and every hooks/<name>.mjs exists
+// 7. the five template hooks are registered in settings.json (user hooks may sit beside them) and every hooks/<name>.mjs exists
 t(() => {
   const settings = JSON.parse(readFileSync(new URL('../settings.json', import.meta.url), 'utf8'));
   const names = Object.values(settings.hooks).flat().flatMap((g) => g.hooks)
     .map((h) => h.command?.match(/hooks\/([\w-]+)\.mjs/)?.[1]).filter(Boolean);
-  for (const n of ['approval-gate', 'compact-gate', 'orca-wait-gate', 'worker-intake-context']) assert.ok(names.includes(n), n);
+  for (const n of ['approval-gate', 'compact-gate', 'orca-wait-gate', 'secret-gate', 'worker-intake-context']) assert.ok(names.includes(n), n);
   for (const n of names) assert.ok(existsSync(new URL(`../hooks/${n}.mjs`, import.meta.url)), n);
+});
+
+// 8. front-desk.settings.json switches off exactly the browser env that settings.json switches on for every session
+t(() => {
+  const on = JSON.parse(readFileSync(new URL('../settings.json', import.meta.url), 'utf8')).env ?? {};
+  const off = JSON.parse(readFileSync(new URL('../front-desk.settings.json', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(off), ['env'], 'the override file carries env only');
+  assert.deepEqual(Object.keys(off.env).sort(), Object.keys(on).filter((k) => k.startsWith('PLAYWRIGHT_MCP_')).sort());
+  for (const k of Object.keys(off.env)) assert.deepEqual([on[k], off.env[k]], ['true', 'false'], k);
 });
 
 console.log(`coordinator-settings.check: ${passed} passed`);

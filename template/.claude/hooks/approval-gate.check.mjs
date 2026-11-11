@@ -22,6 +22,23 @@ assert.ok(decide(bash('git status; git push'), P)?.deny); n++;
 assert.ok(decide(bash('git status\ngit push'), P)?.deny); n++;
 assert.ok(decide(bash('true | git push'), P)?.deny); n++;
 assert.equal(decide(bash('echo "git push"'), P), null); n++;
+// Force push needs a person in every project, whatever the prefix list holds: a worker is denied and told to ask,
+// an interactive mode is left to permissions.ask.
+for (const command of [
+  'git push --force', 'git push -f origin main', 'git push origin main --force', 'git push origin main --force-with-lease',
+  'git push origin main --force-with-lease=main:abc123', 'git push --force-if-includes origin main', 'git push origin +main',
+  'git -C repo push --force', 'cd repo && git push -fu origin main', 'git push "--force"', 'bash -c "git push -f"',
+]) {
+  assert.ok(decide(bash(command), [])?.deny.startsWith('force push'), command); n++;
+  assert.equal(decide(bash(command, 'default'), []), null, command); n++;
+}
+assert.ok(decide(bash('git push --force'), P)?.deny.startsWith('force push'), 'force push wins over the plain prefix'); n++;
+for (const command of ['git push origin main', 'git push origin feature-f', 'echo "git push --force"', 'git commit -m "+1 -f"', 'git status --force', 'git pull --force']) {
+  assert.equal(decide(bash(command), []), null, command); n++;
+}
+// with no project prefix and nothing readable there is still nothing to judge
+assert.equal(decide(null, []), null); n++;
+
 // R1 A-2: the 13 shapes a bypass worker writes in plain shell are all denied.
 for (const command of [
   '(git push)',
@@ -43,6 +60,25 @@ for (const command of ['for r in a; do git push; done', '! git push', 'nohup git
   'pwsh -NoProfile -Command "git status; git push"', "sh -c 'cd x && git push'"]) {
   assert.ok(decide(bash(command), P)?.deny, command); n++;
 }
+// A quoted-delimiter heredoc that `cat` redirects to a file is text, not commands (first run: a spec file mentioning `git push` was denied).
+for (const command of [
+  "cat > spec.md <<'EOF'\n승인 뒤에만 `git push`를 실행한다\ngit push origin main\nEOF",
+  "mkdir -p d && cat > d/spec.md <<'EOF'\ngit push\nEOF\ngit status",
+  'cat <<"EOF" > f\ngit push\nEOF',
+  "cat >> f <<-'EOF'\n\tgit push\n\tEOF",
+]) { assert.equal(decide(bash(command), P), null, command); n++; }
+// Every other heredoc body is still read as commands.
+for (const command of [
+  'cat > f <<EOF\n`git push`\nEOF', // unquoted delimiter: the backticks run
+  "bash <<'EOF'\ngit push\nEOF", // the body is a script
+  "cat <<'EOF' | bash\ngit push\nEOF", // piped into a shell
+  "cat <<'EOF'\ngit push\nEOF", // no file redirect: a $(…) around it would run the output
+  "cat 2>/dev/null <<'EOF'\ngit push\nEOF", // stderr redirect only
+  "cat > f <<'EOF'\ntext\nEOF\ngit push", // a command after the heredoc
+  "cat > f <<'EOF'; git push\ntext\nEOF", // a command on the opening line
+  "cat > f <<'EOF'\ngit push", // no terminator
+  "cat > f <<EOF <<'B'\n`git push`\nEOF\nx\nB", // two heredocs on one line
+]) { assert.ok(decide(bash(command), P)?.deny, command); n++; }
 assert.equal(decide(bash("echo 'a; git push'"), P), null); n++;
 assert.equal(decide(bash('git status && git pull'), P), null); n++;
 assert.equal(decide(bash('git status'), P), null); n++;
