@@ -40,7 +40,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-Once setup finishes, add a team ([Adding a team](#adding-a-team)) and send work to the front desk session.
+Once setup finishes, send work to the front desk session. You pick teams in step 7 of `setup` and can add more by hand later ([Adding a team](#adding-a-team)).
 
 ## Features
 
@@ -56,7 +56,7 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 
 - Teams with different roles, such as product, development, verification, and harness, work together inside one phase.
 - Each team has its own team skill. The team lead splits the team's tasks and supervises its members.
-- You add teams from templates.
+- Step 7 of `setup` recommends teams from past work and creates the ones you pick. You can also add teams from templates by hand later.
 
 **Role hierarchy and size-based routing**
 
@@ -83,7 +83,7 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 | Verification | `code-reviewer` | Code review (read-only) |
 | Harness | `harness-engineer` | End-of-phase retro and harness improvements |
 
-Domain teams such as development or design are not included. You add them from templates.
+Domain teams such as development or design are not included. Step 7 of `setup` recommends them from past work and creates the ones you pick, or you add them from templates by hand.
 
 **Hooks and scripts that enforce the rules**
 

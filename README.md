@@ -38,7 +38,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-설치가 끝나면 팀을 하나 추가하고([팀 추가](#팀-추가)) 창구 세션에 작업을 요청한다.
+설치가 끝나면 창구 세션에 작업을 요청한다. 팀은 `setup`의 7단계에서 고르고, 나중에 직접 추가할 수도 있다([팀 추가](#팀-추가)).
 
 ## 특징
 
@@ -54,7 +54,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 - 기획, 개발, 검증, 하네스처럼 역할이 다른 팀이 하나의 phase 안에서 함께 동작한다.
 - 팀마다 팀 skill을 갖고, 팀장이 자기 팀의 Task를 분할하고 팀원을 감독한다.
-- 팀은 템플릿으로 직접 추가한다.
+- 팀은 `setup`의 7단계가 지난 작업을 보고 추천해 고른 대로 만든다. 나중에 템플릿으로 직접 추가할 수도 있다.
 
 **역할 계층과 요청 규모별 라우팅**
 
@@ -81,7 +81,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
 | 하네스 | `harness-engineer` | phase 종료 시 회고와 하네스 개선 |
 
-개발, 디자인 같은 도메인 팀은 포함하지 않는다. 템플릿으로 직접 추가한다.
+개발, 디자인 같은 도메인 팀은 포함하지 않는다. `setup`의 7단계가 지난 작업을 보고 추천해 고른 대로 만들고, 템플릿으로 직접 추가할 수도 있다.
 
 **규칙을 강제하는 hook과 스크립트**
 

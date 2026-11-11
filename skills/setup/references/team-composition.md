@@ -18,7 +18,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 - `commands`, `skills`: 많이 쓴 셸 명령과 스킬 상위 30개와 횟수.
 - `pipelines`: 기존 파이프라인 파일(CI workflow, `Makefile`, `package.json`, `scripts/`, `_workspace/_run/`의 Run 폴더, 명단). 직접 읽는다.
 
-`prompts`가 비면 "세션 기록 없음"이라고 알린다. `prompts`와 `pipelines`가 둘 다 비면 추천 없이 3절의 "직접 적어서 구성"만 보여 준다.
+`prompts`의 `ok` 한 줄은 setup이 목록을 조사하며 띄운 세션이라 요청으로 세지 않는다. 한 일을 알려 주는 요청이 없으면 "세션 기록 없음"이라고 알린다. 그런 요청이 없고 `pipelines`에 명단 `docs/harness/team-org.md`밖에 없으면 추천 없이 3절의 "직접 적어서 구성"만 보여 준다.
 
 비밀 값 가림은 토큰 접두어와 긴 16진수만 잡는다. 그래서 요청 원문은 어디에도 옮기지 않는다.
 
