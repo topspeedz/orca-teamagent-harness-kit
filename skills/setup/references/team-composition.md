@@ -27,6 +27,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 - 반복해서 나온 일의 종류(구현, 화면, 데이터, 배포, 문서 등)를 묶어 팀 후보를 만든다.
 - 이미 `docs/harness/team-org.md`에 있는 팀은 "있음"으로만 보여 준다. product·qa·harness가 이미 맡는 일은 새 팀으로 추천하지 않는다.
 - 근거를 댈 수 없는 팀은 추천하지 않는다.
+- 새 역할을 추천하는 기준은 [principles.md §5](principles.md)의 세 증거(반복, 분리, 절차)다. 세팅하는 프로젝트에는 아직 Run이 없으므로 반복의 증거는 Run 리포트가 아니라 1절에서 모은 세션 기록과 파이프라인 파일로 댄다.
 
 추천 표의 칸:
 
@@ -58,12 +59,9 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
 
 ## 5. 만들기
 
-팀마다 이 순서로 만든다. 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 사용자에게 알린다. 양식의 안내 문장과 `<...>`는 남기지 않는다.
+팀마다 이 순서로 만든다. 표의 줄을 먼저 넣으므로 `add`가 실패하면 아무것도 만들어지지 않는다. 시작하기 전에 2~3의 파일을 확인한다. 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 사용자에게 알리며, 그 팀은 만들지 않는다. 양식의 안내 문장과 `<...>`는 남기지 않는다.
 
-1. 에이전트 `.claude/agents/<에이전트>.md`(양식 `docs/harness/templates/agent.md`).
-2. 팀 스킬 `.claude/skills/team-<팀>/SKILL.md`(양식 `docs/harness/templates/team-skill.md`).
-3. 명단 `docs/harness/team-org.md`에 팀 한 줄.
-4. 모델 표에 그 에이전트의 줄. runtime·model·effort는 표의 `*` 기본 줄(agent `*`, unit `기본`) 값을 그대로 쓴다(`rows` 명령으로 읽는다. `*` 리드 줄이 아니다). 추천값은 넣지 않는다. 사용자가 8단계 설문에서 저장할 때만 표에 쓰인다. 줄을 `_workspace/setup/model-rows.json`에 쓰고 넣는다.
+1. 모델 표에 그 에이전트의 줄. runtime·model·effort는 표의 `*` 기본 줄(agent `*`, unit `기본`) 값을 그대로 쓴다(`rows` 명령으로 읽는다. `*` 리드 줄이 아니다). 추천값은 넣지 않는다. 사용자가 8단계 설문에서 저장할 때만 표에 쓰인다. 줄을 `_workspace/setup/model-rows.json`에 쓰고 넣는다.
 
    ```sh
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" rows --table docs/harness/model-selection.md
@@ -77,7 +75,10 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" add --table docs/harness/model-selection.md --rows _workspace/setup/model-rows.json
    ```
 
-   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. 이미 있는 (에이전트, 작업 단위) 줄도 거절한다.
+   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. runtime·model·effort가 모두 `*` 기본 줄과 같은 줄은 목록을 보지 않고 받는다. 그 값은 소유자가 정한 기본값이다(고정한 모델 ID 등). 이미 있는 (에이전트, 작업 단위) 줄도 거절한다. 거절되면 메시지를 보여 주고 이 팀의 나머지 단계로 가지 않는다.
+2. 에이전트 `.claude/agents/<에이전트>.md`(양식 `docs/harness/templates/agent.md`).
+3. 팀 스킬 `.claude/skills/team-<팀>/SKILL.md`(양식 `docs/harness/templates/team-skill.md`).
+4. 명단 `docs/harness/team-org.md`에 팀 한 줄.
 5. 검사.
 
    ```sh
@@ -98,7 +99,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    [{ "agent": "developer", "unit": "구현", "isNew": true, "model": "opus", "effort": "medium", "reason": "여러 파일을 고치는 구현" }]
    ```
 
-   기준은 모델 표 머리말이 가리키는 모델 선택 가이드(복잡도, 예상 기간, 필요한 자율성, 응답 속도)다. `isNew`는 이번 실행에서 넣은 줄만 참이다. 새 줄의 추천은 2절에서 정한 값이다. 줄 목록은 이 명령으로 본다.
+   기준은 모델 표 머리말이 가리키는 모델 선택 가이드(복잡도, 예상 기간, 필요한 자율성, 응답 속도)다. `isNew`는 이번 실행에서 넣은 줄만 참이다. 새 줄의 추천은 2절에서 정한 값이다. 0.1.0으로 깐 표는 `coordinator` 줄 model에 옛 표기(opus 뒤에 대괄호로 컨텍스트 창 크기를 붙인 것)가 남아 있을 수 있다. 그 줄은 그냥 `opus`를 추천한다. 지금 opus는 기본으로 100만 토큰 창으로 돈다. 줄 목록은 이 명령으로 본다.
 
    ```sh
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" rows --table docs/harness/model-selection.md

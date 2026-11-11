@@ -145,7 +145,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 ## 7. 팀 구성
 
-[references/team-composition.md](references/team-composition.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 팀 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(`/model`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
+[references/team-composition.md](references/team-composition.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 팀 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(예: `/model opus`, `/effort max`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
 
 1. 지난 세션 기록과 기존 파이프라인을 모은다(`session-digest.mjs`).
 2. 근거와 함께 팀과 팀원을 추천하고 설문으로 고르게 한다: 추천대로 / 골라서·고쳐서 / 직접 적기 / 지금은 만들지 않음.
@@ -162,9 +162,10 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 - 깔린 것: 3단계의 `written`.
 - 건너뛴 것: `skipped`와 사유, 승인받지 못한 `conflicts`.
-- 실패한 검증: 5단계 표의 ❌ 줄.
+- 실패한 검증: 5단계 표의 ❌ 줄, 8단계 `node .claude/scripts/model-selection.mjs check`가 실패했으면 그 출력.
+- 8단계의 결과: 모델 표에서 바뀐 줄(없으면 없다고)과 `node .claude/scripts/model-selection.mjs check`의 결과.
 - 6단계의 산출물: V1 표(검증 명령이 없으면 없다고), 게이트 표(deny, ask, 훅), 라우팅 표, 토큰 기준선(또는 측정하지 못한 사유), 하지 않기로 한 것.
-- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천, 모델 표에서 바뀐 줄. 팀을 나중에 더 넣으려면 setup을 다시 돌리거나 양식(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`)으로 직접 넣는다.
+- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀을 나중에 더 넣으려면 setup을 다시 돌리거나 양식(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`)으로 직접 넣는다.
 - 브라우저 설정: 이 프로젝트의 세션은 기본으로 Playwright 브라우저를 창 없이, 세션마다 따로 띄운다(QA를 병렬로 돌리기 위한 값이다). 직접 여는 세션에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 열어야 한다고 전한다.
 - 워커의 깊이: 이 틀은 워커를 세 단(코디네이터, 팀장, 팀원)까지 띄운다. Orca는 워커가 워커를 띄우는 깊이에 한도를 두므로, 팀장이 팀원을 띄우지 못하면 Orca 설정에서 그 한도를 확인해야 한다고 전한다.
 - force push: 막지 않고 항상 사용자 승인을 거친다. 대화형 세션은 확인 질문을 받고, 무인 워커는 승인 훅이 막은 뒤 `ask`로 올린다. 어느 세션에서도 막아야 하는 명령이 따로 있으면 `permissions.deny`에 넣으라고 전한다.

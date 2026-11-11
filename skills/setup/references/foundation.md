@@ -63,7 +63,10 @@
 
 ## 5. 위임은 필요할 때만
 
-기본은 **인라인 직접 처리**다. 이 스킬은 팀과 에이전트를 만들지 않는다. 에이전트와 스킬은 같은 절차가 반복된 증거와 독립 책임이 생긴 뒤에 만든다([principles.md §5](principles.md)). Orca 틀을 깔았으면 `docs/harness/templates/`의 양식으로 직접 추가한다.
+기본은 **인라인 직접 처리**다. 에이전트와 스킬은 같은 절차가 반복된 증거와 독립 책임이 생긴 뒤에 만든다([principles.md §5](principles.md)).
+
+- Orca 틀을 깔았으면 팀과 팀원은 7단계([team-composition.md](team-composition.md))에서 지난 작업을 근거로 추천하고, 사용자가 고른 것만 만든다. 나중에 하나를 더할 때는 `docs/harness/templates/`의 양식으로 직접 넣어도 된다.
+- Orca를 쓰지 않으면 이 스킬은 팀과 에이전트를 만들지 않는다.
 
 ## 6. 측정과 성장 규칙
 
