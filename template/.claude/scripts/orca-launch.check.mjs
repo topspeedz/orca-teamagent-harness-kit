@@ -102,14 +102,14 @@ const files = (over = {}) => ({
 const inventory = (skills) => () => JSON.stringify({ type: 'system', subtype: 'init', plugins: [{ source: 'p@p' }], skills });
 const val = (a, f) => (a.includes(f) ? a[a.indexOf(f) + 1] : undefined);
 const RULES = '[워커 작업 방식 — 가짜]\n①\n②\n③\n④\n⑤\n⑥';
-function fake({ runs = [], fileOver = {}, skills = ['coordinator'], hookLines = () => RULES } = {}) {
+function fake({ runs = [], fileOver = {}, skills = ['coordinator'], hookLines = () => RULES, turnStart = 'observed', blockedReason = null } = {}) {
   const calls = [];
   const replies = {
     'orchestration run-list': () => ({ ok: true, result: { runs } }),
     'orchestration run-create': () => ({ ok: true, result: { run: { id: 'run_new' } } }),
     'terminal create': () => ({ ok: true, result: { terminal: { handle: 'term_c' } } }),
-    'terminal wait': () => ({ ok: true, result: { wait: { satisfied: true } } }),
-    'orchestration worker-start': (a) => ({ ok: true, result: { taskId: 'task_1', dispatchId: 'ctx_1', runId: val(a, '--run') ?? 'run_1', state: 'ready', turnStart: 'observed',
+    'terminal wait': () => ({ ok: true, result: { wait: blockedReason ? { satisfied: false, blockedReason } : { satisfied: true } } }),
+    'orchestration worker-start': (a) => ({ ok: true, result: { taskId: 'task_1', dispatchId: 'ctx_1', runId: val(a, '--run') ?? 'run_1', state: 'ready', turnStart,
       launch: { effective: { model: val(a, '--model') ?? null, effort: val(a, '--effort') ?? null } }, effects: [{ kind: 'terminal', role: 'agent', id: 'term_w' }] } }),
     'terminal rename': () => ({ ok: true, result: {} }),
     'orchestration check': () => ({ ok: true, result: { messages: [] } }),
@@ -255,6 +255,22 @@ await ta(async () => {
   const { code } = await main(workerArgv, f.deps);
   assert.equal(code, 0);
   assert.equal(val(f.calls.find((a) => a[1] === 'worker-start'), '--spec-file'), 'qa.md');
+});
+
+// 20b. a worker whose turn did not start is checked for a blocking screen (e.g. Codex asking to trust hooks);
+//      the script never answers it: the receipt says so and the coordinator asks the front desk
+await ta(async () => {
+  const f = fake({ turnStart: 'unobserved', blockedReason: 'hook-trust' });
+  const { code, out } = await main(codexArgv, f.deps);
+  assert.equal(code, 1);
+  assert.equal(out.turnStarted, false);
+  assert.equal(out.blocked, 'hook-trust');
+  assert.match(out.next, /누르지 않/);
+  assert.equal(val(f.calls.find((x) => x[0] === 'terminal' && x[1] === 'wait'), '--terminal'), 'term_w');
+  assert.ok(!f.calls.some((x) => x[0] === 'terminal' && x[1] === 'send'), 'never answers the screen');
+  const g = fake();
+  await main(codexArgv, g.deps);
+  assert.ok(!g.calls.some((x) => x[0] === 'terminal' && x[1] === 'wait'), 'a started turn is not checked');
 });
 
 // 21. codex-rules → the six lines, code 0
