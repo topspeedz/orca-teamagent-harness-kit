@@ -642,6 +642,19 @@ await ta(async () => {
   assert.equal(none.fs['waterfall.plan.json'], undefined);
 });
 
+// 49. launchable lists waiting Tasks as pull candidates: the unfinished Tasks each waits on and its spec's 먼저 읽을 것 lines
+await ta(async () => {
+  const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)\n\n먼저 읽을 것:\n- web/stage.js\n- 메모 T03.memo.md\n\n편집 범위: tests/c.spec.mjs' } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await main(reg('T01', 'a.md'), f.deps);
+  await main(reg('T02', 'b.md'), f.deps);
+  await main(reg('T03', 'c.md', '--deps', 'T01,T02'), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const { code, out } = await main(['launchable', ...M, '--slots', '8'], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(out.candidates, [{ id: 'T03', waitingOn: ['T02'], reads: ['web/stage.js', '메모 T03.memo.md'] }]);
+});
+
 // 40. run as a command: outside the project root it refuses before anything else; at the root it runs
 t(() => {
   const script = fileURLToPath(new URL('./orca-launch.mjs', import.meta.url));

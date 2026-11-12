@@ -87,7 +87,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
    ```
 
 - **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
-- **비어 있는 `launch`를 두고 슬롯이 남으면 이유를 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. 남는 슬롯이 절반 넘게 비어 있는데 대기 중인 Task가 그 Task가 읽지 않는 Task만 기다리고 있으면, 위 `--deps` 규칙대로 실제 입력만 의존으로 남겨 당긴다: `node .claude/scripts/orca-launch.mjs pull --map <map> --id <Task ID> --deps <실제 입력 Task,…> --reason "<이유>"`. 실제 입력이 모두 끝났을 때만 준비 상태가 되고, 아니면 `waitingOn`을 돌려주고 아무것도 바꾸지 않는다. 검증·리뷰 Task는 바로 당기고, 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다.
+- **`worker_done`을 정산할 때마다 대기 중인 Task를 당길 수 있는지 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. `launchable`의 `candidates`는 대기 중인 Task마다 아직 안 끝난 앞 Task(`waitingOn`)와 spec의 `먼저 읽을 것`(`reads`)을 보여 준다. 빈 슬롯이 있고, `reads`가 `waitingOn` Task의 산출물(그 Task의 편집 범위나 리포트)을 하나도 읽지 않으면, 실제 입력만 의존으로 남겨 당긴다: `node .claude/scripts/orca-launch.mjs pull --map <map> --id <Task ID> --deps <실제 입력 Task,…> --reason "<이유>"`. 실제 입력이 모두 끝났을 때만 준비 상태가 되고, 아니면 `waitingOn`을 돌려주고 아무것도 바꾸지 않는다. 당긴 뒤 `launchable`을 다시 돌린다(편집 겹침과 자원은 거기서 걸러진다). 검증·리뷰 Task는 바로 당기고, 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다. 판단은 `candidates`의 줄만으로 하고 spec 전체를 다시 읽지 않는다.
 - **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.
 - **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
 - **폭은 계획과 `launchable`이 정한다.** 계획에 없는 Task를 즉석에서 만들지 않는다. 계획에 있는 Task의 순서는 위 규칙대로 실제 입력에 맞춰 당길 수 있다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.

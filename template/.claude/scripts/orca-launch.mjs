@@ -225,7 +225,7 @@ export async function main(argv, deps) {
     const orca = t.id ?? created.result?.taskId;
     if (!orca) return fail(`task-create 실패: ${created.error?.message ?? 'Task ID 없음'}`);
     m.tasks[o.id] = { orca, deps: depIds, title, agent: a.agent, unit, runtime: use.runtime, model: use.model, effort: use.effort ?? null, lead: !!o.lead, gate: null, dispatch: null, started: null, registered: deps.now(),
-      edits: csv(o.edits), resource: csv(o.resource) };
+      edits: csv(o.edits), resource: csv(o.resource), spec: o['spec-file'] };
     saveMap(m);
     return { code: 0, out: { id: o.id, orca, status: t.status ?? created.result?.status ?? null } };
   }
@@ -304,7 +304,15 @@ export async function main(argv, deps) {
       if (!reason && running.length + launch.length >= slots) reason = 'no free slot';
       if (reason) held.push({ id, reason }); else { launch.push(id); busy.push(id); }
     }
-    return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held } };
+    // Waiting Tasks with what they still wait on and what their spec reads: the coordinator pulls one when it reads none of those.
+    const reads = (file) => {
+      let text; try { text = deps.read(file); } catch { return null; }
+      const block = /^먼저 읽을 것:[ \t]*\r?\n((?:-.*(?:\r?\n|$))*)/m.exec(text)?.[1] ?? '';
+      return block.split(/\r?\n/).filter((l) => l.startsWith('-')).map((l) => l.replace(/^-\s*/, '').trim());
+    };
+    const candidates = Object.keys(m.tasks).filter((id) => st[id].status === 'pending' && !m.tasks[id].gate).map((id) => ({
+      id, waitingOn: m.tasks[id].deps.filter((d) => st[d].status !== 'completed'), reads: m.tasks[id].spec ? reads(m.tasks[id].spec) : null }));
+    return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held, candidates } };
   }
 
   if (cmd === 'fail') {
