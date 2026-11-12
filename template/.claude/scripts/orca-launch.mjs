@@ -162,16 +162,6 @@ export async function main(argv, deps) {
       matched: applied.model === use.model && applied.effort === use.effort, turnStarted,
     };
     if (!r.dispatchId) out.error = res.error?.message ?? 'worker-start 영수증에 dispatch가 없음';
-    // M9: a turn that did not start may be stuck behind a screen the agent shows first (Codex asks to trust changed hooks).
-    // The script only reads it; trusting hooks is the user's call, so it never answers the screen.
-    if (!turnStarted && terminal) {
-      const w = call(['terminal', 'wait', '--terminal', terminal, '--for', 'tui-idle', '--timeout-ms', '15000']);
-      const reason = w.result?.wait?.blockedReason;
-      if (reason) {
-        out.blocked = reason;
-        out.next = `화면에 확인 창(${reason})이 떠 있다. 코디네이터는 누르지 않고 창구에 ask로 올린다. 사용자가 확인한 뒤 같은 Dispatch에 지시를 다시 입력한다(재기동 아님).`;
-      }
-    }
     // P10: --display-name is not the tab title; rename once, right after start. A rename failure never fails the start.
     if (turnStarted && terminal) call(['terminal', 'rename', '--terminal', terminal, '--title', title]);
     return { code: turnStarted ? 0 : 1, out, res };
