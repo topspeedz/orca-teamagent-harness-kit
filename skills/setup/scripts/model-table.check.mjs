@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { addRows, applyChoices, buildPage, EFFORTS, MODELS, validate } from './model-table.mjs';
+import { addRows, applyChoices, buildPage, codexModels, EFFORTS, MODELS, validate } from './model-table.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./model-table.mjs', import.meta.url));
 const TEMPLATE_HTML = fileURLToPath(new URL('../assets/model-survey.html', import.meta.url));
@@ -160,3 +160,10 @@ test('the shipped template has the placeholder exactly once', () => {
 });
 
 console.log(`model-table.check: ${n} cases passed`);
+
+test('codex models come from the Codex picker cache, hidden ones left out, none when there is no cache', () => {
+  const f = join(mkdtempSync(join(tmpdir(), 'cm-')), 'c.json');
+  writeFileSync(f, JSON.stringify({ models: [{ slug: 'a', visibility: 'list' }, { slug: 'b', visibility: 'hide' }] }), 'utf8');
+  assert.deepEqual(codexModels(f), ['a']);
+  assert.deepEqual(codexModels(f + 'x'), []);
+});

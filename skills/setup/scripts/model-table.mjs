@@ -6,10 +6,21 @@
 //        node model-table.mjs page --table <path> --recommend <json file> --out <html path> [--codex]   the survey page
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const { parseTable, NO_EFFORT_MODELS } = await import(new URL('../../../template/.claude/scripts/model-selection.mjs', import.meta.url));
 
 export const MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
+
+// the models this PC's Codex lists in its own picker; empty when Codex has no cache yet (the box stays free text)
+export function codexModels(file = join(homedir(), '.codex', 'models_cache.json')) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')).models.filter((m) => m.visibility === 'list').map((m) => m.slug);
+  } catch {
+    return [];
+  }
+}
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const RUNTIMES = ['claude', 'codex'];
 
@@ -115,6 +126,7 @@ function pageData(tableText, recommend, codex) {
     models: MODELS,
     efforts: EFFORTS,
     codex,
+    codexModels: codex ? codexModels() : [],
   };
 }
 
