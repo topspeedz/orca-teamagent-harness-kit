@@ -96,6 +96,11 @@ const recText = (rec) => `추천: ${rec.model}${rec.effort ? ' / ' + rec.effort 
 function render() {
   const body = document.getElementById('rows');
   body.replaceChildren();
+  if (!document.getElementById('codex-models')) {
+    const dl = el('datalist', { id: 'codex-models' });
+    dl.append(...(DATA.codexModels ?? []).map((m) => el('option', { value: m })));
+    document.body.append(dl);
+  }
   DATA.rows.forEach((r, i) => {
     const s = state[i], tr = el('tr');
     tr.append(td(el('code', {}, r.agent)), el('td', {}, r.unit));
@@ -118,6 +123,8 @@ function render() {
     if (s.runtime === 'codex') {
       model = el('input', { type: 'text', id: `model-${i}`, value: s.model, className: 'mono' });
       model.oninput = () => { s.model = model.value.trim(); touched = true; };
+      // Codex's own model list as suggestions; any other ID can still be typed
+      model.setAttribute('list', 'codex-models');
     } else {
       model = select(`model-${i}`, DATA.models, s.model);
       model.onchange = () => { s.model = model.value; if (noEffort(s)) s.effort = ''; change(model.id); };
