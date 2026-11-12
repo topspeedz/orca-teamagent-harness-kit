@@ -93,6 +93,7 @@ node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-t
 - 항상 로드되는 파일(`AGENTS.md`, `CLAUDE.md`, description)이 늘면 어디서 줄였는지 적는다. 세부는 스킬과 참조 문서로 내린다.
 - QA 리포트의 `## 점검표 후보`는 `qa-verification`의 `references/boundary-checklist.md`의 "이 프로젝트에서 겪은 것"에 옮긴다. 출처(phase 이름과 결함 ID)를 붙이고, 같은 뜻의 항목이 있으면 더하지 않는다. 점검 항목은 규칙이 아니라서 한 번 겪은 것도 옮긴다.
 - 고친 하네스 파일마다 `docs/harness/changelog.md`에 한 줄(변경 내용 · 대상 · 사유)을 적는다.
+- 같은 수정을 플러그인 원본에도 반영하면, 플러그인 저장소 루트의 `CHANGELOG.md`에 한 줄(날짜 · 변경 내용 · 대상 · 어느 프로젝트의 어느 phase에서 왜)을 적는다. 파일이 없으면 만든다.
 - 고친 하네스 파일은 같은 PR의 **별도 커밋**으로 들어간다. 커밋은 코디네이터가 한다. 워커는 커밋하지 않는다.
 - **모델 표 `docs/harness/model-selection.md`는 직접 고치지 않는다.** 바꿀 배정과 근거(재시도, 실패, 적용값)를 리포트에 제안으로 적고 사용자 승인을 받는다.
 - 사용자 승인 뒤에만 고치는 것: `.claude/settings*.json`, 훅의 차단 범위, 권한, 모델 표. 승인 전에는 제안으로만 남긴다.
