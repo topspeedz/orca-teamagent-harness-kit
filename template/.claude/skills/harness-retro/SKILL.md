@@ -24,7 +24,7 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 수정 루프 횟수 | `ledger.md`의 예산 줄 |
 | 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
 | 실패 Task | `actual.json`의 `status` (Orca의 기록) |
-| 준비→기동 지연: 마지막 의존이 끝난 때(그 뒤에 등록된 Task는 등록한 때)부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
+| 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
 | 작업 폴더의 크기 | `_workspace/` |
 
 ### 명령
@@ -54,7 +54,7 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-tasks.json > _workspace/_run/<phase>/actual.json
 ```
 
-`registered`는 그 Task를 등록한 시각, `start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
+`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
 
 ### heartbeat만 든 깸은 근사다
 

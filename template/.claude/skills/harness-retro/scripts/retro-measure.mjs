@@ -47,15 +47,14 @@ export function actual(list, wf) {
   const ms = list.filter((r) => r.id in deps).map((r) => {
     const s = Date.parse(r.start), e = Date.parse(r.end);
     if (Number.isNaN(s) || Number.isNaN(e) || e < s) throw new Error(`actual: ${r.id} has an invalid start/end`);
-    return { id: r.id, s, e, reg: Date.parse(r.registered) || 0 };
+    return { id: r.id, s, e };
   });
   const t0 = Math.min(...ms.map((r) => r.s));
-  // ready→start: minutes a Task sat startable, from its last dependency's end (or its own registration, when it was
-  // registered later than that) to its own start. A Task with no dependency, or with one that was not measured, is
-  // left out rather than guessed.
+  // ready→start: minutes a Task sat startable, from its last dependency's end to its own start. A Task with no
+  // dependency, or with one that was not measured, is left out rather than guessed.
   const byId = new Map(ms.map((r) => [r.id, r]));
   const delays = ms.filter((r) => deps[r.id].length && deps[r.id].every((d) => byId.has(d)))
-    .map((r) => ({ id: r.id, min: Math.max(0, r.s - Math.max(r.reg, ...deps[r.id].map((d) => byId.get(d).e))) / 60000 }));
+    .map((r) => ({ id: r.id, min: Math.max(0, r.s - Math.max(...deps[r.id].map((d) => byId.get(d).e))) / 60000 }));
   const worst = delays.reduce((a, d) => (!a || d.min > a.min ? d : a), null);
   return {
     ...parallel(ms.map((r) => ({ id: r.id, start: (r.s - t0) / 60000, end: (r.e - t0) / 60000 })), deps),

@@ -224,7 +224,7 @@ export async function main(argv, deps) {
     const t = created.result?.task ?? {};
     const orca = t.id ?? created.result?.taskId;
     if (!orca) return fail(`task-create 실패: ${created.error?.message ?? 'Task ID 없음'}`);
-    m.tasks[o.id] = { orca, deps: depIds, title, agent: a.agent, unit, runtime: use.runtime, model: use.model, effort: use.effort ?? null, lead: !!o.lead, gate: null, dispatch: null, started: null, registered: deps.now(),
+    m.tasks[o.id] = { orca, deps: depIds, title, agent: a.agent, unit, runtime: use.runtime, model: use.model, effort: use.effort ?? null, lead: !!o.lead, gate: null, dispatch: null, started: null,
       edits: csv(o.edits), resource: csv(o.resource), spec: o['spec-file'] };
     saveMap(m);
     return { code: 0, out: { id: o.id, orca, status: t.status ?? created.result?.status ?? null } };
@@ -363,7 +363,7 @@ export async function main(argv, deps) {
     // start is this script's launch time, end is Orca's; a Task that has not settled is left out
     const rows = Object.entries(m.tasks)
       .filter(([id, e]) => e.started && ['completed', 'failed'].includes(st[id].status) && st[id].completed_at)
-      .map(([id, e]) => ({ id, ...(e.registered ? { registered: e.registered } : {}), start: e.started, end: new Date(st[id].completed_at).toISOString(), status: st[id].status }));
+      .map(([id, e]) => ({ id, start: e.started, end: new Date(st[id].completed_at).toISOString(), status: st[id].status }));
     return { code: 0, out: rows };
   }
 

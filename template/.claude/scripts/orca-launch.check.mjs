@@ -543,10 +543,7 @@ await ta(async () => {
   f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
   const { code, out } = await main(['actual', ...M], f.deps);
   assert.equal(code, 0, JSON.stringify(out));
-  assert.deepEqual(out, [{ id: 'T01', registered: T0, start: T0, end: T10, status: 'completed' }]);
-  // a Task registered before the registration time was kept has no `registered`
-  const m = f.map(); delete m.tasks.T01.registered; f.fs['m.json'] = JSON.stringify(m);
-  assert.deepEqual((await main(['actual', ...M], f.deps)).out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
+  assert.deepEqual(out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
 });
 
 // 41. register keeps --edits and --resource in the map (what launchable compares)
@@ -618,12 +615,6 @@ await ta(async () => {
   assert.deepEqual(f.map().tasks.T03.deps, ['T01']);
   assert.deepEqual(f.map().tasks.T03.pulled, { from: ['T01', 'T02'], reason: 'T02의 산출물을 읽지 않음', at: T0 });
   assert.equal((await pull('--deps', 'T01', '--reason', 'x')).code, 1);   // no longer pending
-});
-
-// 47. register keeps the registration time (a Task added after the plan is not ready before it exists)
-await ta(async () => {
-  const f = await registered();
-  assert.equal(f.map().tasks.T02.registered, T0);
 });
 
 // 48. exec-run freezes the approved plan once: waterfall.json next to the map → waterfall.plan.json, never overwritten

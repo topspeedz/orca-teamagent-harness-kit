@@ -63,14 +63,6 @@ t('actual: ready→start delay is the gap between the last dependency ending and
     { tasks: 0, sum: 0, max: 0, at: null });
 });
 
-t('actual: a Task registered after its dependencies ended is ready from its registration, not before it existed', () => {
-  const r = actual([
-    { id: 'A', start: at(0), end: at(12) }, { id: 'B', start: at(12), end: at(42) },
-    { id: 'C', start: at(13), end: at(20) }, { id: 'D', registered: at(44), start: at(45), end: at(50) },
-  ], wf);
-  assert.deepEqual(r.readyDelay, { tasks: 3, sum: 2, max: 1, at: 'C' });
-});
-
 t('actual: a Task that is not in the plan (a team Task, a phase step) is left out and counted; end before start throws', () => {
   const r = actual([{ id: 'A', start: at(0), end: at(12) }, { id: 'Z', start: at(0), end: at(1) }], wf);
   assert.equal(r.tasks, 1); assert.equal(r.skipped, 1);
