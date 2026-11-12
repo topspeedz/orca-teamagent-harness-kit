@@ -11,7 +11,6 @@
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
 //   node .claude/scripts/orca-launch.mjs unhandled --map <map>   (messages to this map's workers that they have not taken)
-//   node .claude/scripts/orca-launch.mjs reply --map <map> --id <message id> --body <답> [--verify-ms 25000]   (answer, then report handled)
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
@@ -97,7 +96,7 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
-    'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason', 'body', 'verify-ms'].map((k) => [k, { type: 'string' }]),
+    'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason'].map((k) => [k, { type: 'string' }]),
   ['lead', { type: 'boolean' }],
   ['retry', { type: 'boolean' }],
 ]);
@@ -288,25 +287,6 @@ export async function main(argv, deps) {
 
   // A reply or send the worker has not taken. Right after sending this is normal (a working worker takes it when its
   // turn ends); still listed at the next wake, the worker may not have woken — look at its screen.
-  // Answer a worker's question, then check in the same call that the answer was taken.
-  // measured 2026-11-12: a reply landing seconds after the worker ended its turn was typed into its input but not submitted
-  // (77 min idle). Waiting here costs no extra model call; `handled: false` means look at the worker's screen.
-  if (cmd === 'reply') {
-    if (!o.map || !o.id || !o.body) return fail('사용법: reply --map <map> --id <message id> --body <답> [--verify-ms 25000]');
-    const ms = Number(o['verify-ms'] ?? 25000);
-    if (!Number.isInteger(ms) || ms < 0) return fail('--verify-ms는 0 이상의 정수');
-    let m;
-    try { m = loadMap(); } catch (e) { return fail(e.message); }
-    const sent = call(['orchestration', 'reply', '--id', o.id, '--body', o.body]);
-    const reply = sent.result?.messageId;
-    if (sent.ok === false || !reply) return fail(`reply 실패: ${sent.error?.message ?? 'messageId 없음'}`);
-    await (deps.sleep ?? ((t) => new Promise((r) => setTimeout(r, t))))(ms);
-    const box = call(['orchestration', 'inbox', '--limit', '200']);
-    const row = (box.result?.messages ?? []).find((x) => x.id === reply);
-    const byDispatch = Object.fromEntries(Object.entries(m.tasks).filter(([, e]) => e.dispatch).map(([id, e]) => [`dispatch:${e.dispatch}`, id]));
-    return { code: 0, out: { reply, task: row ? byDispatch[row.to] ?? null : null, handled: row ? row.handled : null } };
-  }
-
   if (cmd === 'unhandled') {
     let m;
     try { m = loadMap(); } catch (e) { return fail(e.message); }
@@ -467,7 +447,7 @@ export async function main(argv, deps) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|unhandled|reply|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|unhandled|fail|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };

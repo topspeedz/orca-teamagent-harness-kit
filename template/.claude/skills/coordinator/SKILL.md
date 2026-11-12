@@ -128,7 +128,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 `worker_done`마다 네 가지를 본다. 기대한 Dispatch인가, 리포트 파일이 있는가, 계획서가 적은 그 Task의 산출물이 실제로 있는가, 리포트의 검증 절이 통과하는가. 뒤의 둘은 한 명령으로 본다: `node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`. 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 워커의 검사를 다시 돌리지 않고 리포트 전문을 읽지 않는다.
 
 - **실패로 처리할 때는 `fail` 명령을 돌린다.** `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`. Orca는 워커의 성공 보고만으로 그 Task를 끝난 것으로 치고 뒤 Task를 준비 상태로 올린다. 이 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
-- 질문을 올린 워커에게는 `send`가 아니라 답 명령으로 먼저 답한다: `node .claude/scripts/orca-launch.mjs reply --map <map> --id <message id> --body <답>`. 이 명령은 답을 보내고 스크립트 안에서 25초 기다린 뒤 워커가 답을 가져갔는지(`handled`)를 돌려준다(모델 호출이 늘지 않는다). `handled: false`면 그 워커 화면을 본다: 깨우기 문구가 입력창에 남아 있으면 `orca terminal send`로 Enter만 1회 보내고, 입력창이 비어 있으면 `orca orchestration check`를 돌리라고 넣는다(같은 Dispatch이고 재기동이 아니다). 워커가 턴을 막 끝낸 직후에 온 답이나 사람이 그 창을 보고 있을 때 문구만 들어가고 제출되지 않는 일이 있다(2026-11-12 측정, 77분 정지). 놓친 것은 깰 때마다 `node .claude/scripts/orca-launch.mjs unhandled --map <map>`을 `launchable`과 같은 명령 줄로 돌려 잡는다. 장부의 `## 결정`에 적는다.
+- 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다. 답한 뒤 다음에 깼을 때 `node .claude/scripts/orca-launch.mjs unhandled --map <map>`을 `launchable`과 함께 돌린다. 그 답이 아직 목록에 있으면 워커가 깨지 않았을 수 있다. 화면을 보고, 멈춰 있으면 `orca terminal send`로 그 터미널에 `orca orchestration check`를 돌리라고 넣는다(같은 Dispatch이고 재기동이 아니다). 장부의 `## 결정`에 적는다.
 - `stopReason: "finished"`인 `escalation`("Worker stopped without reporting")은 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다.
 - 기동 스크립트가 턴 시작을 확인하지 못해도 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 확인한 뒤에만 복구한다.
 
