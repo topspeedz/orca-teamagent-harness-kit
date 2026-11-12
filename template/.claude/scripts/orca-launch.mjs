@@ -5,9 +5,10 @@
 //   node .claude/scripts/orca-launch.mjs codex-rules   (prints the six worker lines for a Codex Task spec)
 // Tasks registered in Orca (the coordinator's execution Run; <map> is _workspace/_run/<phase>/orca-tasks.json):
 //   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map>
-//   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>]
+//   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]
 //   node .claude/scripts/orca-launch.mjs worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]
 //   node .claude/scripts/orca-launch.mjs ready --map <map>
+//   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
@@ -93,13 +94,14 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
-    'map', 'id', 'deps', 'cause', 'question', 'resolution'].map((k) => [k, { type: 'string' }]),
+    'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots'].map((k) => [k, { type: 'string' }]),
   ['lead', { type: 'boolean' }],
   ['retry', { type: 'boolean' }],
 ]);
 const fail = (error, extra = {}) => ({ code: 1, out: { error, ...extra } });
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // phase name or backlog ID as a whole token of the objective (`phase-a` must not match `phase-ab`)
+const csv = (s) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const hasToken = (text, token) => new RegExp(`(^|[\\s\\[,])${escapeRe(token)}($|[\\s\\],])`).test(text);
 
 export async function main(argv, deps) {
@@ -191,7 +193,7 @@ export async function main(argv, deps) {
   }
 
   if (cmd === 'register') {
-    if (!o.map || !o.id || !o['spec-file']) return fail('사용법: register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>]');
+    if (!o.map || !o.id || !o['spec-file']) return fail('사용법: register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]');
     let m, spec, row;
     try { m = loadMap(); } catch (e) { return fail(`${o.map}을 읽지 못함 — exec-run을 먼저 돌린다 (${e.message})`); }
     if (m.tasks[o.id]) return { code: 0, out: { id: o.id, orca: m.tasks[o.id].orca, existing: true } };
@@ -215,7 +217,8 @@ export async function main(argv, deps) {
     const t = created.result?.task ?? {};
     const orca = t.id ?? created.result?.taskId;
     if (!orca) return fail(`task-create 실패: ${created.error?.message ?? 'Task ID 없음'}`);
-    m.tasks[o.id] = { orca, deps: depIds, title, agent: a.agent, unit, runtime: use.runtime, model: use.model, effort: use.effort ?? null, lead: !!o.lead, gate: null, dispatch: null, started: null };
+    m.tasks[o.id] = { orca, deps: depIds, title, agent: a.agent, unit, runtime: use.runtime, model: use.model, effort: use.effort ?? null, lead: !!o.lead, gate: null, dispatch: null, started: null,
+      edits: csv(o.edits), resource: csv(o.resource) };
     saveMap(m);
     return { code: 0, out: { id: o.id, orca, status: t.status ?? created.result?.status ?? null } };
   }
@@ -247,6 +250,33 @@ export async function main(argv, deps) {
     try { m = loadMap(); st = statuses(m); } catch (e) { return fail(e.message); }
     const status = Object.fromEntries(Object.entries(st).map(([id, t]) => [id, t.status ?? null]));
     return { code: 0, out: { run: m.run, ready: Object.keys(status).filter((id) => status[id] === 'ready'), status } };
+  }
+
+  // What can start now: ready Tasks, in registration order, that fit the free slots and share no edited path
+  // (a directory edit covers files under it) and no resource with a running or already-picked Task.
+  if (cmd === 'launchable') {
+    let m, st;
+    try { m = loadMap(); st = statuses(m); } catch (e) { return fail(e.message); }
+    const slots = Number(o.slots ?? 8);
+    if (!Number.isInteger(slots) || slots < 1) return fail('--slots는 1 이상의 정수');
+    const running = Object.keys(m.tasks).filter((id) => st[id].status === 'dispatched');
+    const busy = [...running];
+    const launch = [], held = [];
+    const overlap = (a, b) => a.startsWith(b) || b.startsWith(a);
+    for (const id of Object.keys(m.tasks).filter((x) => st[x].status === 'ready')) {
+      const e = m.tasks[id];
+      let reason = null;
+      for (const other of busy) {
+        const x = m.tasks[other];
+        const path = (e.edits ?? []).find((p) => (x.edits ?? []).some((q) => overlap(p, q)));
+        if (path) { reason = `edits overlap ${other} (${path})`; break; }
+        const res = (e.resource ?? []).find((r) => (x.resource ?? []).includes(r));
+        if (res) { reason = `resource ${res} taken by ${other}`; break; }
+      }
+      if (!reason && running.length + launch.length >= slots) reason = 'no free slot';
+      if (reason) held.push({ id, reason }); else { launch.push(id); busy.push(id); }
+    }
+    return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held } };
   }
 
   if (cmd === 'fail') {
@@ -370,7 +400,7 @@ export async function main(argv, deps) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|fail|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };

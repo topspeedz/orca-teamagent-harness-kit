@@ -544,6 +544,52 @@ await ta(async () => {
   assert.deepEqual(out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
 });
 
+// 41. register keeps --edits and --resource in the map (what launchable compares)
+await ta(async () => {
+  const f = fakeDag();
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  const { code, out } = await main(reg('T01', 'a.md', '--edits', 'web/ui/,tests/a.spec.mjs', '--resource', 'gpu'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(f.map().tasks.T01.edits, ['web/ui/', 'tests/a.spec.mjs']);
+  assert.deepEqual(f.map().tasks.T01.resource, ['gpu']);
+});
+
+// 42. launchable: ready Tasks that fit the free slots and touch nothing a running Task edits or holds
+await ta(async () => {
+  const f = fakeDag({ fileOver: {
+    'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    'd.md': '[역할: qa-inspector]\nTask: T04 D\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    'e.md': '[역할: qa-inspector]\nTask: T05 E\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+  } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await main(reg('T01', 'a.md', '--edits', 'web/character.js'), f.deps);            // running
+  await main(reg('T02', 'b.md', '--edits', 'web/character.js,web/ui/'), f.deps);    // ready, overlaps T01's file
+  await main(reg('T03', 'c.md', '--resource', 'blender'), f.deps);                  // ready, free
+  await main(reg('T04', 'd.md', '--resource', 'blender'), f.deps);                  // ready, same resource as T03 picked first
+  await main(reg('T05', 'e.md', '--deps', 'T03'), f.deps);                          // pending
+  f.tasks.get(f.map().tasks.T01.orca).status = 'dispatched';
+  const { code, out } = await main(['launchable', ...M, '--slots', '8'], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(out.launch, ['T03']);
+  assert.equal(out.running, 1);
+  assert.equal(out.free, 7);
+  assert.deepEqual(Object.fromEntries(out.held.map((h) => [h.id, h.reason])), {
+    T02: 'edits overlap T01 (web/character.js)', T04: 'resource blender taken by T03' });
+});
+
+// 43. launchable never fills more than the free slots; a directory edit overlaps a file under it
+await ta(async () => {
+  const f = await registered();
+  f.tasks.get(f.map().tasks.T01.orca).status = 'dispatched';
+  f.tasks.get(f.map().tasks.T02.orca).status = 'ready';
+  const full = await main(['launchable', ...M, '--slots', '1'], f.deps);
+  assert.deepEqual(full.out.launch, []);
+  assert.deepEqual(full.out.held, [{ id: 'T02', reason: 'no free slot' }]);
+  const m = f.map(); m.tasks.T01.edits = ['web/ui/']; m.tasks.T02.edits = ['web/ui/team-select.js']; f.fs['m.json'] = JSON.stringify(m);
+  const overlap = await main(['launchable', ...M, '--slots', '8'], f.deps);
+  assert.deepEqual(overlap.out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/ui/team-select.js)' }]);
+});
+
 // 40. run as a command: outside the project root it refuses before anything else; at the root it runs
 t(() => {
   const script = fileURLToPath(new URL('./orca-launch.mjs', import.meta.url));
