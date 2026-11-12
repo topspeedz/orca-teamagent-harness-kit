@@ -73,19 +73,24 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 스크립트가 `배정:` 줄을 모델 표와 대조하고, 다르면 등록하지 않는다. 사용자가 다른 값을 지시했으면 spec에 `사용자 예외: <원문>` 줄을 넣고 `--override-reason "<원문>"`을 넘긴다.
 
    ```text
-   node .claude/scripts/orca-launch.mjs register --map <map> --id <Task ID> --spec-file <spec> [--deps <앞 Task ID>,<앞 Task ID>]
+   node .claude/scripts/orca-launch.mjs register --map <map> --id <Task ID> --spec-file <spec> [--deps <앞 Task ID>,<앞 Task ID>] [--edits <경로>,<경로>] [--resource <gpu>,<blender>]
    ```
 
-3. **띄우기.** `ready`가 보여 주는 Task를 빈 슬롯만큼 띄운다. 남은 임계 경로가 긴 것부터 띄운다. `worker_done`을 정산할 때마다 `ready`를 다시 본다. 웨이브를 기다리지 않는다.
+   - `--deps`에는 **그 Task가 실제로 읽는 산출물을 만드는 Task만** 건다. 계획서가 "앞 단계 전부 뒤"처럼 단계로 묶어 두었어도, 그 Task가 읽지 않는 Task는 걸지 않는다. 예: 월드 영역 QA는 월드 영역 구현 Task에만 의존하고, 상관없는 캐릭터 연결 Task를 기다리지 않는다.
+   - `--edits`에는 계획서의 그 Task 편집 범위를, `--resource`에는 혼자 써야 하는 자원(GPU를 크게 쓰는 일은 `gpu`, Blender MCP는 `blender`)을 넘긴다. 아래 `launchable`이 이 둘로 겹침을 가른다.
+
+3. **띄우기.** `launchable`이 돌려준 `launch` 목록을 그대로 띄운다. 이 명령은 Orca가 준비 상태로 둔 Task 가운데, 빈 슬롯 안에서, 지금 도는 Task와 편집 경로도 자원도 겹치지 않는 것만 고른다. 판단으로 고르지 않고 이 계산을 따른다.
 
    ```text
-   node .claude/scripts/orca-launch.mjs ready --map <map>
+   node .claude/scripts/orca-launch.mjs launchable --map <map> --slots <브리프의 슬롯 수>
    node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일>
    ```
 
-- **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `ready`를 돌려 `ready` 목록이 비었는지 본다. 남아 있으면 띄우고, 띄우지 못하면(슬롯이 찼다, 같은 자원을 쓰는 Task가 돌고 있다) 그 사유를 장부의 `## 결정`에 적은 뒤에 대기를 건다.
+- **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
+- **비어 있는 `launch`를 두고 슬롯이 남으면 이유를 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. 남는 슬롯이 절반 넘게 비어 있는데 대기 중인 Task가 그 Task가 읽지 않는 Task만 기다리고 있으면, 위 `--deps` 규칙대로 실제 입력만 의존으로 다시 등록해 당긴다. 검증·리뷰 Task는 바로 당기고, 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다.
+- **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.
 - **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
-- **폭은 계획이 정한다.** 계획 없이 즉석에서 병렬을 만들지 않는다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
+- **폭은 계획과 `launchable`이 정한다.** 계획에 없는 Task를 즉석에서 만들지 않는다. 계획에 있는 Task의 순서는 위 규칙대로 실제 입력에 맞춰 당길 수 있다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
 - **팀장.** 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요하면 팀장을 띄운다. 그 팀의 Task들은 팀 spec 하나로 묶어 Task 하나로 등록하고(`register`에 `--lead`), 팀 사이의 의존은 이 팀 Task끼리 건다. 팀 안의 순서는 팀장이 지킨다. 명단의 "팀장이 되는 에이전트"로, spec 첫 줄을 `[역할: <에이전트> · 리드]`로 쓴다. 팀장 spec의 배정 줄은 계획서의 팀원 배정이 아니라 `배정: <에이전트> / 리드 (<모델 표의 `리드` 줄 값>)`이다. 팀장에게는 팀 spec 하나를 주고 통합 보고 하나를 받는다.
 - **그림.** `ready`가 돌려준 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 `ready`의 `status`에서 가져오고 기억으로 적지 않는다(`completed`는 완료, `dispatched`는 진행, 그 밖은 대기).
 - 기동 영수증의 적용값을 장부에 적는다. 요청한 값만 보고 적지 않는다([settle.md](references/settle.md)).
