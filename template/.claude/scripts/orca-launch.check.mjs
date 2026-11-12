@@ -595,24 +595,6 @@ await ta(async () => {
   assert.deepEqual(overlap.out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/ui/team-select.js)' }]);
 });
 
-// 44. a started Task that Orca shows `blocked` (turn start not observed) is running: it takes a slot and holds its paths;
-//     a Task blocked by a gate was never started and is not running
-await ta(async () => {
-  const f = await registered();
-  await main(go('T01'), f.deps);
-  const m = f.map(); m.tasks.T01.edits = ['web/a.js']; m.tasks.T02.edits = ['web/a.js']; f.fs['m.json'] = JSON.stringify(m);
-  f.tasks.get(m.tasks.T01.orca).status = 'blocked';
-  f.tasks.get(m.tasks.T02.orca).status = 'ready';
-  const { out } = await main(['launchable', ...M], f.deps);
-  assert.equal(out.running, 1, JSON.stringify(out));
-  assert.deepEqual(out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/a.js)' }]);
-  assert.deepEqual((await main(['ready', ...M], f.deps)).out.running, ['T01']);
-  const g = await registered();
-  await main(['gate', ...M, '--id', 'T01', '--question', '진행할까?'], g.deps);
-  assert.equal((await main(['launchable', ...M], g.deps)).out.running, 0);
-  assert.deepEqual((await main(['ready', ...M], g.deps)).out.running, []);
-});
-
 // 45. pull: a pending Task's dependencies become its real inputs; it goes ready only when those are all completed, and the map keeps why
 await ta(async () => {
   const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)' } });
@@ -636,20 +618,6 @@ await ta(async () => {
   assert.deepEqual(f.map().tasks.T03.deps, ['T01']);
   assert.deepEqual(f.map().tasks.T03.pulled, { from: ['T01', 'T02'], reason: 'T02의 산출물을 읽지 않음', at: T0 });
   assert.equal((await pull('--deps', 'T01', '--reason', 'x')).code, 1);   // no longer pending
-});
-
-// 46. unhandled: messages sent to this map's workers that they have not taken (a reply that did not wake its worker)
-await ta(async () => {
-  const f = await registered();
-  await main(go('T01'), f.deps);
-  f.inbox.push(
-    { id: 'msg_a', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_new', handled: false },
-    { id: 'msg_b', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_new', handled: true },
-    { id: 'msg_c', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_other', handled: false },
-    { id: 'msg_d', type: 'worker_done', subject: 'done', to: 'run:run_exec', handled: false });
-  const { code, out } = await main(['unhandled', ...M], f.deps);
-  assert.equal(code, 0, JSON.stringify(out));
-  assert.deepEqual(out.unhandled, [{ id: 'T01', message: 'msg_a', subject: 'Re: Question' }]);
 });
 
 // 47. register keeps the registration time (a Task added after the plan is not ready before it exists)

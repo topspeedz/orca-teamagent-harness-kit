@@ -10,7 +10,6 @@
 //   node .claude/scripts/orca-launch.mjs ready --map <map>
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
-//   node .claude/scripts/orca-launch.mjs unhandled --map <map>   (messages to this map's workers that they have not taken)
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
@@ -177,10 +176,6 @@ export async function main(argv, deps) {
     const byOrca = new Map((list.result?.tasks ?? []).map((t) => [t.id, t]));
     return Object.fromEntries(Object.entries(m.tasks).map(([id, e]) => [id, byOrca.get(e.orca) ?? {}]));
   };
-  // measured: a started worker whose turn start was not observed stays `blocked` in Orca while it works.
-  // A Task blocked by a gate was never started, so it is not running.
-  const runningIds = (m, st) => Object.keys(m.tasks).filter((id) =>
-    st[id].status === 'dispatched' || (st[id].status === 'blocked' && m.tasks[id].started && !m.tasks[id].gate));
   const setStatus = (m, orca, status, ...more) => call(['orchestration', 'task-update', '--id', orca, '--status', status, '--run', m.run, ...more]);
 
   if (cmd === 'exec-run') {
@@ -261,7 +256,7 @@ export async function main(argv, deps) {
     let m, st;
     try { m = loadMap(); st = statuses(m); } catch (e) { return fail(e.message); }
     const status = Object.fromEntries(Object.entries(st).map(([id, t]) => [id, t.status ?? null]));
-    return { code: 0, out: { run: m.run, ready: Object.keys(status).filter((id) => status[id] === 'ready'), running: runningIds(m, st), status } };
+    return { code: 0, out: { run: m.run, ready: Object.keys(status).filter((id) => status[id] === 'ready'), status } };
   }
 
   // Orca cannot change a registered Task's dependencies, so the real inputs go into the map (what fail and resolve read)
@@ -285,20 +280,6 @@ export async function main(argv, deps) {
     return { code: 0, out: { id: o.id, status: 'ready', deps: depIds, was: e.pulled.from } };
   }
 
-  // A reply or send the worker has not taken. Right after sending this is normal (a working worker takes it when its
-  // turn ends); still listed at the next wake, the worker may not have woken — look at its screen.
-  if (cmd === 'unhandled') {
-    let m;
-    try { m = loadMap(); } catch (e) { return fail(e.message); }
-    // shortcut: the newest 200 messages across recipients; an older unhandled message is not seen
-    const box = call(['orchestration', 'inbox', '--limit', '200']);
-    if (box.ok === false) return fail(`inbox 실패: ${box.error?.message}`);
-    const byDispatch = Object.fromEntries(Object.entries(m.tasks).filter(([, e]) => e.dispatch).map(([id, e]) => [`dispatch:${e.dispatch}`, id]));
-    const unhandled = (box.result?.messages ?? []).filter((x) => x.handled === false && byDispatch[x.to])
-      .map((x) => ({ id: byDispatch[x.to], message: x.id, subject: x.subject ?? null }));
-    return { code: 0, out: { run: m.run, unhandled } };
-  }
-
   // What can start now: ready Tasks, in registration order, that fit the free slots and share no edited path
   // (a directory edit covers files under it) and no resource with a running or already-picked Task.
   if (cmd === 'launchable') {
@@ -306,7 +287,7 @@ export async function main(argv, deps) {
     try { m = loadMap(); st = statuses(m); } catch (e) { return fail(e.message); }
     const slots = Number(o.slots ?? 8);
     if (!Number.isInteger(slots) || slots < 1) return fail('--slots는 1 이상의 정수');
-    const running = runningIds(m, st);
+    const running = Object.keys(m.tasks).filter((id) => st[id].status === 'dispatched');
     const busy = [...running];
     const launch = [], held = [];
     const overlap = (a, b) => a.startsWith(b) || b.startsWith(a);
@@ -447,7 +428,7 @@ export async function main(argv, deps) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|unhandled|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };
