@@ -8,7 +8,7 @@
 
 | 유형 | 처리 |
 | --- | --- |
-| `question` | `send`가 아니라 `reply --id <message id>`로 먼저 답한다. 코디네이터가 모르는 것은 `ask --wait`로 창구에 올리고(`SKILL.md`의 통신), 그 답으로 `reply`한다. 장부의 질문 열을 1 올린다. 답한 뒤 다음 깸에서 `unhandled` 명령으로 그 답이 처리됐는지 본다(`SKILL.md`의 정산). |
+| `question` | `send`가 아니라 `orca-launch.mjs reply --map <map> --id <message id> --body <답>`으로 먼저 답한다(답을 보내고 25초 뒤 워커가 가져갔는지 돌려준다). 코디네이터가 모르는 것은 `ask --wait`로 창구에 올리고(`SKILL.md`의 통신), 그 답으로 답 명령을 돌린다. 장부의 질문 열을 1 올린다. `handled: false`면 화면을 보고 Enter 1회 또는 `check` 지시(`SKILL.md`의 정산). |
 | `worker_done` | 2절의 세 가지를 확인한다. |
 | `escalation` | `stopReason: "finished"`("Worker stopped without reporting")이면 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다. 그 밖은 코디네이터가 풀 수 있는 것(경로, 환경 안내)은 풀어 `send --to dispatch:<id>`로 알리고, 아니면 `ask --wait`로 올린다. |
 | `status` | 창구가 전한 사용자 지시다. 실행 Run으로 온다. 장부의 `## 결정`에 원문을 적고 따른다. |

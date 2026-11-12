@@ -327,6 +327,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
   const gates = new Map();
   let n = 0;
   const inbox = [];
+  const box = {}; // the fake returned to the test; tests set box.replyHandled / box.replyRefused on it
   const fs = files({
     'a.md': '[역할: qa-inspector]\nTask: T01 로그인 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
     'b.md': '[역할: qa-inspector]\nTask: T02 결제 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
@@ -359,6 +360,12 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     },
     'terminal rename': () => ({ ok: true, result: {} }),
     'orchestration inbox': () => ({ ok: true, result: { messages: inbox } }),
+    'orchestration reply': () => {
+      if (box.replyRefused) return refuse('message_not_found', 'no such message');
+      const id = `msg_r${inbox.length + 1}`; // Orca gives every reply its own message id
+      inbox.push({ id, type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_new', handled: box.replyHandled });
+      return { ok: true, result: { messageId: id } };
+    },
   };
   const deps = {
     orca: (args) => { calls.push(args); return { status: 0, stdout: JSON.stringify(replies[args.slice(0, 2).join(' ')](args)), stderr: '' }; },
@@ -369,7 +376,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     hookLines: () => RULES,
   };
   const count = (name) => calls.filter((a) => a[1] === name).length;
-  return { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) };
+  return Object.assign(box, { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) });
 }
 const M = ['--map', 'm.json'];
 const reg = (id, spec, ...more) => ['register', ...M, '--id', id, '--spec-file', spec, ...more];
@@ -650,6 +657,37 @@ await ta(async () => {
   const { code, out } = await main(['unhandled', ...M], f.deps);
   assert.equal(code, 0, JSON.stringify(out));
   assert.deepEqual(out.unhandled, [{ id: 'T01', message: 'msg_a', subject: 'Re: Question' }]);
+});
+
+// 48. reply: answers, waits inside the script (no extra model call), then says whether the worker took the answer
+await ta(async () => {
+  const f = await registered();
+  await main(go('T01'), f.deps);
+  const waited = [];
+  f.deps.sleep = async (ms) => { waited.push(ms); };
+  f.replyHandled = false; // measured 2026-11-12: a reply landing seconds after the worker's turn ended was typed but not submitted
+  const late = await main(['reply', ...M, '--id', 'msg_q', '--body', '승인'], f.deps);
+  assert.equal(late.code, 0, JSON.stringify(late.out));
+  assert.deepEqual(waited, [25000]);
+  assert.equal(val(f.call('reply'), '--id'), 'msg_q');
+  assert.equal(val(f.call('reply'), '--body'), '승인');
+  assert.deepEqual(late.out, { reply: 'msg_r1', task: 'T01', handled: false });
+  f.replyHandled = true;
+  const ok = await main(['reply', ...M, '--id', 'msg_q', '--body', '승인', '--verify-ms', '0'], f.deps);
+  assert.deepEqual(waited, [25000, 0]);
+  assert.deepEqual(ok.out, { reply: 'msg_r2', task: 'T01', handled: true });
+});
+
+// 49. reply: a refused reply is a failure and nothing is waited for
+await ta(async () => {
+  const f = await registered();
+  const waited = [];
+  f.deps.sleep = async (ms) => { waited.push(ms); };
+  f.replyRefused = true;
+  const { code, out } = await main(['reply', ...M, '--id', 'msg_q', '--body', '승인'], f.deps);
+  assert.equal(code, 1);
+  assert.match(out.error, /reply 실패/);
+  assert.deepEqual(waited, []);
 });
 
 // 47. register keeps the registration time (a Task added after the plan is not ready before it exists)
