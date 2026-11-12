@@ -8,7 +8,7 @@
 
 | 유형 | 처리 |
 | --- | --- |
-| `question` | `send`가 아니라 `reply --id <message id>`로 먼저 답한다. 코디네이터가 모르는 것은 `ask --wait`로 창구에 올리고(`SKILL.md`의 통신), 그 답으로 `reply`한다. 장부의 질문 열을 1 올린다. |
+| `question` | `send`가 아니라 `reply --id <message id>`로 먼저 답한다. 코디네이터가 모르는 것은 `ask --wait`로 창구에 올리고(`SKILL.md`의 통신), 그 답으로 `reply`한다. 장부의 질문 열을 1 올린다. 답한 뒤 다음 깸에서 `unhandled` 명령으로 그 답이 처리됐는지 본다(`SKILL.md`의 정산). |
 | `worker_done` | 2절의 세 가지를 확인한다. |
 | `escalation` | `stopReason: "finished"`("Worker stopped without reporting")이면 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다. 그 밖은 코디네이터가 풀 수 있는 것(경로, 환경 안내)은 풀어 `send --to dispatch:<id>`로 알리고, 아니면 `ask --wait`로 올린다. |
 | `status` | 창구가 전한 사용자 지시다. 실행 Run으로 온다. 장부의 `## 결정`에 원문을 적고 따른다. |
@@ -49,7 +49,7 @@ phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/t
 | --- | --- |
 | 네 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `fail` 명령을 돌리고 원인을 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
 | 팀장의 통합 보고가 실패 | 위와 같은 방법으로 처리한다. 메모에는 통합 보고의 미달 Task만 적는다. 다시 뜬 팀장은 그것만 한다. |
-| 기동 영수증의 `turnStarted: false` | 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 턴이 시작되지 않은 것을 확인한 뒤에만 사람이 복구한다. 장부에 그 상태를 적는다. |
+| 기동 영수증의 `turnStarted: false` | 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 턴이 시작되지 않은 것을 확인한 뒤에만 사람이 복구한다. 화면에서 본 상태별 복구(둘 다 같은 Dispatch이고 재기동이 아니다): 지시가 입력창에 붙은 채 제출되지 않았으면 Enter를 1회 보낸다. 입력창이 비어 대기 중이면 spec 경로, Task ID와 Dispatch ID, `worker_done` 명령을 다시 입력한다. 장부에 그 상태를 적는다. |
 | 등록이 배정 불일치로 거부 | spec의 `배정:` 줄을 계획서와 모델 표에 맞게 고친다. 팀장(`--lead`)이면 배정 줄의 작업 단위가 `리드`이고 값이 표의 `리드` 줄과 같은지 본다. 표에 맞는 작업 단위가 없으면 정하지 않고 `ask --wait`로 올린다. |
 | 같은 워커에게 일을 더해야 한다 | `send`로 보태지 않고 새 Task를 등록해 띄운다. |
 | `기동 거부`가 나온다 | 앞 Task가 안 끝났거나 게이트가 걸려 있다. `unmet`에 적힌 Task를 기다린다. 상태를 손으로 바꾸지 않는다. |

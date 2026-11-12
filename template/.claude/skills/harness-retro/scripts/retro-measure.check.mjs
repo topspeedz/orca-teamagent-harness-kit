@@ -63,6 +63,14 @@ t('actual: ready→start delay is the gap between the last dependency ending and
     { tasks: 0, sum: 0, max: 0, at: null });
 });
 
+t('actual: a Task registered after its dependencies ended is ready from its registration, not before it existed', () => {
+  const r = actual([
+    { id: 'A', start: at(0), end: at(12) }, { id: 'B', start: at(12), end: at(42) },
+    { id: 'C', start: at(13), end: at(20) }, { id: 'D', registered: at(44), start: at(45), end: at(50) },
+  ], wf);
+  assert.deepEqual(r.readyDelay, { tasks: 3, sum: 2, max: 1, at: 'C' });
+});
+
 t('actual: a Task that is not in the plan (a team Task, a phase step) is left out and counted; end before start throws', () => {
   const r = actual([{ id: 'A', start: at(0), end: at(12) }, { id: 'Z', start: at(0), end: at(1) }], wf);
   assert.equal(r.tasks, 1); assert.equal(r.skipped, 1);
@@ -121,12 +129,31 @@ const JSONL = [
 ].join('\n');
 
 t('wakes: notice turns and tool-less wakes', () => {
-  assert.deepEqual(wakes(JSONL), { wakes: 3, toolless: 2, orca: 1 });
+  assert.deepEqual(wakes(JSONL), { wakes: 3, toolless: 2, coordinator: false });
+});
+
+// The wait contract puts `check --wait` in the background, so the wake arrives as that command's completion notice.
+const bg = (id, command) => say(`b${id}`, [{ type: 'tool_use', id, name: 'Bash', input: { command, run_in_background: true } }]);
+const done = (id) => notice(`<task-notification>\n<task-id>x</task-id>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n</task-notification>`);
+const COORD = [
+  bg('w1', 'orca orchestration check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000 --json'),
+  bg('t1', 'npm test'),
+  done('w1'),
+  say('a1', [{ type: 'tool_use', id: 'u9', name: 'Bash', input: { command: 'node .claude/scripts/orca-launch.mjs register --map m.json --id T01 --spec-file a.md' } }]),
+  done('t1'),
+  say('a2', [{ type: 'text', text: '테스트 끝' }]),
+  bg('w2', 'orca orchestration check --wait --json'),
+  done('w2'),
+  say('a3', [{ type: 'text', text: '대기' }]),
+].join('\n');
+
+t('wakes: a finished background `check --wait` is a wake, another background command is not; exec-run/register marks the coordinator', () => {
+  assert.deepEqual(wakes(COORD), { wakes: 2, toolless: 1, coordinator: true });
 });
 
 t('wakes: content as text-block array is read', () => {
   const s = [line({ type: 'user', message: { content: [{ type: 'text', text: 'You have 3 orchestration messages' }] } }), say('x', [{ type: 'text', text: 'k' }])].join('\n');
-  assert.deepEqual(wakes(s), { wakes: 1, toolless: 1, orca: 0 });
+  assert.deepEqual(wakes(s), { wakes: 1, toolless: 1, coordinator: false });
 });
 
 const root = mkdtempSync(join(tmpdir(), 'retro-measure-'));
@@ -158,6 +185,14 @@ t('CLI: prints all sections, approximation note, missing inputs as 측정 불가
   assert.match(withActual.stdout, /\| 준비→기동 지연 합\(분\) \| 4 \|/);
   assert.match(withActual.stdout, /\| 준비→기동 지연 최대\(분\) \| 3 \(D\) \|/);
   assert.match(r.stdout, /작업 폴더 \| 8 bytes · 2 files/);
+  // one row per coordinator session (the session that ran exec-run/register), never a sum across sessions
+  mkdirSync(join(root, 'sess'));
+  writeFileSync(join(root, 'sess/abcdef12-3456.jsonl'), COORD);
+  writeFileSync(join(root, 'sess/99999999-0000.jsonl'), JSONL);
+  const bySession = spawnSync(process.execPath, [script, '--sessions', join(root, 'sess')], { encoding: 'utf8' });
+  assert.match(bySession.stdout, /\| 코디네이터가 깬 턴 수 \(세션 abcdef12\) \| 2 \|/);
+  assert.match(bySession.stdout, /heartbeat만 든 깸의 근사, 세션 abcdef12\) \| 1 \|/);
+  assert.doesNotMatch(bySession.stdout, /세션 99999999/);
 });
 
 console.log(`retro-measure.check: ${n} passed`);

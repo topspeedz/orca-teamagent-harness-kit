@@ -64,7 +64,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
 코디네이터가 띄우는 Task는 모두 Orca에 등록한 뒤 띄운다. 앞 Task가 끝났는지와 사용자 결정을 기다리는지는 Orca가 지킨다. 아래의 `<map>`은 `_workspace/_run/<phase>/orca-tasks.json`이다.
 
-1. **실행 Run.** 시작할 때 한 번 돌리고, 나온 Run ID를 브리프의 `실행 Run` 칸에 적는다. Task를 등록하고 조회하는 일은 Run을 가진 쪽만 할 수 있다.
+1. **실행 Run.** 시작할 때 한 번 돌리고, 나온 Run ID를 브리프의 `실행 Run` 칸에 적는다. Task를 등록하고 조회하는 일은 Run을 가진 쪽만 할 수 있다. Run을 만들 때 스크립트가 승인된 `waterfall.json`을 `waterfall.plan.json`으로 한 번 복사해 둔다(회고가 읽는 계획값이고, 이미 있으면 덮어쓰지 않는다).
 
    ```text
    node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map>
@@ -87,12 +87,12 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
    ```
 
 - **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
-- **비어 있는 `launch`를 두고 슬롯이 남으면 이유를 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. 남는 슬롯이 절반 넘게 비어 있는데 대기 중인 Task가 그 Task가 읽지 않는 Task만 기다리고 있으면, 위 `--deps` 규칙대로 실제 입력만 의존으로 다시 등록해 당긴다. 검증·리뷰 Task는 바로 당기고, 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다.
+- **비어 있는 `launch`를 두고 슬롯이 남으면 이유를 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. 남는 슬롯이 절반 넘게 비어 있는데 대기 중인 Task가 그 Task가 읽지 않는 Task만 기다리고 있으면, 위 `--deps` 규칙대로 실제 입력만 의존으로 남겨 당긴다: `node .claude/scripts/orca-launch.mjs pull --map <map> --id <Task ID> --deps <실제 입력 Task,…> --reason "<이유>"`. 실제 입력이 모두 끝났을 때만 준비 상태가 되고, 아니면 `waitingOn`을 돌려주고 아무것도 바꾸지 않는다. 검증·리뷰 Task는 바로 당기고, 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다.
 - **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.
 - **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
 - **폭은 계획과 `launchable`이 정한다.** 계획에 없는 Task를 즉석에서 만들지 않는다. 계획에 있는 Task의 순서는 위 규칙대로 실제 입력에 맞춰 당길 수 있다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
 - **팀장.** 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요하면 팀장을 띄운다. 그 팀의 Task들은 팀 spec 하나로 묶어 Task 하나로 등록하고(`register`에 `--lead`), 팀 사이의 의존은 이 팀 Task끼리 건다. 팀 안의 순서는 팀장이 지킨다. 명단의 "팀장이 되는 에이전트"로, spec 첫 줄을 `[역할: <에이전트> · 리드]`로 쓴다. 팀장 spec의 배정 줄은 계획서의 팀원 배정이 아니라 `배정: <에이전트> / 리드 (<모델 표의 `리드` 줄 값>)`이다. 팀장에게는 팀 spec 하나를 주고 통합 보고 하나를 받는다.
-- **그림.** `ready`가 돌려준 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 `ready`의 `status`에서 가져오고 기억으로 적지 않는다(`completed`는 완료, `dispatched`는 진행, 그 밖은 대기).
+- **그림.** `ready`가 돌려준 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 `ready`의 `status`에서 가져오고 기억으로 적지 않는다(`completed`는 완료, `ready`의 `running`에 든 Task는 진행, 그 밖은 대기. 턴 시작을 확인하지 못한 워커는 Orca에 `blocked`로 남은 채 일하므로 `status`가 아니라 `running`으로 가른다).
 - 기동 영수증의 적용값을 장부에 적는다. 요청한 값만 보고 적지 않는다([settle.md](references/settle.md)).
 
 ## 결정 대기
@@ -128,7 +128,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 `worker_done`마다 네 가지를 본다. 기대한 Dispatch인가, 리포트 파일이 있는가, 계획서가 적은 그 Task의 산출물이 실제로 있는가, 리포트의 검증 절이 통과하는가. 뒤의 둘은 한 명령으로 본다: `node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`. 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 워커의 검사를 다시 돌리지 않고 리포트 전문을 읽지 않는다.
 
 - **실패로 처리할 때는 `fail` 명령을 돌린다.** `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`. Orca는 워커의 성공 보고만으로 그 Task를 끝난 것으로 치고 뒤 Task를 준비 상태로 올린다. 이 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
-- 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다.
+- 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다. 답한 뒤 다음에 깼을 때 `node .claude/scripts/orca-launch.mjs unhandled --map <map>`을 `launchable`과 함께 돌린다. 그 답이 아직 목록에 있으면 워커가 깨지 않았을 수 있다. 화면을 보고, 멈춰 있으면 `orca terminal send`로 그 터미널에 `orca orchestration check`를 돌리라고 넣는다(같은 Dispatch이고 재기동이 아니다). 장부의 `## 결정`에 적는다.
 - `stopReason: "finished"`인 `escalation`("Worker stopped without reporting")은 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다.
 - 기동 스크립트가 턴 시작을 확인하지 못해도 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 확인한 뒤에만 복구한다.
 

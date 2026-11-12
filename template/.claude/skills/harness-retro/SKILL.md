@@ -24,7 +24,7 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 수정 루프 횟수 | `ledger.md`의 예산 줄 |
 | 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
 | 실패 Task | `actual.json`의 `status` (Orca의 기록) |
-| 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
+| 준비→기동 지연: 마지막 의존이 끝난 때(그 뒤에 등록된 Task는 등록한 때)부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
 | 작업 폴더의 크기 | `_workspace/` |
 
 ### 명령
@@ -33,15 +33,17 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 
 ```bash
 node .claude/skills/harness-retro/scripts/retro-measure.mjs \
-  --waterfall _workspace/_run/<phase>/waterfall.json \
+  --waterfall _workspace/_run/<phase>/waterfall.plan.json \
   --actual _workspace/_run/<phase>/actual.json \
   --ledger _workspace/_run/<phase>/ledger.md \
   --workspace _workspace
 ```
 
+- `waterfall.plan.json`은 `exec-run`이 실행 Run을 만들 때 `waterfall.json`을 한 번 복사해 얼려 둔 승인 계획이다. `waterfall.json`은 phase 동안 재예측으로 덮어써지므로 계획 열에 쓰지 않는다. 사본이 없는 phase는 `waterfall.json`을 넘기고, 리포트에 계획 열이 재예측일 수 있다고 적는다.
+
 - 출력은 리포트에 그대로 붙일 표다. 입력이 없거나 읽을 수 없는 지표는 `측정 불가`로 찍히고 끝에 사유가 붙는다. 0으로 세지 않는다.
 - 세션 기록은 기본으로 `~/.claude/projects/` 아래 현재 폴더 이름의 기록을 최근 7일만 읽는다. 다른 위치면 `--sessions <폴더>`, 기간은 `--days <일수>`.
-- 코디네이터 세션은 orca 명령을 20회 이상 쓴 세션으로 가른다. 워커와 팀장도 같은 알림을 받기 때문이다.
+- 코디네이터 세션은 `orca-launch.mjs`의 `exec-run`이나 `register`를 쓴 세션으로 가르고, 세션마다 한 줄씩 찍는다(합치지 않는다). 워커와 팀장도 같은 알림을 받기 때문이다.
 - 셀프테스트: `node .claude/skills/harness-retro/scripts/retro-measure.check.mjs`.
 
 ### `actual.json` 만드는 법
@@ -52,11 +54,11 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-tasks.json > _workspace/_run/<phase>/actual.json
 ```
 
-`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
+`registered`는 그 Task를 등록한 시각, `start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 4·6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
 
 ### heartbeat만 든 깸은 근사다
 
-세션 기록에는 깬 묶음에 무엇이 들었는지 남지 않는다. 그래서 스크립트는 Orca 알림("You have N orchestration message")으로 깬 턴 가운데 **도구 호출 없이 끝난 깸 수**를 세고, 이것을 heartbeat만 든 깸의 근사로 쓴다. 리포트에도 "근사"라고 적는다. 대기 계약대로라면 heartbeat만 든 묶음에는 도구 없이 턴을 끝내므로 근사가 맞지만, 다른 이유로 도구 없이 끝난 깸도 함께 세어진다.
+세션 기록에는 깬 묶음에 무엇이 들었는지 남지 않는다. 그래서 스크립트는 Orca 알림("You have N orchestration message")이나 백그라운드 `check --wait`의 완료 알림으로 깬 턴 가운데 **도구 호출 없이 끝난 깸 수**를 세고, 이것을 heartbeat만 든 깸의 근사로 쓴다. 리포트에도 "근사"라고 적는다. 대기 계약대로라면 heartbeat만 든 묶음에는 도구 없이 턴을 끝내므로 근사가 맞지만, 다른 이유로 도구 없이 끝난 깸도 함께 세어진다.
 
 ## 2. 출발값 고치기
 

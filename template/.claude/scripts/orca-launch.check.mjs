@@ -326,6 +326,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
   const tasks = new Map(); // Orca id → { status, deps }
   const gates = new Map();
   let n = 0;
+  const inbox = [];
   const fs = files({
     'a.md': '[역할: qa-inspector]\nTask: T01 로그인 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
     'b.md': '[역할: qa-inspector]\nTask: T02 결제 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
@@ -357,6 +358,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
         launch: { effective: { model: val(a, '--model') ?? null, effort: val(a, '--effort') ?? null } }, effects: [{ kind: 'terminal', id: 'term_w' }] } };
     },
     'terminal rename': () => ({ ok: true, result: {} }),
+    'orchestration inbox': () => ({ ok: true, result: { messages: inbox } }),
   };
   const deps = {
     orca: (args) => { calls.push(args); return { status: 0, stdout: JSON.stringify(replies[args.slice(0, 2).join(' ')](args)), stderr: '' }; },
@@ -367,7 +369,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     hookLines: () => RULES,
   };
   const count = (name) => calls.filter((a) => a[1] === name).length;
-  return { calls, deps, tasks, fs, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) };
+  return { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) };
 }
 const M = ['--map', 'm.json'];
 const reg = (id, spec, ...more) => ['register', ...M, '--id', id, '--spec-file', spec, ...more];
@@ -541,7 +543,10 @@ await ta(async () => {
   f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
   const { code, out } = await main(['actual', ...M], f.deps);
   assert.equal(code, 0, JSON.stringify(out));
-  assert.deepEqual(out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
+  assert.deepEqual(out, [{ id: 'T01', registered: T0, start: T0, end: T10, status: 'completed' }]);
+  // a Task registered before the registration time was kept has no `registered`
+  const m = f.map(); delete m.tasks.T01.registered; f.fs['m.json'] = JSON.stringify(m);
+  assert.deepEqual((await main(['actual', ...M], f.deps)).out, [{ id: 'T01', start: T0, end: T10, status: 'completed' }]);
 });
 
 // 41. register keeps --edits and --resource in the map (what launchable compares)
@@ -588,6 +593,85 @@ await ta(async () => {
   const m = f.map(); m.tasks.T01.edits = ['web/ui/']; m.tasks.T02.edits = ['web/ui/team-select.js']; f.fs['m.json'] = JSON.stringify(m);
   const overlap = await main(['launchable', ...M, '--slots', '8'], f.deps);
   assert.deepEqual(overlap.out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/ui/team-select.js)' }]);
+});
+
+// 44. a started Task that Orca shows `blocked` (turn start not observed) is running: it takes a slot and holds its paths;
+//     a Task blocked by a gate was never started and is not running
+await ta(async () => {
+  const f = await registered();
+  await main(go('T01'), f.deps);
+  const m = f.map(); m.tasks.T01.edits = ['web/a.js']; m.tasks.T02.edits = ['web/a.js']; f.fs['m.json'] = JSON.stringify(m);
+  f.tasks.get(m.tasks.T01.orca).status = 'blocked';
+  f.tasks.get(m.tasks.T02.orca).status = 'ready';
+  const { out } = await main(['launchable', ...M], f.deps);
+  assert.equal(out.running, 1, JSON.stringify(out));
+  assert.deepEqual(out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/a.js)' }]);
+  assert.deepEqual((await main(['ready', ...M], f.deps)).out.running, ['T01']);
+  const g = await registered();
+  await main(['gate', ...M, '--id', 'T01', '--question', '진행할까?'], g.deps);
+  assert.equal((await main(['launchable', ...M], g.deps)).out.running, 0);
+  assert.deepEqual((await main(['ready', ...M], g.deps)).out.running, []);
+});
+
+// 45. pull: a pending Task's dependencies become its real inputs; it goes ready only when those are all completed, and the map keeps why
+await ta(async () => {
+  const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)' } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await main(reg('T01', 'a.md'), f.deps);
+  await main(reg('T02', 'b.md'), f.deps);
+  await main(reg('T03', 'c.md', '--deps', 'T01,T02'), f.deps);
+  const pull = (...more) => main(['pull', ...M, '--id', 'T03', ...more], f.deps);
+  const { T01, T03 } = f.map().tasks;
+  const early = await pull('--deps', 'T01', '--reason', 'T02의 산출물을 읽지 않음');
+  assert.equal(early.code, 1);
+  assert.deepEqual(early.out.waitingOn, ['T01']);
+  assert.deepEqual(f.map().tasks.T03.deps, ['T01', 'T02']);
+  assert.equal(f.count('task-update'), 0);
+  assert.equal((await pull('--deps', 'T01')).code, 1);                    // no reason
+  assert.equal((await pull('--deps', 'T09', '--reason', 'x')).code, 1);   // not registered
+  f.tasks.get(T01.orca).status = 'completed';
+  const ok = await pull('--deps', 'T01', '--reason', 'T02의 산출물을 읽지 않음');
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.equal(f.tasks.get(T03.orca).status, 'ready');
+  assert.deepEqual(f.map().tasks.T03.deps, ['T01']);
+  assert.deepEqual(f.map().tasks.T03.pulled, { from: ['T01', 'T02'], reason: 'T02의 산출물을 읽지 않음', at: T0 });
+  assert.equal((await pull('--deps', 'T01', '--reason', 'x')).code, 1);   // no longer pending
+});
+
+// 46. unhandled: messages sent to this map's workers that they have not taken (a reply that did not wake its worker)
+await ta(async () => {
+  const f = await registered();
+  await main(go('T01'), f.deps);
+  f.inbox.push(
+    { id: 'msg_a', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_new', handled: false },
+    { id: 'msg_b', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_new', handled: true },
+    { id: 'msg_c', type: 'status', subject: 'Re: Question', to: 'dispatch:ctx_other', handled: false },
+    { id: 'msg_d', type: 'worker_done', subject: 'done', to: 'run:run_exec', handled: false });
+  const { code, out } = await main(['unhandled', ...M], f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+  assert.deepEqual(out.unhandled, [{ id: 'T01', message: 'msg_a', subject: 'Re: Question' }]);
+});
+
+// 47. register keeps the registration time (a Task added after the plan is not ready before it exists)
+await ta(async () => {
+  const f = await registered();
+  assert.equal(f.map().tasks.T02.registered, T0);
+});
+
+// 48. exec-run freezes the approved plan once: waterfall.json next to the map → waterfall.plan.json, never overwritten
+await ta(async () => {
+  const f = fakeDag({ fileOver: { 'waterfall.json': '{"v":1}' } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  assert.equal(f.fs['waterfall.plan.json'], '{"v":1}');
+  f.fs['waterfall.json'] = '{"v":2}';
+  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  assert.equal(f.fs['waterfall.plan.json'], '{"v":1}');
+  const g = fakeDag({ fileOver: { 'waterfall.json': '{"v":2}', 'waterfall.plan.json': '{"v":1}' } });
+  await main(['exec-run', '--phase', 'phase-a', ...M], g.deps);
+  assert.equal(g.fs['waterfall.plan.json'], '{"v":1}');
+  const none = fakeDag();
+  assert.equal((await main(['exec-run', '--phase', 'phase-a', ...M], none.deps)).code, 0);
+  assert.equal(none.fs['waterfall.plan.json'], undefined);
 });
 
 // 40. run as a command: outside the project root it refuses before anything else; at the root it runs

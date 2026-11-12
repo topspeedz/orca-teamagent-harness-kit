@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 const scenarios = ['low', 'likely', 'high'];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function render(d) {
@@ -61,7 +61,8 @@ function mark(id,on){document.querySelectorAll('.row').forEach(r=>{r.classList.t
 document.querySelectorAll('.row').forEach(r=>{['mouseenter','focus'].forEach(e=>r.addEventListener(e,()=>mark(r.dataset.id,true)));['mouseleave','blur'].forEach(e=>r.addEventListener(e,()=>mark(r.dataset.id,false)));});
 </script></html>`;
 }
-if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){
+// realpath on both sides: run through a junction or symlink, main must still run
+if(process.argv[1] && fs.realpathSync(process.argv[1])===fs.realpathSync(fileURLToPath(import.meta.url))){
   const [input,output]=process.argv.slice(2);assert(input&&output,'Usage: node render.mjs input.json output.html');
   const html=render(JSON.parse(fs.readFileSync(input,'utf8').replace(/^\uFEFF/,'')));fs.writeFileSync(output,html);console.log(output);
 }
