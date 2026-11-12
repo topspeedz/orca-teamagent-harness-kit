@@ -9,7 +9,6 @@
 //   node .claude/scripts/orca-launch.mjs worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]
 //   node .claude/scripts/orca-launch.mjs ready --map <map>
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
-//   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
@@ -259,27 +258,6 @@ export async function main(argv, deps) {
     return { code: 0, out: { run: m.run, ready: Object.keys(status).filter((id) => status[id] === 'ready'), status } };
   }
 
-  // Orca cannot change a registered Task's dependencies, so the real inputs go into the map (what fail and resolve read)
-  // and the Task is made ready here, only when every real input is completed.
-  if (cmd === 'pull') {
-    if (!o.id || o.deps === undefined || !o.reason) return fail('사용법: pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>');
-    let m, e, st;
-    try { m = loadMap(); e = entry(m); st = statuses(m); } catch (err) { return fail(err.message); }
-    const depIds = csv(o.deps);
-    const missing = depIds.filter((d) => !m.tasks[d]);
-    if (missing.length) return fail(`의존 ${missing.join(', ')}가 등록되지 않음`);
-    if (e.gate) return fail(`${o.id}에 게이트가 걸려 있음 — resolve가 먼저다`);
-    if (st[o.id].status !== 'pending') return fail(`${o.id}는 ${st[o.id].status} — 대기(pending) 중인 Task만 당긴다`);
-    const waitingOn = depIds.filter((d) => st[d].status !== 'completed');
-    if (waitingOn.length) return fail('실제 입력이 아직 끝나지 않음 — 바꾸지 않음', { id: o.id, waitingOn });
-    const done = setStatus(m, e.orca, 'ready');
-    if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
-    e.pulled = { from: e.deps, reason: o.reason, at: deps.now() };
-    e.deps = depIds;
-    saveMap(m);
-    return { code: 0, out: { id: o.id, status: 'ready', deps: depIds, was: e.pulled.from } };
-  }
-
   // What can start now: ready Tasks, in registration order, that fit the free slots and share no edited path
   // (a directory edit covers files under it) and no resource with a running or already-picked Task.
   if (cmd === 'launchable') {
@@ -428,7 +406,7 @@ export async function main(argv, deps) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|fail|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };

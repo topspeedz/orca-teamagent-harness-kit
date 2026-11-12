@@ -595,31 +595,6 @@ await ta(async () => {
   assert.deepEqual(overlap.out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/ui/team-select.js)' }]);
 });
 
-// 45. pull: a pending Task's dependencies become its real inputs; it goes ready only when those are all completed, and the map keeps why
-await ta(async () => {
-  const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
-  await main(reg('T01', 'a.md'), f.deps);
-  await main(reg('T02', 'b.md'), f.deps);
-  await main(reg('T03', 'c.md', '--deps', 'T01,T02'), f.deps);
-  const pull = (...more) => main(['pull', ...M, '--id', 'T03', ...more], f.deps);
-  const { T01, T03 } = f.map().tasks;
-  const early = await pull('--deps', 'T01', '--reason', 'T02의 산출물을 읽지 않음');
-  assert.equal(early.code, 1);
-  assert.deepEqual(early.out.waitingOn, ['T01']);
-  assert.deepEqual(f.map().tasks.T03.deps, ['T01', 'T02']);
-  assert.equal(f.count('task-update'), 0);
-  assert.equal((await pull('--deps', 'T01')).code, 1);                    // no reason
-  assert.equal((await pull('--deps', 'T09', '--reason', 'x')).code, 1);   // not registered
-  f.tasks.get(T01.orca).status = 'completed';
-  const ok = await pull('--deps', 'T01', '--reason', 'T02의 산출물을 읽지 않음');
-  assert.equal(ok.code, 0, JSON.stringify(ok.out));
-  assert.equal(f.tasks.get(T03.orca).status, 'ready');
-  assert.deepEqual(f.map().tasks.T03.deps, ['T01']);
-  assert.deepEqual(f.map().tasks.T03.pulled, { from: ['T01', 'T02'], reason: 'T02의 산출물을 읽지 않음', at: T0 });
-  assert.equal((await pull('--deps', 'T01', '--reason', 'x')).code, 1);   // no longer pending
-});
-
 // 47. register keeps the registration time (a Task added after the plan is not ready before it exists)
 await ta(async () => {
   const f = await registered();
