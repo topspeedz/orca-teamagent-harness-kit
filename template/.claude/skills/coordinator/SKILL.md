@@ -167,7 +167,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 **승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask --wait`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 같은 방법으로 올린다.
 
 ## 대기 계약 (생략·요약 금지)
-대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 5줄은 그와 별개로 항상 지킨다.
+대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 1~5는 그와 별개로 항상 지킨다. Codex는 1~5 대신 6을 지킨다.
 1. 대기는 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 포그라운드 대기는
    도구 한도(최대 10분)에 끊기고, `Start-Process`·`nohup` 분리 실행은 끝나도 아무도 못 깨운다. stderr keepalive를 Monitor로 보지 않는다.
    결과는 stdout의 JSON만 읽고 `| head -c`로 자르지 않는다(keepalive 줄이 자를 몫을 다 먹어 본문이 사라진다 — 거르려면 `| grep -v _keepalive`).
@@ -187,3 +187,6 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
    `<내 수신함>`은 Run을 가진 쪽은 `run:<Run ID>`, Run이 없는 팀장은 `dispatch:<자기 Dispatch ID>`다.
    연속 3번 빈 대기면 `worker-list`로 워커 생존을 본다. 침묵·타임아웃·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
    heartbeat는 워커가 보내는 것이지 코디네이터가 보내거나 답할 것이 아니다.
+6. Codex는 `check --wait`를 걸지 않는다. 끝난 백그라운드 명령은 Codex를 깨우지 못하고, 대기가 가져간 메시지에는 Orca 알림도 오지 않아
+   메시지가 묻힌다. 할 일을 마치면 턴을 끝낸다. "You have N orchestration message" 알림이 오면 알림이 적어 준 `check` 명령을 그대로 한 번 돌려
+   묶음 전체를 3대로 처리한다. 사용자 지시도 이 알림으로 온다. 그 `check`가 비어 있으면 5의 `inbox --limit 5`를 한 번 본다.
