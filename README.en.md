@@ -132,6 +132,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 - The agent that implemented a change does not approve it. Implementation tasks write the test first (TDD).
 - End-of-run QA runs as one worker per area, at the same time, and browser QA does too. Two lines in `.claude/settings.json` (`PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS`) give each worker its own browser.
 - Those two lines apply to every session in the project. To use a visible browser that keeps its profile (logins) in a session you open yourself, including the front desk, start it with `claude --settings .claude/front-desk.settings.json`.
+- Verification that needs a resource only one worker can use at a time (a GPU, Blender MCP) is not split. Implementation Tasks finish on simple code tests that run without that resource, and one Task runs the resource-using verification once, after all implementation is done.
 
 **Approval gates cannot be bypassed**
 

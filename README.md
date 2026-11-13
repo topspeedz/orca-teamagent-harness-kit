@@ -130,6 +130,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 - 구현한 에이전트가 자신의 결과를 승인하지 않는다. 구현 Task는 테스트를 먼저 작성한다(TDD).
 - 끝 검증의 QA는 영역별 워커로 동시에 돈다. 브라우저를 쓰는 QA도 같다. `.claude/settings.json`의 `PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS` 두 줄이 워커마다 브라우저를 따로 띄우게 한다.
 - 이 두 줄은 프로젝트의 모든 세션에 적용된다. 직접 여는 세션(창구 포함)에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 연다.
+- 혼자 써야 하는 자원(GPU, Blender MCP 등)을 쓰는 검증은 나누지 않는다. 구현 Task는 그 자원 없이 도는 간단한 코드 테스트로 끝내고, 그 자원을 쓰는 검증은 구현이 모두 끝난 뒤 Task 하나가 한 번 돌린다.
 
 **승인 절차를 우회할 수 없다**
 
