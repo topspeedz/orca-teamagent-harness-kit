@@ -84,7 +84,7 @@ description: "실행해서 결함을 찾는 QA 절차. 수락 기준의 흐름�
 
 ## 리포트 형식
 
-경로와 이름은 spec을 따른다(`team-qa`의 산출물 규칙). 뼈대는 양식 `docs/harness/templates/report.md`이고, 결함 표와 QA 절을 더한다.
+경로와 이름은 spec을 따른다(`team-qa`의 산출물 규칙). 기본 구조는 양식 `docs/harness/templates/report.md`이고, 결함 표와 QA 절을 더한다.
 
 ```markdown
 # <Task ID> <이름> 리포트

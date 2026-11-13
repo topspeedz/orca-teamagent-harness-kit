@@ -2,7 +2,7 @@
 
 > **읽는 시점:** setup 스킬 6단계. Orca 틀을 깔았든 깔지 않았든 같다.
 
-기반 하네스는 에이전트가 작업에 필요한 정본만 찾아 읽고, 되돌리기 비싼 행위 앞에서 멈추고, 끝났다고 말하기 전에 검증하게 만드는 구조다. 문서를 많이 쓰는 일이 아니다. 근거는 [principles.md](principles.md), 복사해 쓸 뼈대는 [templates.md](templates.md), 도구 함정은 [pitfalls.md](pitfalls.md)에 있다. 해당 단계에서만 연다.
+기반 하네스는 에이전트가 작업에 필요한 정본만 찾아 읽고, 되돌리기 비싼 행위 앞에서 멈추고, 끝났다고 말하기 전에 검증하게 만드는 구조다. 문서를 많이 쓰는 일이 아니다. 근거는 [principles.md](principles.md), 복사해 쓸 기본 구조는 [templates.md](templates.md), 도구 함정은 [pitfalls.md](pitfalls.md)에 있다. 해당 단계에서만 연다.
 
 설계는 제안이다. 파일을 만들거나 설정을 바꾸기 전에 단계마다 범위를 보여 주고 진행한다. 권한 완화, 훅 등록, 전역 설정은 먼저 승인받는다.
 
@@ -28,7 +28,7 @@
 ## 2. T0 라우터 (항상 로드되는 층)
 
 - Orca 틀을 깔았으면 깔린 `AGENTS.md`의 `명령`, `기술 스택`, `핵심 원칙`, `작업별 라우팅`을 채운다. `CLAUDE.md`는 `@AGENTS.md`와 Claude 전용 내용만 둔다.
-- 깔지 않았으면 [templates.md §1](templates.md)의 뼈대로 `CLAUDE.md`를 쓴다. Codex 같은 다른 런타임과 함께 쓰면 공통 규칙은 `AGENTS.md` 하나에 두고 `CLAUDE.md`는 `@AGENTS.md` 한 줄과 Claude 전용 내용만 둔다.
+- 깔지 않았으면 [templates.md §1](templates.md)의 기본 구조로 `CLAUDE.md`를 쓴다. Codex 같은 다른 런타임과 함께 쓰면 공통 규칙은 `AGENTS.md` 하나에 두고 `CLAUDE.md`는 `@AGENTS.md` 한 줄과 Claude 전용 내용만 둔다.
 - **담는 것:** V1에서 돌려 본 명령, 기술 스택 한 단락, 이 프로젝트 고유의 원칙, 코드 스타일, "작업 → 첫 문서" 라우팅 표.
 - **담지 않는 것:** 값, 표, 이력, 장문 예시, 특정 작업 전용 절차. 그것은 가리켜진 문서가 소유한다.
 - 예산은 `/context`의 실제 토큰으로 잰다(한글은 바이트당 토큰 비율이 달라 bytes는 근사다). 출발점은 다른 런타임과 공유하면 13KiB 안팎, 단독이어도 20KiB 이하다. T0 1만 토큰은 모든 턴에 곱해진다([principles.md §1](principles.md)).
