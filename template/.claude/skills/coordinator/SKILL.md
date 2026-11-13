@@ -114,11 +114,14 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 | --- | --- |
 | 4 백로그 반영 | `product-manager` 워커 Task로 띄운다. 계획의 Task를 백로그 항목에 연결한다. |
 | 5 실행 | 기동, 정산, 중간 리뷰, 끝 검증, 수정 루프, 최종 테스트 |
-| 6 완료 처리 | `product-manager` 워커 Task로 띄운다. 백로그를 정리한다. |
+| 6 완료 처리 | `doc-steward` 워커 Task로 띄워 live 문서(`docs/`의 번호 폴더)를 맞춘 뒤, `product-manager` 워커 Task로 띄워 백로그를 정리한다. |
 | 7 하네스 회고 | `harness-engineer` 워커 Task로 띄운다. 생략하지 않는다. 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다. |
 | 8 커밋과 PR | 창구를 거쳐 사용자 승인을 받은 뒤 한 번에 한다. |
 
 - 4, 6, 7단계의 Task도 같은 방식으로 등록해 띄운다.
+- 6단계의 문서 동기화 Task는 마지막 최종 테스트 뒤에 띄운다. 배정은 `doc-steward / 문서 동기화`다. spec의 "먼저 읽을 것"에 브리프, 설계서, 계획서, 장부, 끝 검증 리포트의 경로를 넣고, 리포트 경로는 `_workspace/_run/<phase>/06_doc-steward_sync_v1.md`로 적는다. 정산의 `--expect`는 `docs/DOCUMENTATION_INDEX.md`다. 실패하면 1회 다시 띄운다. 그래도 실패하면 사용자에게 묻지 않고 최종 보고에 "문서 미동기화"를 적고 완료 처리로 간다.
+- 완료 처리 Task는 문서 동기화 Task를 정산한 뒤에 등록해 띄운다. 문서 동기화에 의존(`--deps`)을 걸지 않는다. 걸면 문서 동기화가 끝내 실패했을 때 완료 처리가 풀리지 않는다.
+- 사용자가 요청한 문서 초기화와 문서 감사는 5단계의 Task다. 리포트는 `05_doc-steward_init_v1.md`, `05_doc-steward_audit_v1.md`이고, `--expect`는 초기화가 `docs/CODEBASE_MAP.md`, 감사가 `docs/DOCUMENTATION_INDEX.md`다. 실행 Task가 `doc-steward`의 Task뿐인 phase에서는 6단계의 문서 동기화를 띄우지 않는다.
 - 7단계를 띄우기 전에 실제 시각을 남긴다. 회고가 이 파일로 실제값을 잰다: `node .claude/scripts/orca-launch.mjs actual --map <map> > _workspace/_run/<phase>/actual.json`
 
 건너뛰기: 백로그 항목과 수락 기준이 이미 있으면 4단계를 생략한다.
@@ -163,7 +166,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 1. 최종 보고를 `_workspace/_run/<phase>/report.md`에 쓴다.
 2. 최종 보고, 장부, 회고 리포트, DAG 입력 파일을 `docs/history/<phase>/`로 복사한다. 추적되는 문서는 `_workspace/` 경로를 근거로 가리키지 않는다. 작업 폴더는 지우지 않는다.
-3. 커밋과 PR은 사용자 승인 뒤 한 번에 한다. 경로를 지정해 커밋한다. 경로 목록에 git이 모르는 경로(워커가 만들었다가 지운 미추적 파일 등)가 하나라도 있으면 `pathspec did not match`로 커밋 전체가 빠진다. 지운 것이 섞인 곳은 파일이 아니라 폴더 경로로 지정하고, 커밋 뒤 `git status --short`로 남은 것이 없는지 본다. 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다. 워커는 커밋하지 않는다.
+3. 커밋과 PR은 사용자 승인 뒤 한 번에 한다. 경로를 지정해 커밋한다. 경로 목록에 git이 모르는 경로(워커가 만들었다가 지운 미추적 파일 등)가 하나라도 있으면 `pathspec did not match`로 커밋 전체가 빠진다. 지운 것이 섞인 곳은 파일이 아니라 폴더 경로로 지정하고, 커밋 뒤 `git status --short`로 남은 것이 없는지 본다. 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다. `doc-steward`가 고친 `docs/` 문서는 제품 변경과 같은 커밋에 넣는다. 워커는 커밋하지 않는다.
 4. 최종 보고 경로를 실어 `worker_done`을 보낸다.
 
 **승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask --wait`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 같은 방법으로 올린다.

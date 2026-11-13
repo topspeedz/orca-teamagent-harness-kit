@@ -11,4 +11,5 @@
 | `harness` | `harness-engineer` | `harness-engineer` | `team-harness` | `.claude/`, `AGENTS.md`, `CLAUDE.md`, `docs/harness/`(모델 표 제외), `_workspace/harness/` |
 
 - `planner`는 어느 팀에도 속하지 않는다. 창구가 띄운다.
+- `doc-steward`도 어느 팀에도 속하지 않는다. 코디네이터가 띄운다. 제품의 live 문서를 맡는다('문서 초기화', '문서 동기화', '문서 감사'). 편집 범위는 `docs/DOCUMENTATION_INDEX.md`, `docs/CODEBASE_MAP.md`, `docs/`의 번호 폴더(`01-product`~`12-changelog`)이고, 리포트는 `_workspace/_run/<phase>/`에 쓴다.
 - 팀 이름은 작업 폴더 `_workspace/<팀>/`의 이름과 같다.

@@ -72,12 +72,14 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 - ✋ marks a user approval gate. Design and plan approvals come with a DAG swimlane diagram and a waterfall diagram.
 - The planner writes the design doc and implementation plan in the format of the superpowers `brainstorming` and `writing-plans` skills.
 - The retro is never skipped. If there is no evidence for a change, it records the measurements and "no change".
+- In step 6 `doc-steward` updates the live docs under `docs/` with what the phase changed.
 
 **Built-in roles**
 
 | Team | Agent | Responsibility |
 | --- | --- | --- |
 | (shared) | `planner` | Design doc, implementation plan, DAG |
+| (shared) | `doc-steward` | Live product docs (requirements, design, contracts, tests, operations): initialization, sync, audit |
 | Product | `product-manager` | Backlog, acceptance criteria, close-out |
 | Verification | `qa-inspector` | Verification by running the product |
 | Verification | `code-reviewer` | Code review (read-only) |
@@ -144,6 +146,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 - The working directory is `_workspace/<team>/<phase>/` and is excluded through `.gitignore`. File names follow one format: `NN_<agent>_<artifact>_v1.md`.
 - No rule is written in two places. The wait contract, the model assignment table, and the team roster each have a single source of truth.
+- Team outputs are history. Live docs that describe the product's current state are written only by `doc-steward`, in the twelve numbered folders under `docs/`. Document forms are reference files of a skill and are read only when needed.
 
 **Claude and Codex side by side**
 
@@ -259,10 +262,11 @@ Requests to the front desk (your regular Claude Code session) are routed by the 
 ```
 AGENTS.md, CLAUDE.md             shared instructions and routing
 .claude/
-  agents/                        5 built-in agents
+  agents/                        6 built-in agents
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 team-product, team-qa, team-harness, dag-swimlane, waterfall-timeline
+                                 docs-management, team-product, team-qa, team-harness,
+                                 dag-swimlane, waterfall-timeline
   hooks/                         approval, waiting, context compaction, worker rule injection,
                                  browser secret blocking
   scripts/                       worker launch, model assignment table, report evaluation,
@@ -273,6 +277,7 @@ AGENTS.md, CLAUDE.md             shared instructions and routing
   coordinator.keep.json          allowlist of plugins and skills enabled for the coordinator
 docs/
   backlog.md, backlog-archive.md
+  DOCUMENTATION_INDEX.md         index of product docs (doc-steward creates the docs themselves)
   harness/                       model assignment table, team roster, changelog, 8 templates
 .agents/skills/                  pointers for Codex (only when Codex is selected)
 ```

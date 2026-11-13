@@ -17,5 +17,6 @@
 | `code-reviewer` | 일반 변경 리뷰 | claude | opus | medium | 끝 리뷰 |
 | `code-reviewer` | 보안·돈이 걸린 변경 리뷰 | claude | opus | high | |
 | `harness-engineer` | 회고, 구조 변경 | claude | opus | high | |
+| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | fable | high | 동기화는 phase의 6단계마다. 초기화와 감사는 사용자가 요청할 때만 |
 | `*` | 리드 | claude | opus | high | 팀장으로 띄울 때 |
 | `*` | 기본 | claude | opus | medium | 표에 없는 조합 |

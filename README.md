@@ -70,12 +70,14 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 - ✋는 사용자 승인 단계다. 설계와 계획을 승인받을 때는 DAG Swimlane 다이어그램과 Waterfall 다이어그램을 함께 제시한다.
 - 설계 문서와 구현 계획은 planner가 superpowers의 `brainstorming`, `writing-plans` 형식으로 작성한다.
 - 회고는 생략하지 않는다. 변경할 근거가 없으면 측정 결과와 "변경 없음"만 기록한다.
+- 6단계에서 `doc-steward`가 그 phase가 바꾼 것을 `docs/`의 live 문서에 반영한다.
 
 **기본 제공 역할**
 
 | 팀 | 에이전트 | 담당 |
 | --- | --- | --- |
 | (공용) | `planner` | 설계 문서, 구현 계획, DAG |
+| (공용) | `doc-steward` | 제품 live 문서(요구사항, 설계, 계약, 테스트, 운영)의 초기화, 동기화, 감사 |
 | 기획 | `product-manager` | 백로그, 수락 기준, 완료 처리 |
 | 검증 | `qa-inspector` | 실행 기반 검증 |
 | 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
@@ -142,6 +144,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 - 작업 디렉터리는 `_workspace/<팀>/<phase>/`이고 `.gitignore`로 제외한다. 파일 이름은 `NN_<에이전트>_<산출물>_v1.md` 형식 하나로 통일한다.
 - 같은 규칙을 두 곳에 두지 않는다. 대기 규약, 모델 배정표, 팀 구성표는 각각 단일 원본(single source of truth) 파일을 갖는다.
+- 팀의 산출물은 이력이다. 제품의 지금 상태를 담는 live 문서는 `doc-steward`만 `docs/`의 번호 폴더 12개에 쓴다. 양식은 skill의 참조 파일로 두고 필요한 것만 읽는다.
 
 **Claude와 Codex를 함께 사용한다**
 
@@ -257,10 +260,11 @@ node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --targe
 ```
 AGENTS.md, CLAUDE.md             공통 지침과 라우팅
 .claude/
-  agents/                        기본 에이전트 5개
+  agents/                        기본 에이전트 6개
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 team-product, team-qa, team-harness, dag-swimlane, waterfall-timeline
+                                 docs-management, team-product, team-qa, team-harness,
+                                 dag-swimlane, waterfall-timeline
   hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입, 브라우저 비밀값 차단
   scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정, 브라우저 런처
   settings.json                  hook 등록, permissions, 브라우저 병렬용 env 두 줄 (기존 파일에는 항목만 병합한다)
@@ -268,6 +272,7 @@ AGENTS.md, CLAUDE.md             공통 지침과 라우팅
   coordinator.keep.json          코디네이터에서 활성화할 플러그인과 skill의 allowlist
 docs/
   backlog.md, backlog-archive.md
+  DOCUMENTATION_INDEX.md         제품 문서 색인 (문서 본문은 doc-steward가 만든다)
   harness/                       모델 배정표, 팀 구성표, changelog, 템플릿 8개
 .agents/skills/                  Codex용 포인터 (Codex 사용을 선택했을 때만)
 ```

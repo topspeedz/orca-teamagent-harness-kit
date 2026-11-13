@@ -43,7 +43,7 @@
 
 역할은 router / canonical / contract / runbook / spec / history 여섯 개면 충분하다([principles.md §2](principles.md)). 처음부터 다 만들지 않는다.
 
-1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다.
+1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다. Orca 틀을 깔았으면 제품 문서의 router는 틀이 깐 `docs/DOCUMENTATION_INDEX.md` 하나다. 따로 만들지 않는다. 문서 본문은 `doc-steward`가 쓸 내용이 생길 때 만든다.
 2. 활성 문서 첫 화면에 상단 계약 3줄을 둔다: 읽는 시점, 역할과 소유 범위, 소유자와 상태([templates.md §2](templates.md)).
 3. 날짜 붙은 계획과 사고 기록은 history 폴더로 분리하고 본문을 고치지 않는다. 현재 규칙과 섞어 읽히면 안 된다.
 4. 깊이는 T0 → router → canonical → 코드, **3단을 넘기지 않는다.**

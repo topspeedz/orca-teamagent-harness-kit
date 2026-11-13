@@ -2,7 +2,7 @@
 
 > **읽는 시점:** setup 스킬 7단계(1~6절)와 8단계(7절).
 
-프로젝트의 지난 작업에서 팀과 팀원을 추천하고, 사용자가 고른 것만 만든다. 기존 에이전트 5개와 팀 3개(`product`, `qa`, `harness`)의 정의는 고치지 않는다.
+프로젝트의 지난 작업에서 팀과 팀원을 추천하고, 사용자가 고른 것만 만든다. 기존 에이전트 6개와 팀 3개(`product`, `qa`, `harness`)의 정의는 고치지 않는다.
 
 명령은 프로젝트 루트에서 돌린다. `model-table.mjs`가 실패하면 `model-table: ...`을 stderr에 찍고 코드 1로 끝나며 표는 그대로다. 그 메시지를 사용자에게 보여 주고, 값을 바꿔 스스로 다시 돌리지 않는다.
 
@@ -24,8 +24,8 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 
 ## 2. 추천 만들기
 
-- 반복해서 나온 일의 종류(구현, 화면, 데이터, 배포, 문서 등)를 묶어 팀 후보를 만든다.
-- 이미 `docs/harness/team-org.md`에 있는 팀은 "있음"으로만 보여 준다. product·qa·harness가 이미 맡는 일은 새 팀으로 추천하지 않는다.
+- 반복해서 나온 일의 종류(구현, 화면, 데이터, 배포 등)를 묶어 팀 후보를 만든다.
+- 이미 `docs/harness/team-org.md`에 있는 팀은 "있음"으로만 보여 준다. product·qa·harness가 이미 맡는 일은 새 팀으로 추천하지 않는다. 제품 문서를 쓰는 일도 `doc-steward`가 이미 맡으므로 추천하지 않는다.
 - 근거를 댈 수 없는 팀은 추천하지 않는다.
 - 새 역할을 추천하는 기준은 [principles.md §5](principles.md)의 세 증거(반복, 분리, 절차)다. 세팅하는 프로젝트에는 아직 Run이 없으므로 반복의 증거는 Run 리포트가 아니라 1절에서 모은 세션 기록과 파이프라인 파일로 댄다.
 
@@ -51,7 +51,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 
 ## 4. 역할 스킬 정하기
 
-팀원마다 기존 역할 스킬(`.claude/skills/`의 `backlog-management`, `change-review`, `qa-verification`, `phase-planning`, `harness-retro`)의 `description`을 읽는다. 그 팀원이 맡을 일의 절차가 거기 있으면 그 스킬을 쓴다.
+팀원마다 기존 역할 스킬(`.claude/skills/`의 `backlog-management`, `change-review`, `qa-verification`, `phase-planning`, `harness-retro`, `docs-management`)의 `description`을 읽는다. 그 팀원이 맡을 일의 절차가 거기 있으면 그 스킬을 쓴다.
 
 없으면 `.claude/skills/<역할>/SKILL.md`를 새로 만든다. 그 일의 절차와 산출물, 완료 기준만 적고, 1절에서 확인한 프로젝트의 실제 명령(테스트, 빌드)을 넣는다.
 
