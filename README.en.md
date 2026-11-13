@@ -128,7 +128,8 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 **Verification converges**
 
 - Only High findings and unmet completion criteria get fixed. Medium and below go to the inbox.
-- A recheck only confirms whether that defect still reproduces. A High finding first seen during a recheck still counts as open. The fix loop runs at most twice. If a High finding remains after that and a third round would be needed, the run stops and asks the user.
+- The end-of-run code review first runs the checks that need no browser (syntax, types, lint, unit tests) once on the combined code.
+- Each fix leaves a reproduction test per defect, and right after the fixes the coordinator runs the final test, which checks them. A recheck is run only for a defect that has no reproduction test, and it only confirms whether that defect still reproduces. A High finding first seen during a recheck still counts as open. The fix loop runs at most twice. If a High finding remains after that and a third round would be needed, the run stops and asks the user.
 - The agent that implemented a change does not approve it. Implementation tasks write the test first (TDD).
 - End-of-run QA runs as one worker per area, at the same time, and browser QA does too. Two lines in `.claude/settings.json` (`PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS`) give each worker its own browser.
 - Those two lines apply to every session in the project. To use a visible browser that keeps its profile (logins) in a session you open yourself, including the front desk, start it with `claude --settings .claude/front-desk.settings.json`.

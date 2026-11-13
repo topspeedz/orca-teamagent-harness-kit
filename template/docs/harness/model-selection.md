@@ -11,9 +11,10 @@
 | `planner` | 설계, 계획 | claude | opus | max | effort는 세팅에서 고른 값. 작업량이 매우 방대하면 띄우기 전에 `fable`로 띄울지 사용자에게 묻는다 |
 | `product-manager` | 수락 기준, 항목화 | claude | opus | medium | |
 | `product-manager` | 장부 정리, 완료 처리 | claude | sonnet | medium | |
-| `qa-inspector` | 흐름 검증 | claude | opus | medium | |
-| `qa-inspector` | 재검 | claude | sonnet | medium | 재현 확인만 한다 |
-| `code-reviewer` | 일반 변경 리뷰 | claude | opus | medium | |
+| `qa-inspector` | 흐름 검증 | claude | opus | high | 끝 QA. 결함을 처음 찾는 단계 |
+| `qa-inspector` | 재검 | claude | sonnet | medium | 재현 테스트가 없는 결함의 재현 확인만 한다 |
+| `code-reviewer` | 중간 변경 리뷰 | claude | sonnet | medium | phase 중간, 뒤 Task가 쌓이기 전 묶음 리뷰 |
+| `code-reviewer` | 일반 변경 리뷰 | claude | opus | medium | 끝 리뷰 |
 | `code-reviewer` | 보안·돈이 걸린 변경 리뷰 | claude | opus | high | |
 | `harness-engineer` | 회고, 구조 변경 | claude | opus | high | |
 | `*` | 리드 | claude | opus | high | 팀장으로 띄울 때 |

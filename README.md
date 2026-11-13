@@ -126,7 +126,8 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **검증이 수렴한다**
 
 - 수정 대상은 High와 완료 기준 미달뿐이다. Medium 이하는 인박스로 넘긴다.
-- 재검증은 해당 결함의 재현 여부만 확인한다. 재검증 중에 새로 찾은 High도 남은 High로 센다. fix loop는 최대 2회이고, 그 뒤에도 High가 남아 3회째가 필요해지면 중단하고 사용자에게 묻는다.
+- 끝 리뷰는 합쳐진 코드에서 브라우저 없이 도는 검사(문법, 타입, 린트, 단위 테스트)를 먼저 한 번 돌린다.
+- 수정은 결함마다 재현 테스트를 남기고, 수정 뒤에는 코디네이터가 바로 최종 테스트를 돌려 그 테스트로 확인한다. 재검증은 재현 테스트가 없는 결함만 그 결함의 재현 여부를 확인한다. 재검증 중에 새로 찾은 High도 남은 High로 센다. fix loop는 최대 2회이고, 그 뒤에도 High가 남아 3회째가 필요해지면 중단하고 사용자에게 묻는다.
 - 구현한 에이전트가 자신의 결과를 승인하지 않는다. 구현 Task는 테스트를 먼저 작성한다(TDD).
 - 끝 검증의 QA는 영역별 워커로 동시에 돈다. 브라우저를 쓰는 QA도 같다. `.claude/settings.json`의 `PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS` 두 줄이 워커마다 브라우저를 따로 띄우게 한다.
 - 이 두 줄은 프로젝트의 모든 세션에 적용된다. 직접 여는 세션(창구 포함)에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 연다.
