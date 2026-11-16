@@ -9,8 +9,11 @@
 | --- | --- | --- | --- | --- | --- |
 | `coordinator` | 실행 감독 | claude | opus | high | 100만 토큰 창 전제 |
 | `planner` | 설계, 계획 | claude | opus | max | effort는 세팅에서 고른 값. 작업량이 매우 방대하면 띄우기 전에 `fable`로 띄울지 사용자에게 묻는다 |
-| `product-manager` | 수락 기준, 항목화 | claude | opus | medium | |
+| `product-manager` | 수락 기준, 항목화 | claude | fable | max | 2단계. 분해, 복잡도, 우선순위, 묶음 제안 |
 | `product-manager` | 장부 정리, 완료 처리 | claude | sonnet | medium | |
+| `prd-writer` | 요구사항 정리 | claude | fable | max | 2단계. 요청을 PRD와 SRS의 줄로 쓴다 |
+| `pm-reviewer` | 기획 검토 | claude | opus | high | 2단계. 결함을 처음 찾는 단계 |
+| `pm-reviewer` | 계획 대조 | claude | opus | medium | 4단계. 항목과 Task의 대조 |
 | `qa-inspector` | 흐름 검증 | claude | opus | high | 끝 QA. 결함을 처음 찾는 단계 |
 | `qa-inspector` | 재검 | claude | sonnet | medium | 재현 테스트가 없는 결함의 재현 확인만 한다 |
 | `code-reviewer` | 중간 변경 리뷰 | claude | sonnet | medium | phase 중간, 뒤 Task가 쌓이기 전 묶음 리뷰 |
