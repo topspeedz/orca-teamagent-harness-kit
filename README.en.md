@@ -22,7 +22,8 @@ It packages a role hierarchy (front desk, coordinator, team lead, team member) a
 User
   │
 Front desk (user session)          requirements interview and approvals, request triage, final report
-  ├── planner                      design doc, implementation plan, DAG
+  ├── Product team                 requirements (PRD, SRS), backlog items, design doc and plan, review
+  │     prd-writer → product-manager → planner → pm-reviewer
   └── Coordinator (own terminal)   starts workers, collects results, updates the ledger, commits and opens the PR
         ├── Team lead ── Team member ×N
         ├── Team lead ── Team member ×N
@@ -46,7 +47,7 @@ Once setup finishes, send work to the front desk session. You pick teams in step
 
 **Multi-Team Agent**
 
-The team agent structure is based on [revfactory/harness](https://github.com/revfactory/harness). The difference is the number of teams.
+The team agent structure is based on [revfactory/harness](https://github.com/revfactory/harness). The difference is the number of teams. The product team's methods (requirements, decomposition and complexity, RICE, planning review) are taken from [revfactory/harness-100's 46-product-manager](https://github.com/revfactory/harness-100/tree/main/ko/46-product-manager) (Apache-2.0) and rewritten for this kit's rules.
 
 | | revfactory/harness | This kit |
 | --- | --- | --- |
@@ -66,10 +67,11 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 **A fixed phase workflow**
 
 ```
-1 Interview → 2 Design ✋ → 3 Plan ✋ → 4 Backlog sync → 5 Execution → 6 Close-out → 7 Harness retro → 8 Commit and PR ✋
+1 Interview → 2 Product planning ✋ → 3 Design ✋ → 4 Plan ✋ → 5 Execution → 6 Close-out → 7 Harness retro → 8 Commit and PR ✋
 ```
 
 - ✋ marks a user approval gate. Design and plan approvals come with a DAG swimlane diagram and a waterfall diagram.
+- In step 2 the product team writes the requirements into the PRD and SRS first, splits them into backlog items with complexity and priority (RICE), and proposes this phase's batch. The user approves the batch.
 - The planner writes the design doc and implementation plan in the format of the superpowers `brainstorming` and `writing-plans` skills.
 - The retro is never skipped. If there is no evidence for a change, it records the measurements and "no change".
 - In step 6 `doc-steward` updates the live docs under `docs/` with what the phase changed.
@@ -78,9 +80,11 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 
 | Team | Agent | Responsibility |
 | --- | --- | --- |
-| (shared) | `planner` | Design doc, implementation plan, DAG |
+| Product | `prd-writer` | Turns the request into PRD and SRS requirements |
+| Product | `product-manager` | Backlog items, acceptance criteria, complexity and priority, close-out |
+| Product | `planner` | Design doc, implementation plan, DAG |
+| Product | `pm-reviewer` | Checks requirements, items and tasks for gaps (read-only) |
 | (shared) | `doc-steward` | Live product docs (requirements, design, contracts, tests, operations): initialization, sync, audit |
-| Product | `product-manager` | Backlog, acceptance criteria, close-out |
 | Verification | `qa-inspector` | Verification by running the product |
 | Verification | `code-reviewer` | Code review (read-only) |
 | Harness | `harness-engineer` | End-of-phase retro and harness improvements |
@@ -146,7 +150,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 - The working directory is `_workspace/<team>/<phase>/` and is excluded through `.gitignore`. File names follow one format: `NN_<agent>_<artifact>_v1.md`.
 - No rule is written in two places. The wait contract, the model assignment table, and the team roster each have a single source of truth.
-- Team outputs are history. Live docs that describe the product's current state are written only by `doc-steward`, in the twelve numbered folders under `docs/`. Document forms are reference files of a skill and are read only when needed.
+- Team outputs are history. Live docs that describe the product's current state are written by `doc-steward`, in the twelve numbered folders under `docs/`. The exception is the requirement lines in the PRD and SRS: the product team's `prd-writer` writes them before execution, marked `(계획됨)`, and `doc-steward` reconciles them with the code afterwards. Document forms are reference files of a skill and are read only when needed.
 
 **Claude and Codex side by side**
 
@@ -262,10 +266,10 @@ Requests to the front desk (your regular Claude Code session) are routed by the 
 ```
 AGENTS.md, CLAUDE.md             shared instructions and routing
 .claude/
-  agents/                        6 built-in agents
+  agents/                        8 built-in agents
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 docs-management, team-product, team-qa, team-harness,
+                                 docs-management, product-planning, team-product, team-qa, team-harness,
                                  dag-swimlane, waterfall-timeline
   hooks/                         approval, waiting, context compaction, worker rule injection,
                                  browser secret blocking

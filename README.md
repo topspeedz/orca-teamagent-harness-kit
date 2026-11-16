@@ -20,7 +20,8 @@
 사용자
   │
 창구 (사용자 세션)            요구사항 인터뷰와 승인, 요청 분류, 최종 보고
-  ├── planner                설계 문서와 구현 계획, DAG
+  ├── 기획 팀                 요구사항(PRD·SRS), 백로그 항목, 설계 문서와 구현 계획, 검토
+  │     prd-writer → product-manager → planner → pm-reviewer
   └── 코디네이터 (별도 터미널)  워커 실행, 결과 수집, ledger 갱신, commit과 PR
         ├── 팀장 ── 팀원 ×N
         ├── 팀장 ── 팀원 ×N
@@ -44,7 +45,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 **Multi-Team Agent 방식**
 
-팀 에이전트 구조는 [revfactory/harness](https://github.com/revfactory/harness)를 참조했다. 차이는 팀의 수다.
+팀 에이전트 구조는 [revfactory/harness](https://github.com/revfactory/harness)를 참조했다. 차이는 팀의 수다. 기획 팀의 방법(요구사항 정리, 분해와 복잡도, RICE, 기획 검토)은 [revfactory/harness-100의 46-product-manager](https://github.com/revfactory/harness-100/tree/main/ko/46-product-manager)(Apache-2.0)에서 가져와 이 키트의 규칙에 맞게 다시 썼다.
 
 | | revfactory/harness | 이 키트 |
 | --- | --- | --- |
@@ -64,10 +65,11 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **정해진 phase 워크플로**
 
 ```
-1 요구사항 인터뷰 → 2 설계 ✋ → 3 계획 ✋ → 4 백로그 반영 → 5 실행 → 6 완료 처리 → 7 하네스 회고 → 8 commit과 PR ✋
+1 요구사항 인터뷰 → 2 기획 ✋ → 3 설계 ✋ → 4 계획 ✋ → 5 실행 → 6 완료 처리 → 7 하네스 회고 → 8 commit과 PR ✋
 ```
 
 - ✋는 사용자 승인 단계다. 설계와 계획을 승인받을 때는 DAG Swimlane 다이어그램과 Waterfall 다이어그램을 함께 제시한다.
+- 2단계 기획에서 기획 팀이 요구사항을 PRD와 SRS에 먼저 쓰고, 백로그 항목으로 나눠 복잡도와 우선순위(RICE)를 붙이고, 이번 phase의 묶음을 제안한다. 사용자가 묶음을 승인한다.
 - 설계 문서와 구현 계획은 planner가 superpowers의 `brainstorming`, `writing-plans` 형식으로 작성한다.
 - 회고는 생략하지 않는다. 변경할 근거가 없으면 측정 결과와 "변경 없음"만 기록한다.
 - 6단계에서 `doc-steward`가 그 phase가 바꾼 것을 `docs/`의 live 문서에 반영한다.
@@ -76,9 +78,11 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 | 팀 | 에이전트 | 담당 |
 | --- | --- | --- |
-| (공용) | `planner` | 설계 문서, 구현 계획, DAG |
+| 기획 | `prd-writer` | 요청을 PRD와 SRS의 요구사항으로 정리 |
+| 기획 | `product-manager` | 백로그 항목화, 수락 기준, 복잡도와 우선순위, 완료 처리 |
+| 기획 | `planner` | 설계 문서, 구현 계획, DAG |
+| 기획 | `pm-reviewer` | 요구사항·항목·Task의 빠진 것 대조 (읽기 전용) |
 | (공용) | `doc-steward` | 제품 live 문서(요구사항, 설계, 계약, 테스트, 운영)의 초기화, 동기화, 감사 |
-| 기획 | `product-manager` | 백로그, 수락 기준, 완료 처리 |
 | 검증 | `qa-inspector` | 실행 기반 검증 |
 | 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
 | 하네스 | `harness-engineer` | phase 종료 시 회고와 하네스 개선 |
@@ -144,7 +148,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 - 작업 디렉터리는 `_workspace/<팀>/<phase>/`이고 `.gitignore`로 제외한다. 파일 이름은 `NN_<에이전트>_<산출물>_v1.md` 형식 하나로 통일한다.
 - 같은 규칙을 두 곳에 두지 않는다. 대기 규약, 모델 배정표, 팀 구성표는 각각 단일 원본(single source of truth) 파일을 갖는다.
-- 팀의 산출물은 이력이다. 제품의 지금 상태를 담는 live 문서는 `doc-steward`만 `docs/`의 번호 폴더 12개에 쓴다. 양식은 skill의 참조 파일로 두고 필요한 것만 읽는다.
+- 팀의 산출물은 이력이다. 제품의 지금 상태를 담는 live 문서는 `doc-steward`가 `docs/`의 번호 폴더 12개에 쓴다. 예외로 PRD와 SRS의 요구사항 줄은 기획 팀의 `prd-writer`가 실행 전에 `(계획됨)`으로 쓰고, `doc-steward`가 실행 뒤에 코드와 맞춘다. 양식은 skill의 참조 파일로 두고 필요한 것만 읽는다.
 
 **Claude와 Codex를 함께 사용한다**
 
@@ -260,10 +264,10 @@ node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --targe
 ```
 AGENTS.md, CLAUDE.md             공통 지침과 라우팅
 .claude/
-  agents/                        기본 에이전트 6개
+  agents/                        기본 에이전트 8개
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 docs-management, team-product, team-qa, team-harness,
+                                 docs-management, product-planning, team-product, team-qa, team-harness,
                                  dag-swimlane, waterfall-timeline
   hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입, 브라우저 비밀값 차단
   scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정, 브라우저 런처

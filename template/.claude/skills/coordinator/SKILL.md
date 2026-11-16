@@ -108,23 +108,21 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 ## phase의 단계
 
-코디네이터는 계획 승인 뒤의 4~8단계를 맡는다. 1~3단계(설문, 설계, 계획)는 창구가 `plan-orchestrate`로 한다.
+코디네이터는 계획 승인 뒤의 5~8단계를 맡는다. 1~4단계(설문, 기획, 설계, 계획)는 창구가 `plan-orchestrate`로 한다. 백로그 항목은 2단계 기획에서 이미 만들어져 있다.
 
 | 단계 | 코디네이터가 하는 것 |
 | --- | --- |
-| 4 백로그 반영 | `product-manager` 워커 Task로 띄운다. 계획의 Task를 백로그 항목에 연결한다. |
 | 5 실행 | 기동, 정산, 중간 리뷰, 끝 검증, 수정 루프, 최종 테스트 |
 | 6 완료 처리 | `doc-steward` 워커 Task로 띄워 live 문서(`docs/`의 번호 폴더)를 맞춘 뒤, `product-manager` 워커 Task로 띄워 백로그를 정리한다. |
 | 7 하네스 회고 | `harness-engineer` 워커 Task로 띄운다. 생략하지 않는다. 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다. |
 | 8 커밋과 PR | 창구를 거쳐 사용자 승인을 받은 뒤 한 번에 한다. |
 
-- 4, 6, 7단계의 Task도 같은 방식으로 등록해 띄운다.
+- 6, 7단계의 Task도 같은 방식으로 등록해 띄운다.
+- Task의 백로그 ID는 계획서 `## DAG`의 그 Task의 `백로그:` 줄에서 읽는다. 계획서 없이 도는 phase(답이 정해진 작업)는 브리프의 `## 백로그 항목`에서 읽는다. 기동의 `--bracket`과 백로그 상태 열 갱신에 쓴다. `없음`이면 `--bracket`에 phase 이름을 쓰고 상태 열은 고치지 않는다.
 - 6단계의 문서 동기화 Task는 마지막 최종 테스트 뒤에 띄운다. 배정은 `doc-steward / 문서 동기화`다. spec의 "먼저 읽을 것"에 브리프, 설계서, 계획서, 장부, 끝 검증 리포트의 경로를 넣고, 리포트 경로는 `_workspace/_run/<phase>/06_doc-steward_sync_v1.md`로 적는다. 정산의 `--expect`는 `docs/DOCUMENTATION_INDEX.md`다. 실패하면 1회 다시 띄운다. 그래도 실패하면 사용자에게 묻지 않고 최종 보고에 "문서 미동기화"를 적고 완료 처리로 간다.
-- 완료 처리 Task는 문서 동기화 Task를 정산한 뒤에 등록해 띄운다. 문서 동기화에 의존(`--deps`)을 걸지 않는다. 걸면 문서 동기화가 끝내 실패했을 때 완료 처리가 풀리지 않는다.
+- 완료 처리 Task는 문서 동기화 Task를 정산한 뒤에 등록해 띄운다. 배정은 `product-manager / 완료 처리`다(모델 표의 쉼표로 묶인 칸을 그대로 쓰지 않는다). 문서 동기화에 의존(`--deps`)을 걸지 않는다. 걸면 문서 동기화가 끝내 실패했을 때 완료 처리가 풀리지 않는다.
 - 사용자가 요청한 문서 초기화와 문서 감사는 5단계의 Task다. 리포트는 `05_doc-steward_init_v1.md`, `05_doc-steward_audit_v1.md`이고, `--expect`는 초기화가 `docs/CODEBASE_MAP.md`, 감사가 `docs/DOCUMENTATION_INDEX.md`다. 실행 Task가 `doc-steward`의 Task뿐인 phase에서는 6단계의 문서 동기화를 띄우지 않는다.
 - 7단계를 띄우기 전에 실제 시각을 남긴다. 회고가 이 파일로 실제값을 잰다: `node .claude/scripts/orca-launch.mjs actual --map <map> > _workspace/_run/<phase>/actual.json`
-
-건너뛰기: 백로그 항목과 수락 기준이 이미 있으면 4단계를 생략한다.
 
 ## 정산
 
