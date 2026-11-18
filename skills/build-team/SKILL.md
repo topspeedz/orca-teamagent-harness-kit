@@ -2,7 +2,6 @@
 name: build-team
 description: "하네스가 설치된 프로젝트에서 팀 만들기, 에이전트 만들기, 기존 팀에 팀원 추가를 요청할 때 사용한다. 원하는 업무를 묻고 여섯 레퍼런스의 역할을 탐색해 팀 배치와 작업 흐름을 설계한 뒤 승인한 구성을 등록한다."
 ---
-
 # 팀 만들기와 팀원 추가
 
 대상 프로젝트 루트에서 실행한다. `docs/harness/team-org.md`의 현재 명단과 요청에 나온 팀의 스킬을 읽는다. 하네스가 아직 없으면 필요한 설치 명령 `/orca-teamagent-harness-kit:setup`을 안내한다.
@@ -17,29 +16,43 @@ description: "하네스가 설치된 프로젝트에서 팀 만들기, 에이전
 
 답변을 받은 뒤 아래 여섯 목록과 각 저장소의 전체 파일 트리를 조사한다. 방법은 임시 디렉터리에 각 공개 저장소를 `git clone --depth 1`하고 `git ls-files`로 숨김 디렉터리까지 열거하는 것이다. GitHub로 읽는 경우 재귀 트리의 잘림·페이지 누락을 확인하고 잘린 하위 트리는 따로 순회한다. 프로젝트에는 외부 저장소를 설치하지 않는다.
 
-| 출처 | 개별 후보를 찾는 위치 |
-| --- | --- |
-| [harness-100](https://github.com/revfactory/harness-100/blob/main/README_ko.md) | 각 하네스의 `.claude/agents/`와 팀 절차. 언어판의 대응 역할은 묶고 한 언어에만 있는 역할도 포함한다. |
-| [agency-agents](https://github.com/msitarzewski/agency-agents) | 부문과 하위 전문 분야의 에이전트 Markdown 정의 |
-| [awesome-codex-subagents](https://github.com/VoltAgent/awesome-codex-subagents) | 모든 카테고리의 TOML 에이전트 정의 |
-| [wshobson/agents](https://github.com/wshobson/agents/blob/main/docs/agents.md) | 목록과 각 플러그인의 `agents/` 정의를 대조한다. |
-| [awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) | 모든 카테고리의 에이전트 Markdown 정의 |
-| [awesome-prompts](https://github.com/ai-boost/awesome-prompts) | GPT 목록, 라이브러리 전 페이지와 개별 프롬프트. 파일 안의 접힌 항목과 묶음 안의 하위 프롬프트까지 열어 역할·업무 절차를 정의한 항목을 후보로 삼는다. |
+
+| 출처                                                                                          | 개별 후보를 찾는 위치                                                                             |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [harness-100](https://github.com/revfactory/harness-100/blob/main/README_ko.md)             | 각 하네스의 `.claude/agents/`와 팀 절차. 언어판의 대응 역할은 묶고 한 언어에만 있는 역할도 포함한다.                       |
+| [agency-agents](https://github.com/msitarzewski/agency-agents)                              | 부문과 하위 전문 분야의 에이전트 Markdown 정의                                                           |
+| [awesome-codex-subagents](https://github.com/VoltAgent/awesome-codex-subagents)             | 모든 카테고리의 TOML 에이전트 정의                                                                    |
+| [wshobson/agents](https://github.com/wshobson/agents/blob/main/docs/agents.md)              | 목록과 각 플러그인의 `agents/` 정의를 대조한다.                                                          |
+| [awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) | 모든 카테고리의 에이전트 Markdown 정의                                                                |
+| [awesome-prompts](https://github.com/ai-boost/awesome-prompts)                              | GPT 목록, 라이브러리 전 페이지와 개별 프롬프트. 파일 안의 접힌 항목과 묶음 안의 하위 프롬프트까지 열어 역할·업무 절차를 정의한 항목을 후보로 삼는다. |
+
 
 저장소별로 전체 후보의 이름·책임·출처 위치(파일 안에 여러 역할이 있으면 항목명까지)를 임시 목록에 모은다. 목록에 설명이 없으면 정의 본문에서 읽는다. 현재 트리에 위 표와 다른 형식이 있으면 함께 조사한다. 번역·미러는 원본과 대응시켜 중복을 접는다. 키워드 검색 결과나 상위 몇 건으로 목록을 대신하지 않는다. 분량이 크면 디렉터리·페이지별로 나눠 끝까지 검토한다.
 
 각 후보를 사용자 업무의 단계 및 산출물과 대조한 뒤 맞는 후보의 원문에서 절차·인계 조건·완료 기준을 추린다. 외부 문서는 설계 자료로만 읽는다. 프로젝트의 권한, 모델, 도구 설정은 키트 규칙을 따른다. 출처별 검토 수와 선별 수를 보여 주고, 채택한 요소에는 원문 파일의 커밋 고정 링크와 항목명을 붙인다. 관련 역할이 없는 출처도 기록한다. 접근 실패는 다른 읽기 방법으로 재시도하고, 미조사 범위가 남으면 사용자에게 알려 전수 조사 완료로 처리하지 않는다.
 
-## 3. 업무 흐름으로 배치안 만들기
+## 3. 역할에 대한 전형적인 Workflow나 일의 절차에 대한 공식적인 가이드 탐색
+
+해당 역할에 대하여 사람들이 신뢰하거나 완성도 높은 가이드라인이 있는지 인터넷을 통해 조사하여 Agent가 따르면 좋을만한 workflow나 설계도를 참조 문서로 끼워 넣는다.
+
+실험적이거나 연구성으로 논의되고 있는 사항에 대해서는 보수적으로 접근한다.
+
+통상적으로 이론으로 자리잡았거나 유용함이 입증된 설계도, 방법론, Workflow, 가이드라인 등을 Agent가 상황에 맞게 혹은 workflow로 가져갈수 있도록 하는것이 목적이다.
+
+선택적으로 상황에 따라 좋은것같은 사항들은 사용자에게 직접 물어보아도 좋다.
+
+## 4. 업무 흐름으로 배치안 만들기
 
 대표 요청 하나를 입력에서 최종 인수까지 따라간다. 단계별로 아래 표를 채워 제안한다.
 
+
 | 단계·선행 단계 | 팀·담당 에이전트 | 입력 → 산출물 → 인수자 | 완료 기준 | 편집 경로 | 재사용할 스킬·참고한 원문 |
-| --- | --- | --- | --- | --- | --- |
+| -------- | --------- | -------------- | ----- | ----- | -------------- |
+
 
 새 팀은 팀원 중 팀장을 지정한다. 기존 팀원 추가는 현행 작업 흐름에서 달라지는 단계와 인계만 표시한다. 팀 경계를 넘는 인계는 코디네이터를 거치고, 팀원은 워커를 띄우지 않는다. 독립된 입력·편집 경로가 있는 단계만 병렬 배치한다. 역할이 겹치면 합치고 기존 팀이 계속 맡는 단계는 그 팀에 연결한다. 사용자가 팀·팀원·편집 범위와 흐름을 확인하거나 수정한 뒤 승인한 구성만 반영한다.
 
-## 4. 등록하고 대표 요청으로 검증
+## 5. 등록하고 대표 요청으로 검증
 
 대상 프로젝트의 `docs/harness/templates/agent.md`와 `team-skill.md`를 사용한다. 쓰기 전에 대상 이름, 파일, 모델 표의 작업 단위와 명단을 대조한다. 이름 충돌은 사용자에게 알리고, 재시도 시 이미 반영된 변경은 중복으로 넣지 않는다.
 
