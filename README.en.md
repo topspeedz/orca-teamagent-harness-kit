@@ -4,7 +4,7 @@
 
 **A Claude Code plugin that installs an Orca-based multi-agent harness into a new project in one step.**
 
-It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin exposes a single skill, `setup`. The files it installs live under `template/`, mirroring the paths they take in the target project.
+It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin provides `setup` for installation and `build-team` for team composition. The files it installs live under `template/`, mirroring the paths they take in the target project.
 
 > **Base environment: Orca + Superpowers + TeamAgent Harness**
 >
@@ -41,7 +41,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-Once setup finishes, send work to the front desk session. You pick teams in step 7 of `setup` and can add more by hand later ([Adding a team](#adding-a-team)).
+Once setup finishes, send work to the front desk session. Pick teams in step 7 of `setup` and use `build-team` to add teams or members later ([Adding a team](#adding-a-team)).
 
 ## Features
 
@@ -239,7 +239,9 @@ node "<plugin directory>/skills/setup/scripts/setup.mjs" verify --target .
 
 ### Adding a team
 
-Step 7 of the `setup` skill analyzes past work, recommends teams, and creates the ones you pick. To add one by hand later, follow these steps.
+After setup, run `/orca-teamagent-harness-kit:build-team` or ask to create a team or add a member to an existing team. Describe the work you want it to handle. The skill surveys roles across six repositories and proposes a lead, members, source references, workflow stages, and handoffs. Once approved, it updates the roster, agent definitions, team skill, and model table. [Team composition skill](skills/build-team/SKILL.md)
+
+To add a team by hand, follow these steps.
 
 1. Copy the team skill template `docs/harness/templates/team-skill.md` to `.claude/skills/team-<name>/SKILL.md` and fill it in.
 2. Copy the agent template `docs/harness/templates/agent.md` to `.claude/agents/<name>.md` and fill it in.

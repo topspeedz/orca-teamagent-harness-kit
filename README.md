@@ -4,7 +4,7 @@
 
 **Orca 기반 멀티 에이전트 하네스를 새 프로젝트에 한 번에 설치하는 Claude Code 플러그인.**
 
-창구, 코디네이터, 팀장, 팀원으로 이어지는 역할 계층과 그 계층이 따르는 규칙(대기, 승인, 모델 배정, 검증, 문서화)을 skill, hook, 스크립트, 템플릿으로 패키징했다. 플러그인이 제공하는 skill은 `setup` 하나이고, 프로젝트에 설치되는 파일은 `template/` 아래에 대상 프로젝트와 같은 경로 구조로 들어 있다.
+창구, 코디네이터, 팀장, 팀원으로 이어지는 역할 계층과 그 계층이 따르는 규칙(대기, 승인, 모델 배정, 검증, 문서화)을 skill, hook, 스크립트, 템플릿으로 패키징했다. 플러그인은 설치용 `setup`과 팀 구성용 `build-team`을 제공한다. 프로젝트에 설치되는 파일은 `template/` 아래에 대상 프로젝트와 같은 경로 구조로 들어 있다.
 
 > **기본 환경: Orca + Superpowers + TeamAgent Harness**
 >
@@ -39,7 +39,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-설치가 끝나면 창구 세션에 작업을 요청한다. 팀은 `setup`의 7단계에서 고르고, 나중에 직접 추가할 수도 있다([팀 추가](#팀-추가)).
+설치가 끝나면 창구 세션에 작업을 요청한다. 팀은 `setup`의 7단계에서 고르고, 나중에는 `build-team`으로 팀이나 팀원을 추가한다([팀 추가](#팀-추가)).
 
 ## 특징
 
@@ -237,7 +237,9 @@ node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --targe
 
 ### 팀 추가
 
-`setup` skill의 7단계가 지난 작업을 분석해 팀을 추천하고 고른 대로 만든다. 나중에 직접 넣을 때는 아래 순서로 한다.
+설치 후 `/orca-teamagent-harness-kit:build-team`을 실행하거나 “디자인 팀 만들어줘”, “개발 팀에 접근성 검토 담당을 추가해줘”처럼 요청한다. 원하는 업무를 답하면 여섯 외부 저장소에서 역할을 조사해 팀장·팀원, 참고한 원문, 담당 단계와 산출물 인계 경로를 제안한다. 승인한 구성은 명단, 에이전트, 팀 스킬과 모델 표에 반영한다. [팀 구성 스킬](skills/build-team/SKILL.md)
+
+직접 추가할 때는 아래 순서로 한다.
 
 1. 팀 skill 템플릿 `docs/harness/templates/team-skill.md`를 `.claude/skills/team-<이름>/SKILL.md`로 복사해 작성한다.
 2. 에이전트 템플릿 `docs/harness/templates/agent.md`를 `.claude/agents/<이름>.md`로 복사해 작성한다.

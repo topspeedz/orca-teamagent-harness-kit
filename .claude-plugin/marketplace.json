@@ -6,7 +6,7 @@
     {
       "name": "orca-teamagent-harness-kit",
       "source": "./",
-      "description": "Orca 기반 멀티 에이전트 하네스 틀과 세팅 스킬"
+      "description": "Orca 멀티 에이전트 하네스 설치, 팀 생성과 팀원 추가"
     }
   ]
 }

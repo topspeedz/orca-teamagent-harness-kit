@@ -165,7 +165,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 - 실패한 검증: 5단계 표의 ❌ 줄, 8단계 `node .claude/scripts/model-selection.mjs check`가 실패했으면 그 출력.
 - 8단계의 결과: 모델 표에서 바뀐 줄(없으면 없다고)과 `node .claude/scripts/model-selection.mjs check`의 결과.
 - 6단계의 산출물: V1 표(검증 명령이 없으면 없다고), 게이트 표(deny, ask, 훅), 라우팅 표, 토큰 기준선(또는 측정하지 못한 사유), 하지 않기로 한 것.
-- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀을 나중에 더 넣으려면 setup을 다시 돌리거나 양식(`docs/harness/templates/`의 팀 스킬·에이전트 양식과 명단 `docs/harness/team-org.md`)으로 직접 넣는다.
+- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀이나 팀원을 나중에 더 넣으려면 `/orca-teamagent-harness-kit:build-team`을 안내한다.
 - 요구사항이 흐릿하거나 많은 요청은 2단계 기획(요구사항 정리, 항목화, 검토, 묶음 승인)을 거친 뒤 설계와 계획으로 간다.
 - 제품 문서: phase마다 6단계에서 `doc-steward`가 그 phase가 바꾼 것을 `docs/`의 문서에 반영한다. 코드가 이미 있는 프로젝트는 '문서 초기화'를 요청하면 문서를 처음 세운다고 전한다.
 - 브라우저 설정: 이 프로젝트의 세션은 기본으로 Playwright 브라우저를 창 없이, 세션마다 따로 띄운다(QA를 병렬로 돌리기 위한 값이다). 직접 여는 세션에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 열어야 한다고 전한다.
