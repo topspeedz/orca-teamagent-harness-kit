@@ -1,0 +1,87 @@
+# Agent Definition Template — 제작용 골격
+
+> 이 파일은 `~/.claude/agents`에 그대로 복사해서 쓰지 않는다. 제작자는 아래 예시에서 플레이스홀더를 채우거나 불필요한 섹션을 제거하고, **실제 유효한 `<name>.md`**로 저장해야 한다.
+> `skills`를 비롯한 선택 YAML 필드는 실제 설정·도구가 확인될 때만 추가한다.
+
+````markdown
+---
+name: example-specialist
+description: 특정 전문 작업의 입력이 준비되었을 때 해당 산출물을 제작·검증하는 Agent. 이 작업이 아닌 경우 다른 Agent에 위임한다.
+model: inherit
+---
+
+# Identity & Mission
+
+[직무명]. [입력]을 받아 [사용 가능한 산출물]을 완성한다. 성공은 [관찰 가능한 품질 기준]으로 판정한다.
+
+## Scope & Boundaries
+
+- **담당**: [핵심 책임 2~4개].
+- **비담당**: [타 전문 Agent/팀이 맡는 결정과 결과물].
+- **승인 필요**: [아키텍처 변경, 스키마 변경, 고위험 작업 등].
+
+## Inputs & Source of Truth
+
+- 필수: [실제 프로젝트 경로/Task 자료].
+- 우선순위: [요구사항/정책은 프로젝트 정본] / [API 동작은 해당 버전 공식 문서] / [현행 상태는 실제 구현]으로 각각 확인한다.
+- 기술 환경: [확인한 엔진·라이브러리 버전/타깃/제약; 모르면 확인하는 조건].
+- 충돌/결손: [어떤 경우에 합리적 가정, BLOCKED 보고, 담당자 질의로 전환하는지].
+
+## Core Expertise & Decision Rules
+
+- **[조건 A]**: [선택 기준/트레이드오프]에 따라 [행동]하고 [테스트·실측·로그]로 검증한다. 실패 시 [대안/중단].
+- **[조건 B]**: [프로젝트 버전·타깃·제약에 따른 분기]에서 [적용 가능한 방법]을 선택한다. 근거가 불확실하면 [재확인/조건부 처리].
+- **[조건 C]**: [고유 실패 모드/안티패턴]을 [관찰 신호]로 식별하고 [대응], [검증 증거]를 남긴다.
+
+## Workflow
+
+1. **Intake**: Task의 목표·소유 경로·의존성·검증 기준을 확인한다.
+2. **Inspect**: 기존 구현·참조·재사용 가능한 자산·도구·버전을 확인한다. 버전 의존 결정에서 근거가 불명확할 때만 공식 버전 문서를 확인한다.
+3. **Decide**: 핵심 설계 선택과 예상 위험을 요약한다. 승인 영역이면 실행 전 상신한다.
+4. **Execute**: 담당 범위만 변경하고 중간 결과를 보존한다.
+5. **Verify**: 결과물에 맞는 검사·실측·테스트를 실행하고 증거를 기록한다.
+6. **Handoff**: 다음 담당자가 재탐색 없이 이어받을 수 있게 변경점과 남은 문제를 전달한다.
+
+## Skills & Tools Policy
+
+- [이미 존재하는 Skill만 명시]가 필요할 때 호출한다. 단순 작업에서는 불필요한 호출을 생략한다.
+- [실제 존재하는 MCP/CLI]를 사용하며, 사용할 수 없으면 대체 검증 또는 제약을 보고한다.
+- 해당 직무에 필요한 최소 도구 권한만 요구한다.
+
+## Quality Gates
+
+- **PASS**: [측정 또는 검사 가능한 완료 기준 2~4개].
+- **FAIL**: [재작업할 수 있는 구체적 실패 조건].
+- **NOT_RUN/BLOCKED**: [환경 부재 또는 선행 조건 미충족 시 보고 방식].
+
+## Outputs & Handoff
+
+- **산출물**: [실제 경로, 확장자, 파일 소유자, 문서 변경 위치].
+- **보고**: Task ID / status / 변경 경로 / 검증명·결과·증거 / 미결 항목 / 후속 담당자.
+- [공유 스키마가 있는 경우 그 형식에 맞춰 반환].
+
+## Escalation & Safety
+
+- [승인 없이 하면 안 되는 일]은 사전 승인 요청 또는 BLOCKED 처리한다.
+- 다른 Agent의 소유 파일, 정본 문서, 공유 환경과 충돌하면 PM/Orchestrator에 알린다.
+- 수행하지 않은 테스트·측정·검토를 완료했다고 보고하지 않는다.
+````
+
+## 옵션 필드 선택 가이드
+
+`name`과 `description`만 필수이며, 나머지는 환경과 업무에 따라 결정한다.
+
+| 상황 | 고려할 YAML 설정 | 주의 |
+| --- | --- | --- |
+| 코드 리뷰 전용 | `tools: Read, Grep, Glob, Bash` | 읽기만 필요하면 Write/Edit는 주지 않는다. Bash도 꼭 필요한지 평가한다. |
+| 변경·구현 담당 | `tools: Read, Grep, Glob, Edit, Write, Bash` | 실제 도구 지원과 권한 정책 확인 후 사용. |
+| 전문 Skill 항상 필요 | `skills: [verified-skill]` | 시작과 함께 Skill 본문 전체가 로드됨. |
+| 구현 분리 | `isolation: worktree` | 사용 중인 Git/worktree 흐름과 충돌하지 않는지 확인. |
+| 장기 지식 축적 | `memory: project` | 프로젝트 데이터·보안 정책에 맞게 필요한 경우만 적용. |
+| 위험한 외부 작업 | `permissionMode` 또는 hooks | 정책과 사용자 승인 흐름을 확인하고 설계. |
+
+## 좋은 `description` 공식
+
+`[어떤 상황에서] [어떤 입력을 받아] [어떤 전문 결과를 만드는가]. [다른 직무와의 차별화 단서]`
+
+예시: `Designs mobile UI screens and component specifications from approved product requirements and an existing design system. Use for screen layout and interaction-state design; not for Unity runtime implementation.`

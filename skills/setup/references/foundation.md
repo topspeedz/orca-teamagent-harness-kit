@@ -33,7 +33,7 @@
 - **담지 않는 것:** 값, 표, 이력, 장문 예시, 특정 작업 전용 절차. 그것은 가리켜진 문서가 소유한다.
 - 예산은 `/context`의 실제 토큰으로 잰다(한글은 바이트당 토큰 비율이 달라 bytes는 근사다). 출발점은 다른 런타임과 공유하면 13KiB 안팎, 단독이어도 20KiB 이하다. T0 1만 토큰은 모든 턴에 곱해진다([principles.md §1](principles.md)).
 - `.claude/rules/*.md`는 `paths:` frontmatter가 없으면 `CLAUDE.md`처럼 항상 로드된다. 쪼개도 T0는 줄지 않는다. 특정 경로에서만 필요한 규칙은 `paths:`를 달거나 그 폴더의 `CLAUDE.md`로 내린다(그 폴더 파일을 읽을 때만 로드). 항상 필요한 규칙은 발동 조건과 금지만 적고 상세는 문서로 내린다.
-- 한쪽 런타임에서 다른 쪽으로 파일을 생성·미러링하는 장치(변환기, manifest, 동기화 훅)는 두지 않는다. Claude 전용은 `.claude/`, Codex 전용은 `.codex/`와 `.agents/`에 두고, 둘 다 사본이 아니라 그 자리의 원본이다. 양쪽이 쓰는 스킬은 원본 `.claude/skills/<이름>`에 두고 `.agents/skills/<이름>/SKILL.md`는 frontmatter와 "본문은 원본 경로를 읽는다" 한 줄만 둔다. 저장소 안에는 정션을 두지 않는다. git과 새 워크트리가 재현하지 못한다.
+- Codex를 선택하면 설치 시 기본 에이전트, 팀 구성 시 추가·수정한 에이전트의 `.claude/agents/<이름>.md`에서 `.codex/agents/<이름>.toml`을 생성한다. 양쪽이 쓰는 스킬은 원본 `.claude/skills/<이름>`에 두고 `.agents/skills/<이름>/SKILL.md`는 frontmatter와 "본문은 원본 경로를 읽는다" 한 줄만 둔다. 저장소 안에는 정션을 두지 않는다. git과 새 워크트리가 재현하지 못한다.
 
 **범위 모드(하네스가 있는 저장소의 새 모듈):** 그 폴더의 `CLAUDE.md` 또는 `paths:`를 단 `.claude/rules/<모듈>.md` 하나와 루트 라우팅 표의 한 줄만 만든다. 루트 설정과 훅은 상속하고 건드리지 않는다. 검증은 V1과 V4만 한다.
 
@@ -43,7 +43,7 @@
 
 역할은 router / canonical / contract / runbook / spec / history 여섯 개면 충분하다([principles.md §2](principles.md)). 처음부터 다 만들지 않는다.
 
-1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다. Orca 틀을 깔았으면 제품 문서의 router는 틀이 깐 `docs/DOCUMENTATION_INDEX.md` 하나다. 따로 만들지 않는다. 문서 본문은 `doc-steward`가 쓸 내용이 생길 때 만든다.
+1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다. Orca 틀을 깔았으면 제품 문서의 router는 틀이 깐 `docs/DOCUMENTATION_INDEX.md` 하나다. 따로 만들지 않는다. 문서 본문은 쓸 내용이 생길 때 정본 소유 담당이 만든다.
 2. 활성 문서 첫 화면에 상단 계약 3줄을 둔다: 읽는 시점, 역할과 소유 범위, 소유자와 상태([templates.md §2](templates.md)).
 3. 날짜 붙은 계획과 사고 기록은 history 폴더로 분리하고 본문을 고치지 않는다. 현재 규칙과 섞어 읽히면 안 된다.
 4. 깊이는 T0 → router → canonical → 코드, **3단을 넘기지 않는다.**

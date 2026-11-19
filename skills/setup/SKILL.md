@@ -95,13 +95,14 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 스크립트가 하는 일:
 
 - 없는 파일은 복사하고, 같은 내용의 파일은 건너뛴다.
+- Codex를 선택하면 프로젝트에 설치된 기본 에이전트 Markdown에서 `.codex/agents/<이름>.toml`을 생성한다. 기존 TOML이 생성 이후 수정됐거나 같은 이름의 다른 파일이면 충돌로 보고한다.
 - `.claude/settings.json`은 훅, `permissions` 항목, 없는 `env` 키만 더한다. 프로젝트가 이미 정한 `env` 값은 바꾸지 않는다. `.gitignore`는 없는 줄만 덧붙인다. 둘은 충돌로 올리지 않는다.
 - 승인 접두어를 `permissions.ask`(`Bash(<접두어>:*)`, `PowerShell(<접두어>:*)`)와 `.claude/hooks/approval-gate.config.json`에 넣는다. 둘은 늘 같이 고친다. `permissions.ask`에만 있으면 무인 워커가 확인 화면에서 멈춘다.
 - 모델 표 `docs/harness/model-selection.md`의 planner 줄에 고른 effort를 넣는다. model은 표의 값을 그대로 둔다.
 - 전역에 있는 그림 스킬은 건너뛴다(사유 `전역에 있음`).
 - `.claude/coordinator.keep.json`이 없으면 `coordinator-settings.mjs init-keep`으로 만들고, `permissionMode`에 고른 권한 모드를 넣는다.
 
-출력의 `conflicts`가 비지 않으면(코드 2) 내용이 다른 기존 파일이다. 파일마다 차이를 보여 준다.
+출력의 `conflicts`가 비지 않으면(코드 2) 내용이 다른 기존 파일이다. 생성된 Agent TOML은 프로젝트의 `.claude/agents/<이름>.md`와 이름·설명·본문을 대조한다. 틀에서 복사하는 파일은 아래 명령으로 차이를 보여 준다.
 
 ```sh
 git diff --no-index -- "${CLAUDE_PLUGIN_ROOT}/template/<경로>" "<경로>"
@@ -165,7 +166,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 - 실패한 검증: 5단계 표의 ❌ 줄, 8단계 `node .claude/scripts/model-selection.mjs check`가 실패했으면 그 출력.
 - 8단계의 결과: 모델 표에서 바뀐 줄(없으면 없다고)과 `node .claude/scripts/model-selection.mjs check`의 결과.
 - 6단계의 산출물: V1 표(검증 명령이 없으면 없다고), 게이트 표(deny, ask, 훅), 라우팅 표, 토큰 기준선(또는 측정하지 못한 사유), 하지 않기로 한 것.
-- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀이나 팀원을 나중에 더 넣으려면 `/orca-teamagent-harness-kit:build-team`을 안내한다.
+- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀이나 팀원을 나중에 더 넣으려면 `/orca-teamagent-harness-kit:agent-author`을 안내한다.
 - 요구사항이 흐릿하거나 많은 요청은 2단계 기획(요구사항 정리, 항목화, 검토, 묶음 승인)을 거친 뒤 설계와 계획으로 간다.
 - 제품 문서: phase마다 6단계에서 `doc-steward`가 그 phase가 바꾼 것을 `docs/`의 문서에 반영한다. 코드가 이미 있는 프로젝트는 '문서 초기화'를 요청하면 문서를 처음 세운다고 전한다.
 - 브라우저 설정: 이 프로젝트의 세션은 기본으로 Playwright 브라우저를 창 없이, 세션마다 따로 띄운다(QA를 병렬로 돌리기 위한 값이다). 직접 여는 세션에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 열어야 한다고 전한다.

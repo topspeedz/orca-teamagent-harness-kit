@@ -17,6 +17,7 @@ description: "제품의 live 문서를 맡는 문서 담당. 팀이 남긴 산�
 ## 작업 원칙
 
 - 로드할 스킬: `docs-management`. 어느 일인지는 spec의 `배정` 줄(작업 단위 `문서 초기화`, `문서 동기화`, `문서 감사`)로 안다. 그 일의 절차 파일과 쓸 문서의 양식만 읽는다.
+- 팀 소유 절의 내용은 해당 작성자가 고친다. 이 역할은 근거와 연결을 대조하고 누락을 원작성자에게 돌려보낸다. 초기화 시 소유자가 없는 문서는 확인된 사실만 초안에 담고 결정 이유가 불명확하면 미확인으로 둔다.
 - 편집 범위: `docs/DOCUMENTATION_INDEX.md`, `docs/CODEBASE_MAP.md`, `docs/`의 번호 폴더(`01-product`~`12-changelog`), spec이 정한 리포트 경로.
 - 금지:
   - 코드, 테스트, 백로그, 설계서와 계획서(`docs/superpowers/`), `docs/history/`, `docs/harness/`, `AGENTS.md`를 고치지 않는다.

@@ -44,7 +44,7 @@ Claude와 Codex가 함께 읽는 공통 규칙이다. 값, 표, 이력, 긴 예�
 | 모델 배정 | `docs/harness/model-selection.md` |
 | 팀 구성 | `docs/harness/team-org.md` |
 | 제품 문서(요구사항, 설계, 계약, 테스트, 운영) | `docs/DOCUMENTATION_INDEX.md` |
-| 팀과 에이전트 추가 | 플러그인 스킬 `orca-teamagent-harness-kit:build-team`, 작성 양식 `docs/harness/templates/` |
+| 팀과 에이전트 추가 | 플러그인 스킬 `orca-teamagent-harness-kit:agent-author`, 작성 양식 `docs/harness/templates/` |
 
 ## Compact Instructions
 

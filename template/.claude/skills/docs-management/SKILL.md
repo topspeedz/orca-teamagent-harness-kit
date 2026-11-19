@@ -5,7 +5,7 @@ description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTAT
 
 # docs-management
 
-제품의 지금 상태를 담는 live 문서의 정본 규칙이다. 팀이 남기는 리포트, 설계서, 계획서, phase 사본은 그때의 기록이고, 지금 상태는 `doc-steward`가 `docs/`에 쓴다.
+제품의 지금 상태를 담는 live 문서의 정본 규칙이다. 팀이 남기는 리포트, 설계서, 계획서, phase 사본은 그때의 기록이고, 지금 상태는 `docs/`에 둔다. 팀에 배정한 정본 절은 해당 담당이 자기 Task에서 갱신하고 `doc-steward`는 근거와 색인·연결을 확인한다.
 
 성공 기준은 하나다. 다른 에이전트가 이 문서만 읽고 정확하게 구현하고 검증할 수 있다. 문서를 많이 쓰는 것은 기준이 아니다.
 
@@ -53,7 +53,7 @@ description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTAT
 - 폴더와 문서는 쓸 내용이 생길 때 만든다. 빈 문서를 미리 만들지 않는다. 색인의 그 줄은 `없음`으로 둔다.
 - 이 프로젝트에 없는 영역(예: 화면이 없는 도구의 `docs/03-ui-ux/`)은 색인에 `해당 없음`으로 적고 만들지 않는다.
 - 다른 경로에 이미 문서가 있으면 옮기거나 지우지 않는다. 색인의 정본 문서 칸에 그 경로를 적는다. 번호 폴더로 옮길지는 사용자 결정이므로 리포트의 `## 인박스 후보`에 한 줄로 올린다.
-- 모든 문서의 머리는 양식 `docs/harness/templates/live-doc.md`의 네 줄이다: 읽는 시점, 역할과 소유 범위, 소유 에이전트(`doc-steward`), 마지막으로 갱신한 phase. PRD와 SRS의 소유 에이전트 줄에는 둘을 적는다: `prd-writer`(요구사항 문장과 우선순위), `doc-steward`(상태, 수용 기준, 연결).
+- 모든 문서의 머리는 양식 `docs/harness/templates/live-doc.md`의 네 줄이다: 읽는 시점, 역할과 소유 범위, 소유 에이전트(팀에 배정한 절은 해당 내용 담당, 공용 색인·추적은 `doc-steward`), 마지막으로 갱신한 phase. PRD와 SRS의 소유 에이전트 줄에는 둘을 적는다: `prd-writer`(요구사항 문장과 우선순위), `doc-steward`(상태, 수용 기준, 연결).
 - PRD와 SRS의 요구사항 줄은 기획 팀의 `prd-writer`가 실행 전(phase의 2단계)에 쓴다. 이 역할은 그 문장과 우선순위를 고치지 않는다. 구현을 확인해 표시를 떼고 연결을 맞춘다.
 - 30KB를 넘는 문서는 주제별로 나눈다. 원래 파일에는 나눈 파일을 가리키는 표를 남긴다. 예: 화면이 많으면 `docs/03-ui-ux/screens/<화면 ID>.md`.
 - `docs/` 안에서 이 역할의 것이 아닌 곳은 고치지 않고 가리키기만 한다: `docs/backlog.md`와 `docs/backlog-archive.md`(기획), `docs/harness/`(하네스), `docs/superpowers/`(`planner`의 설계서와 계획서), `docs/history/`(코디네이터의 phase 사본).

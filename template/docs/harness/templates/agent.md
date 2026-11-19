@@ -1,6 +1,7 @@
 # 에이전트 양식
 
 > 읽는 시점: 새 에이전트를 추가할 때. 이 양식을 `.claude/agents/<에이전트>.md`로 복사해 채운다.
+> Codex를 선택하면 이 양식의 `name`과 `description`은 TOML의 같은 필드에, 닫는 `---` 다음의 전체 본문은 `developer_instructions`에 들어간다.
 > 에이전트를 추가하면 `docs/harness/team-org.md`의 그 팀 줄에 팀원으로 넣고, `docs/harness/model-selection.md`에 그 에이전트의 작업 단위 줄을 넣는다.
 > 팀이 어떻게 일하는지는 팀 스킬에, 질문과 보고 통로는 spec 양식과 훅에 있다. 이 파일에는 이 에이전트가 무엇을 맡고 무엇을 하지 않는지만 적는다.
 

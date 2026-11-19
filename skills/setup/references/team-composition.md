@@ -25,7 +25,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 ## 2. 추천 만들기
 
 - 반복해서 나온 일의 종류(구현, 화면, 데이터, 배포 등)를 묶어 팀 후보를 만든다.
-- 이미 `docs/harness/team-org.md`에 있는 팀은 "있음"으로만 보여 준다. product·qa·harness가 이미 맡는 일은 새 팀으로 추천하지 않는다. 요구사항 정리, 백로그 항목화와 우선순위, 기획 검토, 설계와 계획은 product 팀이 맡는다. 제품 문서를 쓰는 일도 `doc-steward`가 이미 맡으므로 추천하지 않는다.
+- 이미 `docs/harness/team-org.md`에 있는 팀은 "있음"으로만 보여 준다. product·qa·harness가 이미 맡는 일은 새 팀으로 추천하지 않는다. 요구사항 정리, 백로그 항목화와 우선순위, 기획 검토, 설계와 계획은 product 팀이 맡는다. 문서 색인과 감사는 `doc-steward`가 맡고, 제품 동작과 결정의 문서화는 그 내용을 소유할 팀에 포함한다.
 - 근거를 댈 수 없는 팀은 추천하지 않는다.
 - 새 역할을 추천하는 기준은 [principles.md §5](principles.md)의 세 증거(반복, 분리, 절차)다. 세팅하는 프로젝트에는 아직 Run이 없으므로 반복의 증거는 Run 리포트가 아니라 1절에서 모은 세션 기록과 파이프라인 파일로 댄다.
 
@@ -47,7 +47,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 - "직접 적어서": 팀, 팀원, 편집 범위를 채팅으로 받아 2절의 표로 정리한다.
 - "지금은 만들지 않음": 8단계로 간다.
 
-편집 범위는 만들기 전에 사용자 확인을 받는다.
+편집 범위에는 팀이 결정하거나 검증하는 정본 경로·절을 포함해 사용자 확인을 받는다. 명단과 역할 파일에 그 경로를 넣고 팀 스킬에는 절별 작성자와 검증 근거를 적는다. API 변경은 기존 계약의 정본 위치부터 확인한다.
 
 ## 4. 역할 스킬 정하기
 
@@ -77,6 +77,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
 
    `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. runtime·model·effort가 모두 `*` 기본 줄과 같은 줄은 목록을 보지 않고 받는다. 그 값은 소유자가 정한 기본값이다(고정한 모델 ID 등). 이미 있는 (에이전트, 작업 단위) 줄도 거절한다. 거절되면 메시지를 보여 주고 이 팀의 나머지 단계로 가지 않는다.
 2. 에이전트 `.claude/agents/<에이전트>.md`(양식 `docs/harness/templates/agent.md`).
+   Codex를 선택한 프로젝트에서는 역할 파일을 추가하거나 수정한 직후 해당 에이전트마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 실행한다. 종료 코드 2이면 출력된 기존 TOML과의 충돌을 사용자에게 알리고 보존한다.
 3. 팀 스킬 `.claude/skills/team-<팀>/SKILL.md`(양식 `docs/harness/templates/team-skill.md`).
 4. 명단 `docs/harness/team-org.md`에 팀 한 줄.
 5. 검사.

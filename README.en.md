@@ -4,7 +4,7 @@
 
 **A Claude Code plugin that installs an Orca-based multi-agent harness into a new project in one step.**
 
-It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin provides `setup` for installation and `build-team` for team composition. The files it installs live under `template/`, mirroring the paths they take in the target project.
+It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin provides `setup` for installation and `agent-author` for team composition. The files it installs live under `template/`, mirroring the paths they take in the target project.
 
 > **Base environment: Orca + Superpowers + TeamAgent Harness**
 >
@@ -41,7 +41,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 /orca-teamagent-harness-kit:setup
 ```
 
-Once setup finishes, send work to the front desk session. Pick teams in step 7 of `setup` and use `build-team` to add teams or members later ([Adding a team](#adding-a-team)).
+Once setup finishes, send work to the front desk session. Pick teams in step 7 of `setup` and use `agent-author` to add teams or members later ([Adding a team](#adding-a-team)).
 
 ## Features
 
@@ -239,7 +239,7 @@ node "<plugin directory>/skills/setup/scripts/setup.mjs" verify --target .
 
 ### Adding a team
 
-After setup, run `/orca-teamagent-harness-kit:build-team` or ask to create a team or add a member to an existing team. Describe the work you want it to handle. The skill surveys roles across six repositories and proposes a lead, members, source references, workflow stages, and handoffs. Once approved, it updates the roster, agent definitions, team skill, and model table. [Team composition skill](skills/build-team/SKILL.md)
+After setup, run `/orca-teamagent-harness-kit:agent-author` or ask to create a team or add a member to an existing team. Describe the work you want it to handle. The skill checks existing roles and the requested work and proposes a lead, members, source references, workflow stages, and handoffs. Once approved, it updates the roster, agent definitions, team skill, and model table. [Team composition skill](skills/agent-author/SKILL.md)
 
 To add a team by hand, follow these steps.
 

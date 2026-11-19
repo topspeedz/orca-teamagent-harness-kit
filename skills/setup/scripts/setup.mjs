@@ -161,6 +161,31 @@ export function applyInstall(plan, opts = { approve: [] }) {
   return { written, skipped: plan.skip, conflicts };
 }
 
+// Use the installed Markdown so project-specific role edits reach Codex too.
+function syncAgents(target, names, approve = []) {
+  const files = readRecord(target);
+  const plan = { target, copy: [], skip: [], conflict: [] };
+  for (const name of names) {
+    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(name ?? '') || !name) throw new Error('잘못된 에이전트 이름');
+    const from = join(target, '.claude/agents', name + '.md');
+    const source = readFileSync(from, 'utf8').replace(/^\uFEFF/, '').replaceAll('\r\n', '\n');
+    const match = /^---\nname: ([^\n]+)\ndescription: ([^\n]+)\n---\n([\s\S]+)$/.exec(source);
+    if (!match || match[1] !== name || !match[3].trim()) throw new Error(`${from}: docs/harness/templates/agent.md 양식을 확인하세요`);
+    const description = match[2].startsWith('"') ? JSON.parse(match[2]) : match[2];
+    if (!description.trim()) throw new Error(`${from}: description이 비어 있습니다`);
+    const content = `name = ${JSON.stringify(name)}\ndescription = ${JSON.stringify(description)}\ndeveloper_instructions = ${JSON.stringify(match[3])}\n`;
+    const to = `.codex/agents/${name}.toml`;
+    const path = join(target, to);
+    if (existsSync(path)) {
+      const current = readFileSync(path);
+      if (current.equals(Buffer.from(content))) continue;
+      if (files[to] !== sha(current)) plan.conflict.push(to);
+    }
+    plan.copy.push({ from, to, content });
+  }
+  return applyInstall(plan, { approve });
+}
+
 function initKeep(target, mode) {
   const keep = join(target, KEEP);
   let note = '있음';
@@ -210,6 +235,11 @@ function main(argv) {
   const target = resolve(opt('--target') ?? '.');
   if (cmd === 'inspect') { console.log(JSON.stringify(inspect(target, DEPS), null, 2)); return 0; }
   if (cmd === 'verify') return verify(target);
+  if (cmd === 'sync-agent') {
+    const result = syncAgents(target, [opt('--agent')]);
+    console.log(json(result));
+    return result.conflicts.length ? 2 : 0;
+  }
   if (cmd === 'install') {
     const answers = JSON.parse(readFileSync(opt('--answers'), 'utf8'));
     if (!MODES.includes(answers.coordinatorPermissionMode)) throw new Error(`coordinatorPermissionMode는 ${MODES.join(', ')} 중 하나다`);
@@ -217,11 +247,17 @@ function main(argv) {
     if (!PLANNER_EFFORTS.includes(answers.planner?.effort)) throw new Error(`planner.effort는 ${PLANNER_EFFORTS.join(', ')} 중 하나다`);
     const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
+    if (answers.codex && !r.conflicts.length) {
+      const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3));
+      const agents = syncAgents(target, names, approve);
+      r.written.push(...agents.written);
+      r.conflicts.push(...agents.conflicts);
+    }
     r.keep = initKeep(target, answers.coordinatorPermissionMode);
     console.log(JSON.stringify(r, null, 2));
     return r.conflicts.length ? 2 : 0;
   }
-  console.log('usage: setup.mjs inspect|install|verify --target <dir> [--answers <json>] [--approve <path,...>]');
+  console.log('usage: setup.mjs inspect|install|verify|sync-agent --target <dir> [--answers <json>] [--approve <path,...>] [--agent <name>]');
   return 1;
 }
 

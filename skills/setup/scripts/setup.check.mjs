@@ -185,4 +185,28 @@ test('mergeGitignore adds only missing lines', () => {
   assert.equal(mergeGitignore('a\n', ['_workspace/', 'a']), 'a\n_workspace/\n');
 });
 
+test('Codex install and team edits preserve the role and protect local TOML edits', () => {
+  const t = target('codex roles');
+  put(t, '.claude/coordinator.keep.json', '{}');
+  put(root, 'codex-answers.json', JSON.stringify({ ...ANSWERS, codex: true }));
+  const setup = fileURLToPath(new URL('./setup.mjs', import.meta.url));
+  const cli = (...args) => spawnSync(process.execPath, [setup, ...args, '--target', t], { encoding: 'utf8' });
+  const result = cli('install', '--answers', join(root, 'codex-answers.json'));
+  assert.equal(result.status, 0, result.stderr);
+  const rel = '.codex/agents/planner.toml';
+  assert.match(read(t, rel), /developer_instructions = .*## 핵심 역할/u);
+  const body = '# custom\n\n## 입력과 출력\n\n"결과" C:\\tmp\n';
+  put(t, '.claude/agents/custom.md', '---\nname: custom\ndescription: "설명"\n---\n' + body);
+  const sync = () => cli('sync-agent', '--agent', 'custom');
+  assert.equal(sync().status, 0);
+  const custom = '.codex/agents/custom.toml';
+  assert.equal(read(t, custom), 'name = "custom"\ndescription = "설명"\ndeveloper_instructions = ' + JSON.stringify(body) + '\n');
+  put(t, '.claude/agents/custom.md', read(t, '.claude/agents/custom.md') + '변경\n');
+  assert.equal(sync().status, 0);
+  assert.match(read(t, custom), /변경/u);
+  put(t, custom, '# local\n');
+  assert.equal(sync().status, 2);
+  assert.equal(read(t, custom), '# local\n');
+});
+
 console.log(`setup.check: ${n} passed`);
