@@ -1,6 +1,6 @@
 ---
 name: harness-retro
-description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase 흐름 7단계에서 이번 phase를 재고(병렬 지표, 코디네이터가 깬 횟수, 수정 루프, 재시도와 원인, 작업 폴더 크기), 근거가 있는 하네스 파일만 최소로 고친다. '하네스 회고', 'phase 회고', '하네스 개선', '병렬 효율 측정', '출발값 고치기'. 팀 운영과 Task 나누기(team-harness), 제품 결함 수정, 백로그 정리, 모델 표 직접 수정에는 쓰지 않는다."
+description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase 흐름 7단계에서 이번 phase를 재고(병렬 지표, 코디네이터가 깬 횟수, 수정 루프, 재시도와 원인, 작업 폴더 크기), 근거가 있는 하네스 파일만 최소로 고친다. '하네스 회고', 'phase 회고', '하네스 개선', '병렬 효율 측정', '출발값 고치기'. 실행 팀 내부 배정(team-lead), 제품 결함 수정, 백로그 정리, 모델 표 직접 수정에는 쓰지 않는다."
 ---
 
 # harness-retro
@@ -106,7 +106,7 @@ node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-t
 
 ## 6. 리포트
 
-경로: `_workspace/harness/<phase>/01_harness-engineer_retro_v<N>.md`(team-harness의 작업 흐름 표). 형식은 양식 `docs/harness/templates/report.md`를 따르고 아래 절을 넣는다.
+회고 경로는 `_workspace/harness/<phase>/01_harness-engineer_retro_v<N>.md`다. 근거 있는 하네스 수정을 별도 Task로 맡으면 `02_harness-engineer_changes_v<N>.md`에 변경과 재검 결과를 기록한다. 형식은 양식 `docs/harness/templates/report.md`를 따르고 아래 절을 넣는다.
 
 ```markdown
 # 하네스 회고 — <phase>

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -17,6 +17,10 @@ const KEEP = '.claude/coordinator.keep.json';
 const SETTINGS = '.claude/settings.json';
 const GATE_CONFIG = '.claude/hooks/approval-gate.config.json';
 const MODEL_TABLE = 'docs/harness/model-selection.md';
+const DOCS_SKILL = '.claude/skills/docs-management';
+const TEMPLATES = 'docs/harness/templates';
+const DRAFT_MANIFEST = new URL('../references/document-drafts.json', import.meta.url);
+const DRAFT_FORMS = JSON.parse(readFileSync(DRAFT_MANIFEST, 'utf8'));
 const INSTALL_RECORD = '.claude/harness-install.json';
 const DIAGRAM = ['dag-swimlane', 'waterfall-timeline'];
 const EXISTING = ['AGENTS.md', 'CLAUDE.md', '.claude', '.gitignore', '.agents', '.codex', 'package.json', 'Makefile'];
@@ -79,7 +83,7 @@ export function mergeGitignore(text, lines) {
 
 // Setup asks only for the planner's effort; the model stays what the table says.
 export function setPlannerRow(tableText, effort) {
-  return tableText.replace(/^\|\s*`planner`\s*\|.*$/gm, (line) => {
+  return tableText.replace(/^\|[ \t]*`planner`[ \t]*\|[ \t]*(?:설계|계획)[ \t]*\|.*$/gm, (line) => {
     const cells = line.split('|');
     cells[5] = ` ${effort} `;
     return cells.join('|');
@@ -88,18 +92,79 @@ export function setPlannerRow(tableText, effort) {
 
 const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
 const sha = (data) => createHash('sha256').update(data).digest('hex');
+function agentOff(target, to) {
+  return /^(?:\.claude\/agents\/[^/]+\.md|\.codex\/agents\/[^/]+\.toml)$/.test(to) && existsSync(join(target, to + '.agent-toggle-off'));
+}
 // Hashes of the files setup wrote, keyed by target path. A missing or unreadable record is empty: its files are conflicts as before.
 function readRecord(target) {
   try { return JSON.parse(readFileSync(join(target, INSTALL_RECORD), 'utf8')).files ?? {}; } catch { return {}; }
 }
 
+function documentDraft(to, formPath, source) {
+  const structure = /^(`{3,})markdown\n([\s\S]+?)^\1$/m.exec(source.replaceAll('\r\n', '\n'))?.[2];
+  if (!structure) throw new Error(`문서 구조가 없는 양식: ${formPath}`);
+  const [title, ...blocks] = structure.trimEnd().split(/\n\n+/);
+  const parts = [title.includes('<') ? source.split(/\r?\n/)[0].replace(/ 양식$/, '') : title];
+  parts.push(`> 설치 초안 · [작성 양식](${posix.relative(posix.dirname(to), formPath)})`);
+  // Copy the structure. Example IDs, commands, releases and results stay in the form.
+  let omitSection = false;
+  for (const block of blocks) {
+    if (block.startsWith('## ')) {
+      omitSection = (to.startsWith('docs/05-api/') && block === '## 스키마: 객체')
+        || (to.startsWith('docs/06-database/') && block === '## 스키마: 연산')
+        || block.startsWith('## [<버전>]');
+    }
+    if (omitSection) continue;
+    if (block.startsWith('- 읽는 시점:')) parts.push(block.replace('<phase>', '없음'));
+    else if (block.startsWith('##')) parts.push(block.replace(/-\d{3}\b/g, '-###'));
+    else if (block.startsWith('|')) {
+      const [header, separator, ...rows] = block.split('\n');
+      const table = [header, separator];
+      if (/^\| 항목 \| (값|정의) \|$/.test(header)) {
+        for (const row of rows) {
+          const field = row.split('|')[1]?.trim();
+          if (field && !field.includes('<')) table.push(`| ${field} | |`);
+        }
+      }
+      parts.push(table.join('\n'));
+    } else if (['요청', '응답', '오류'].includes(block)) {
+      parts.push(block);
+    }
+  }
+  return parts.join('\n\n') + '\n';
+}
+
+function planDocumentDrafts(plan, templateDir) {
+  const index = join(plan.target, 'docs/DOCUMENTATION_INDEX.md');
+  const rows = existsSync(index) ? readFileSync(index, 'utf8').split(/\r?\n/).map(line => line.split('|').map(cell => cell.trim())) : [];
+  for (const [to, form] of Object.entries(DRAFT_FORMS)) {
+    const folder = posix.dirname(to);
+    const location = folder === 'docs' ? to : folder + '/';
+    const [, , , canonical, , , status] = rows.find(cells => cells[1] === '`' + location + '`') ?? [];
+    const indexed = (canonical && canonical !== '없음') || status === '해당 없음';
+    const rootChangelog = form === 'changelog.md' && existsSync(join(plan.target, 'CHANGELOG.md'));
+    if (existsSync(join(plan.target, to)) || rootChangelog || indexed) {
+      plan.skip.push({ to, reason: '기존 문서 또는 색인 유지' });
+      continue;
+    }
+    const formPath = `${TEMPLATES}/product-docs/${form}`;
+    const from = join(templateDir, formPath);
+    plan.copy.push({ from, to, content: documentDraft(to, formPath, readFileSync(from, 'utf8')), draft: true });
+  }
+}
+
 export function planInstall(templateDir, codexDir, target, answers, ins) {
   const plan = { target, copy: [], skip: [], conflict: [] };
   const installed = readRecord(target);
-  const sources = walk(templateDir).map((rel) => [templateDir, rel]);
-  if (answers.codex) sources.push(...walk(codexDir).map((rel) => [codexDir, rel]));
-  for (const [dir, rel] of sources) {
-    const from = join(dir, rel);
+  const sources = walk(templateDir).map((rel) => [join(templateDir, rel), rel]);
+  if (answers.codex) sources.push(...walk(codexDir).map((rel) => [join(codexDir, rel), rel]));
+  sources.push(
+    [fileURLToPath(DRAFT_MANIFEST), `${TEMPLATES}/document-drafts.json`],
+    [fileURLToPath(new URL('../assets/model-survey.html', import.meta.url)), `${TEMPLATES}/model-survey.html`],
+    [fileURLToPath(new URL('./model-table.mjs', import.meta.url)), '.claude/scripts/model-table.mjs'],
+  );
+  for (const [from, rel] of sources) {
+    if (rel === DOCS_SKILL + '/SKILL.md') planDocumentDrafts(plan, templateDir);
     const skill = DIAGRAM.find((s) => rel.startsWith(`.claude/skills/${s}/`));
     if (skill && ins.globalDiagramSkills[skill]) {
       const to = `.claude/skills/${skill}`;
@@ -110,6 +175,10 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     if (rel === KEEP) { plan.skip.push({ to: rel, reason: 'init-keep이 만든다' }); continue; }
     const to = rel === 'gitignore.add' ? '.gitignore' : rel;
     const curPath = join(target, to);
+    if (agentOff(target, to)) {
+      plan.skip.push({ to, reason: '에이전트 OFF' });
+      continue;
+    }
     const cur = existsSync(curPath) ? readFileSync(curPath) : null;
     const src = readFileSync(from, 'utf8');
     let content = readFileSync(from);
@@ -145,12 +214,20 @@ export function applyInstall(plan, opts = { approve: [] }) {
   const approve = (opts.approve ?? []).map((a) => a.replaceAll('\\', '/'));
   const written = [];
   const conflicts = [];
+  const skipped = [...plan.skip];
   const files = readRecord(plan.target);
   for (const c of plan.copy) {
+    if (agentOff(plan.target, c.to)) { skipped.push({ to: c.to, reason: '에이전트 OFF' }); continue; }
     if (plan.conflict.includes(c.to) && !approve.includes(c.to)) { conflicts.push(c.to); continue; }
     const p = join(plan.target, c.to);
     mkdirSync(dirname(p), { recursive: true });
-    writeFileSync(p, c.content);
+    try {
+      writeFileSync(p, c.content, { flag: c.draft ? 'wx' : 'w' });
+    } catch (error) {
+      if (!c.draft || error.code !== 'EEXIST') throw error;
+      skipped.push({ to: c.to, reason: '기존 문서 유지' });
+      continue;
+    }
     written.push(c.to);
     files[c.to] = sha(c.content);
   }
@@ -158,7 +235,7 @@ export function applyInstall(plan, opts = { approve: [] }) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped: plan.skip, conflicts };
+  return { written, skipped, conflicts };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.
@@ -167,15 +244,20 @@ function syncAgents(target, names, approve = []) {
   const plan = { target, copy: [], skip: [], conflict: [] };
   for (const name of names) {
     if (!/^[a-z0-9][a-z0-9_-]*$/i.test(name ?? '') || !name) throw new Error('잘못된 에이전트 이름');
-    const from = join(target, '.claude/agents', name + '.md');
+    const to = `.codex/agents/${name}.toml`;
+    const path = join(target, to);
+    if (agentOff(target, to)) {
+      plan.skip.push({ to, reason: '에이전트 OFF' });
+      continue;
+    }
+    const active = join(target, '.claude/agents', name + '.md');
+    const from = existsSync(active) ? active : active + '.agent-toggle-off';
     const source = readFileSync(from, 'utf8').replace(/^\uFEFF/, '').replaceAll('\r\n', '\n');
     const match = /^---\nname: ([^\n]+)\ndescription: ([^\n]+)\n---\n([\s\S]+)$/.exec(source);
     if (!match || match[1] !== name || !match[3].trim()) throw new Error(`${from}: docs/harness/templates/agent.md 양식을 확인하세요`);
     const description = match[2].startsWith('"') ? JSON.parse(match[2]) : match[2];
     if (!description.trim()) throw new Error(`${from}: description이 비어 있습니다`);
     const content = `name = ${JSON.stringify(name)}\ndescription = ${JSON.stringify(description)}\ndeveloper_instructions = ${JSON.stringify(match[3])}\n`;
-    const to = `.codex/agents/${name}.toml`;
-    const path = join(target, to);
     if (existsSync(path)) {
       const current = readFileSync(path);
       if (current.equals(Buffer.from(content))) continue;
@@ -247,10 +329,13 @@ function main(argv) {
     if (!PLANNER_EFFORTS.includes(answers.planner?.effort)) throw new Error(`planner.effort는 ${PLANNER_EFFORTS.join(', ')} 중 하나다`);
     const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
-    if (answers.codex && !r.conflicts.length) {
+    if (answers.codex && r.conflicts.length) {
+      r.skipped.push({ to: '.codex/agents/', reason: '설치 충돌 해결 뒤 역할 동기화' });
+    } else if (answers.codex) {
       const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3));
       const agents = syncAgents(target, names, approve);
       r.written.push(...agents.written);
+      r.skipped.push(...agents.skipped);
       r.conflicts.push(...agents.conflicts);
     }
     r.keep = initKeep(target, answers.coordinatorPermissionMode);

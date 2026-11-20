@@ -61,6 +61,14 @@
 3. 항상 필요한 판단 규칙만 Agent에 넣는다. 긴 구현 절차는 Skill, 상세 자료·참조 출처는 Reference로 분리한다.
 4. QA 평가에서 **프로젝트 제약과 충돌하거나 예제에만 있던 강제 규칙을 제거했는지** 검사한다.
 
+### API 역할의 비교 예
+
+응답 필드 변경 작업에서는 소비자가 읽는 필드와 전환 순서를 먼저 파악하는 판단을 검토한다. [API Designer 원문](https://github.com/VoltAgent/awesome-codex-subagents/blob/main/categories/01-core-development/api-designer.toml)
+
+다음으로 실제 흐름에 등장하는 소비자와 실패 분기를 찾아 인계 시점과 확인 증거를 정한다. [Workflow Architect 원문](https://github.com/msitarzewski/agency-agents/blob/main/specialized/specialized-workflow-architect.md)
+
+두 판단을 적용할 때 해당 프로젝트의 계약과 소비 코드에서 사용 여부를 대조한다. 전환 뒤에는 소비자 계약 검사의 결과를 남기고, 소비자를 확인할 수 없으면 필드를 보존하고 배정자에게 넘긴다. 프로젝트별 판단·출처 기록은 생성한 역할 또는 기존 제작 리포트에 남긴다.
+
 ## 3. 조사 기록과 보고 — 간결한 추적성
 
 내부 조사에는 아래와 같은 **Candidate Ledger**를 사용할 수 있다. 별도 파일은 사용자에게 필요하거나 후속 유지보수 가치가 있을 때만 만든다.

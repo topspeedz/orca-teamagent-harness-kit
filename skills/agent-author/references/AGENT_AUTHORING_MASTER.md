@@ -166,13 +166,14 @@ next_owner: "팀장/PM/QA/Orchestrator"
 - 파일 형식: YAML frontmatter + Markdown body.
 - 프로젝트 파일 위치: `.claude/agents/<unique-name>.md`; 개인 공용 위치: `~/.claude/agents/<unique-name>.md`.
 - YAML 필수 필드: `name`, `description`.
-- 권장: `model: inherit`; `tools`는 실제 필요 권한만 명시. `skills`, `memory`, `isolation`, `permissionMode`, `maxTurns` 등은 **필요한 경우에만** 추가.
+- 하네스 설치 프로젝트의 출력 양식은 대상 `docs/harness/templates/agent.md`다. 머리말에는 `name`, `description`만 넣고 모델은 작업 단위별 모델 표를 따른다.
+- 하네스 없는 독립 설치에서 고려할 선택 필드: `model: inherit`, `tools`는 실제 필요 권한만 명시. `skills`, `memory`, `isolation`, `permissionMode`, `maxTurns` 등은 **필요한 경우에만** 추가.
 - `description`에는 이 Agent를 호출해야 할 조건과 배정하면 안 되는 조건을 짧고 정확하게 표현한다. Agent가 많을수록 짧은 구분 설명이 중요하다.
 - Agent 본문에서 전체 스킬 내용을 복사하지 않는다. `CLAUDE.md`를 매번 되풀이하지 않는다.
 - 기존 파일을 개선할 때는 기존 네이밍·역할·연동 계약을 최대한 유지하고 변경 근거를 제시한다.
 - User가 실제 Agent만 요청한 경우 설계 문서/Skill 스텁을 무분별하게 추가 생성하지 않는다.
 
-구체적인 산출물 형태는 [Agent 정의 템플릿](./agent-definition-template.md)에 있다. 해당 파일은 **제작용 골격**이므로 플레이스홀더를 제거하고 실무 정보로 치환해 저장한다.
+[Agent 정의 템플릿](./agent-definition-template.md)은 하네스의 전문 판단 질문과 독립 설치용 출력 예시를 제공한다. 해당 파일은 **제작용 골격**이므로 플레이스홀더를 제거하고 실무 정보로 치환해 저장한다.
 
 ## 7. 생성 후 품질 검증
 

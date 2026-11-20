@@ -1,6 +1,6 @@
 // Model selection table: parse, check, lookup. `node .claude/scripts/model-selection.mjs check|lookup|list`
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const TABLE_PATH = 'docs/harness/model-selection.md';
@@ -70,7 +70,7 @@ function main(argv) {
 
   if (cmd === 'check') {
     const dir = join('.claude', 'agents');
-    const agentNames = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => basename(f, '.md')) : [];
+    const agentNames = existsSync(dir) ? readdirSync(dir).filter((f) => /\.md(?:\.agent-toggle-off)?$/.test(f)).map((f) => f.replace(/\.md(?:\.agent-toggle-off)?$/, '')) : [];
     const all = [...errors, ...checkTable(rows, { agentNames, noEffortModels: NO_EFFORT_MODELS })];
     if (all.length) { for (const e of all) console.log(e); return 1; }
     console.log(`model-selection: OK ${rows.length} rows`);
@@ -98,4 +98,4 @@ function main(argv) {
 }
 
 // realpath on both sides: run through a junction or symlink, main must still run
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) process.exitCode = main(process.argv.slice(2));

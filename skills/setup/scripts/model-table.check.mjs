@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { addRows, applyChoices, buildPage, codexModels, EFFORTS, MODELS, validate } from './model-table.mjs';
+import { addRows, applyChoices, buildPage, codexModels, EFFORTS, MODELS, pageData, validate } from './model-table.mjs';
 
 const SCRIPT = fileURLToPath(new URL('./model-table.mjs', import.meta.url));
 const TEMPLATE_HTML = fileURLToPath(new URL('../assets/model-survey.html', import.meta.url));
@@ -58,6 +58,10 @@ test('codex rows take any model; runtime changes are checked against the new run
   assert.ok(applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', runtime: 'codex', model: 'gpt-5.2-codex', effort: 'high' }]).includes('| `qa-inspector` | 재검 | codex | gpt-5.2-codex | high | |'));
   assert.throws(() => applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', runtime: 'gemini', model: 'x', effort: '' }]), /gemini/);
   assert.equal(applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', runtime: 'claude', model: 'opus', effort: 'max' }]), T);
+  for (const model of ['one|two', 'row\nanother', 12, ['one']]) {
+    assert.throws(() => applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', runtime: 'codex', model }]));
+  }
+  assert.throws(() => applyChoices(T, {}), /choices/);
 });
 
 test('new rows go before the first `*` row, duplicates are errors', () => {
@@ -159,11 +163,23 @@ test('the shipped template has the placeholder exactly once', () => {
   assert.equal(readFileSync(TEMPLATE_HTML, 'utf8').split('/*__DATA__*/null').length, 2);
 });
 
-console.log(`model-table.check: ${n} cases passed`);
-
 test('codex models come from the Codex picker cache, hidden ones left out, none when there is no cache', () => {
   const f = join(mkdtempSync(join(tmpdir(), 'cm-')), 'c.json');
   writeFileSync(f, JSON.stringify({ models: [{ slug: 'a', visibility: 'list' }, { slug: 'b', visibility: 'hide' }] }), 'utf8');
   assert.deepEqual(codexModels(f), ['a']);
   assert.deepEqual(codexModels(f + 'x'), []);
 });
+
+test('the local survey opens at the project values and carries the current revision', () => {
+  const template = readFileSync(TEMPLATE_HTML, 'utf8');
+  const current = T.replace('| opus | max | 사용자 메모', '| pinned-claude | max | 사용자 메모');
+  const localSave = { token: 'local-session', revision: 'current-revision' };
+  const page = buildPage(template, { ...pageData(current, [], true), localSave });
+  const data = JSON.parse(page.match(/const DATA = (.*);/)[1]);
+  assert.deepEqual(data.localSave, localSave);
+  assert.equal(data.rows[0].model, 'pinned-claude');
+  assert.equal(data.rows[0].recommend, null);
+  assert.equal(pageData(current).localSave, undefined);
+});
+
+console.log(`model-table.check: ${n} cases passed`);

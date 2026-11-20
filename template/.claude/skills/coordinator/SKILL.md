@@ -17,12 +17,9 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
 | 요청 | 경로 |
 | --- | --- |
-| 단순 질문, 한 파일의 작은 수정 | 창구가 직접 한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. |
-| 답이 정해진 작은 작업 (한 팀의 Task 1~2개) | 코디네이터가 팀장 없이 워커를 직접 띄운다. |
-| 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요 | 코디네이터가 팀장을 띄우고, 팀장이 팀원을 띄운다. |
-| 요구사항이 흐릿한 큰 작업 | 설문부터 시작하는 전체 흐름을 탄다(`plan-orchestrate`). 코디네이터는 계획 승인 뒤에 뜬다. |
-
-기준값 3은 실측값이다. 팀장 세션에는 고정 비용이 있어서 Task가 적으면 이득보다 비용이 크다.
+| 단순 질문, BL 지정이 없는 한 파일의 작은 수정 | 창구가 직접 한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. |
+| 새 요구사항, 지정 BL ID, 한 phase 위임 | 창구가 `plan-orchestrate`의 세 접수 경로와 승인 절차를 따른다. |
+| 승인된 실행 팀의 Task | 팀장이 ON이고 단순한 1개면 팀원에게 직접 배정할 수 있다. 2개 이상 또는 전문 분해 1개는 팀장 경유, 팀장 OFF는 팀 배정 대기다. |
 
 ## 하는 일과 하지 않는 일
 
@@ -67,10 +64,10 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 1. **실행 Run.** 시작할 때 한 번 돌리고, 나온 Run ID를 브리프의 `실행 Run` 칸에 적는다. Task를 등록하고 조회하는 일은 Run을 가진 쪽만 할 수 있다. Run을 만들 때 스크립트가 승인된 `waterfall.json`을 `waterfall.plan.json`으로 한 번 복사해 둔다(회고가 읽는 계획값이고, 이미 있으면 덮어쓰지 않는다).
 
    ```text
-   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map>
+   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <브리프의 승인 파일>
    ```
 
-2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 스크립트가 `배정:` 줄을 모델 표와 대조하고, 다르면 등록하지 않는다. 사용자가 다른 값을 지시했으면 spec에 `사용자 예외: <원문>` 줄을 넣고 `--override-reason "<원문>"`을 넘긴다.
+2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 등록 시 검토·승인된 Task ID의 배정과 spec을 대조한다. 실시간 모델 표 저장은 다음 계획에 적용한다. 현재 Run을 바꾸라는 사용자 요청이 있으면 해당 배정과 DAG를 갱신해 PM 검토와 재승인 뒤 `reapprove --map <map> --approval <새 승인 파일> --id <변경 Task ID>`로 반영한다. 이미 진행한 Dispatch의 기록은 보존한다.
 
    ```text
    node .claude/scripts/orca-launch.mjs register --map <map> --id <Task ID> --spec-file <spec> [--deps <앞 Task ID>,<앞 Task ID>] [--edits <경로>,<경로>] [--resource <gpu>,<blender>]
@@ -91,8 +88,8 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 - **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.
 - **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
 - **폭은 계획과 `launchable`이 정한다.** 계획에 없는 Task를 즉석에서 만들지 않는다. 계획에 있는 Task의 순서는 위 규칙대로 실제 입력에 맞춰 당길 수 있다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
-- **팀장.** 한 팀의 Task가 3개 이상이거나 나누는 데 도메인 판단이 필요하면 팀장을 띄운다. 그 팀의 Task들은 팀 spec 하나로 묶어 Task 하나로 등록하고(`register`에 `--lead`), 팀 사이의 의존은 이 팀 Task끼리 건다. 팀 안의 순서는 팀장이 지킨다. 명단의 "팀장이 되는 에이전트"로, spec 첫 줄을 `[역할: <에이전트> · 리드]`로 쓴다. 팀장 spec의 배정 줄은 계획서의 팀원 배정이 아니라 `배정: <에이전트> / 리드 (<모델 표의 `리드` 줄 값>)`이다. 팀장에게는 팀 spec 하나를 주고 통합 보고 하나를 받는다.
-- **그림.** `ready`가 돌려준 상태가 바뀔 때마다 `dag-swimlane`으로 스윔레인을 **같은 파일 경로로** 다시 게시한다. 사용자는 같은 주소에서 진행을 본다. 상태는 `ready`의 `status`에서 가져오고 기억으로 적지 않는다(`completed`는 완료, `dispatched`는 진행, 그 밖은 대기).
+- **실행 팀 배정.** 등록 전과 기동 직전에 `node .claude/scripts/phase-routing.mjs team --team <명단의 팀> --count <이 팀에 배정된 전체 Task 수> [--complex]`를 실행한다. `wait`이면 원소속으로 배정 대기하고 창구에 알린다. `direct`면 단순 1개를 팀원에게 직접 배정하고 보고받을 수 있다. `lead`면 팀 Task를 `--lead`로 등록하고 팀장에게 통합 보고를 받는다. 해당 엔진의 워커 정의가 OFF여도 기동을 보류한다. 팀장·팀원 모두 승인 당시의 역할·작업 단위별 배정을 사용한다. 내부 분해로 범위나 소속 팀이 바뀌면 새 배정 전에 창구로 올린다.
+- **그림.** 상태 변화 때 같은 실행 Run의 `ready` 상태로 DAG를 갱신한다. 워터폴은 설치된 번들의 `scripts/from-orca.mjs --map <map> --run <실행 Run> --ledger <ledger.md> --plan <waterfall.plan.json> --out <진행.json>`과 `scripts/progress.mjs <진행.json> <진행.html>`로 같은 주소를 갱신한다. 완료·진행 막대의 시작은 Task 생성 시각이며 사전 등록 대기가 포함된다. 여러 Run은 각 진행 JSON을 `merge.mjs`로 합친다. setup이 전역 그림 스킬을 선택했으면 그 스킬의 설치 위치에서 실행한다. 그 버전에 `--map` 지원이 없으면 설치한 하네스 키트의 `template/.claude/skills/waterfall-timeline/scripts/`에서 같은 명령을 실행하고 입력·출력은 프로젝트 경로로 지정한다.
 - 기동 영수증의 적용값을 장부에 적는다. 요청한 값만 보고 적지 않는다([settle.md](references/settle.md)).
 
 ## 결정 대기
@@ -113,16 +110,17 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 | 단계 | 코디네이터가 하는 것 |
 | --- | --- |
 | 5 실행 | 기동, 정산, 중간 리뷰, 끝 검증, 수정 루프, 최종 테스트 |
-| 6 완료 처리 | `doc-steward` 워커 Task로 띄워 live 문서(`docs/`의 번호 폴더)를 맞춘 뒤, `product-manager` 워커 Task로 띄워 백로그를 정리한다. |
+| 6 완료 처리 | QA 뒤 독립 doc-steward가 정합성을 확인한다. 지정 작성자의 반영·현행 확인 또는 사용자의 명시 이월을 확인한 뒤 PM이 완료 항목을 정산한다. |
 | 7 하네스 회고 | `harness-engineer` 워커 Task로 띄운다. 생략하지 않는다. 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남긴다. |
 | 8 커밋과 PR | 창구를 거쳐 사용자 승인을 받은 뒤 한 번에 한다. |
 
-- 공개 API 변경은 구현 Task 정산의 `--expect`에 계약 정본 경로를 넣는다. 구현 검증과 호출자 또는 QA의 계약 대조가 모두 통과해야 해당 항목을 완료한다. 불일치는 원작성자 수정과 재검으로 돌린다.
+- 라이브 문서에 영향이 있으면 BL, 정본 경로·절/ID, 발견 근거, 지정 작성자와 수신 경로를 spec·리포트에 연결한다. 발견자와 작성자가 다르면 발견자는 리포트로 넘기고 작성자가 갱신한다. 이력 전용 Task는 해당 팀 리포트로 정산한다.
 - 6, 7단계의 Task도 같은 방식으로 등록해 띄운다.
 - Task의 백로그 ID는 계획서 `## DAG`의 그 Task의 `백로그:` 줄에서 읽는다. 계획서 없이 도는 phase(답이 정해진 작업)는 브리프의 `## 백로그 항목`에서 읽는다. 기동의 `--bracket`과 백로그 상태 열 갱신에 쓴다. `없음`이면 `--bracket`에 phase 이름을 쓰고 상태 열은 고치지 않는다.
-- 6단계의 문서 동기화 Task는 마지막 최종 테스트 뒤에 띄운다. 배정은 `doc-steward / 문서 동기화`다. spec의 "먼저 읽을 것"에 브리프, 설계서, 계획서, 장부, 끝 검증 리포트의 경로를 넣고, 리포트 경로는 `_workspace/_run/<phase>/06_doc-steward_sync_v1.md`로 적는다. 정산의 `--expect`는 `docs/DOCUMENTATION_INDEX.md`다. 이번 변경의 계약 누락·불일치가 발견되면 원 구현 담당에게 수정 Task를 배정하고 해당 항목을 미완료로 둔다. 원작성자가 첨삭하고 호출자 또는 QA가 재검한 뒤 다시 동기화한다. 해결되지 않은 항목은 완료 처리·보관 대상에서 제외한다. 그 밖의 동기화 실패는 1회 다시 띄운다. 그래도 실패하면 사용자에게 묻지 않고 최종 보고에 "문서 미동기화"를 적고 완료 처리로 간다.
-- 완료 처리 Task는 문서 동기화 Task를 정산한 뒤에 등록해 띄운다. 배정은 `product-manager / 완료 처리`다(모델 표의 쉼표로 묶인 칸을 그대로 쓰지 않는다). 문서 동기화에 의존(`--deps`)을 걸지 않는다. 걸면 문서 동기화가 끝내 실패했을 때 완료 처리가 풀리지 않는다.
-- 사용자가 요청한 문서 초기화와 문서 감사는 5단계의 Task다. 리포트는 `05_doc-steward_init_v1.md`, `05_doc-steward_audit_v1.md`이고, `--expect`는 초기화가 `docs/CODEBASE_MAP.md`, 감사가 `docs/DOCUMENTATION_INDEX.md`다. 실행 Task가 `doc-steward`의 Task뿐인 phase에서는 6단계의 문서 동기화를 띄우지 않는다.
+- 최종 테스트 뒤 코디네이터가 `doc-steward / 문서 동기화`를 직접 띄운다. 브리프·계획·장부·끝 검증 리포트를 주고 `_workspace/_run/<phase>/06_doc-steward_sync_v<N>.md`와 색인을 확인한다. 담당이 없으면 발견자의 근거로 지정 요청을 올린다. 제품 내용 결함은 지정 작성자에게 돌려보내고 처음 작성·수정·현행 확인 결과까지 추적한다. 확인 자체가 실패하면 사유를 기록해 1회 재시도하고 다시 실패하면 창구에 보고한다.
+- 필수 수정은 같은 phase에서 마친다. 이월이 필요하면 사용자에게 남은 BL과 문서·절·담당·사유를 올린다. 답변이 오기 전에는 phase를 열어 둔다. 코디네이터가 장부의 `## 라이브 문서 확인`에 근거와 사용자 답변 원문을 기록하고 `node .claude/scripts/phase-documents.mjs <ledger.md>`로 대조한다. 코드 1이면 원작성자 반영이나 결정 대기다. 명시적 이월은 PM이 해당 BL에 남은 문서·절·지정 작성자(또는 미배정)·사유를 남기고 미완료로 유지한다.
+- PM의 `완료 처리`는 문서 확인 뒤 한 번 호출해 나머지 완료 항목만 보관한다. 독립 `harness-engineer / 회고`는 이어서 매 phase 직접 호출한다. 변경 근거가 없어도 측정 결과와 ‘변경 없음’을 받는다. 실패 시 같은 Task를 1회 재시도하고 결함을 창구에 보고한다. 회고 결과를 받기 전에 phase를 마감하지 않는다.
+- 사용자가 요청한 문서 초기화와 감사는 5단계 Task다. 해당 리포트가 확인한 버전·범위가 그대로면 그 근거를 6단계 정합성 확인에 재사용한다.
 - 7단계를 띄우기 전에 실제 시각을 남긴다. 회고가 이 파일로 실제값을 잰다: `node .claude/scripts/orca-launch.mjs actual --map <map> > _workspace/_run/<phase>/actual.json`
 
 ## 정산
@@ -165,7 +163,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 1. 최종 보고를 `_workspace/_run/<phase>/report.md`에 쓴다.
 2. 최종 보고, 장부, 회고 리포트, DAG 입력 파일을 `docs/history/<phase>/`로 복사한다. 추적되는 문서는 `_workspace/` 경로를 근거로 가리키지 않는다. 작업 폴더는 지우지 않는다.
-3. 커밋과 PR은 사용자 승인 뒤 한 번에 한다. 경로를 지정해 커밋한다. 경로 목록에 git이 모르는 경로(워커가 만들었다가 지운 미추적 파일 등)가 하나라도 있으면 `pathspec did not match`로 커밋 전체가 빠진다. 지운 것이 섞인 곳은 파일이 아니라 폴더 경로로 지정하고, 커밋 뒤 `git status --short`로 남은 것이 없는지 본다. 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다. `doc-steward`가 고친 `docs/` 문서는 제품 변경과 같은 커밋에 넣는다. 워커는 커밋하지 않는다.
+3. 커밋과 PR은 사용자 승인 뒤 한 번에 한다. 경로를 지정해 커밋한다. 경로 목록에 git이 모르는 경로(워커가 만들었다가 지운 미추적 파일 등)가 하나라도 있으면 `pathspec did not match`로 커밋 전체가 빠진다. 지운 것이 섞인 곳은 파일이 아니라 폴더 경로로 지정하고, 커밋 뒤 `git status --short`로 남은 것이 없는지 본다. 회고가 고친 하네스 파일은 같은 PR의 별도 커밋이다. 지정 작성자가 고친 `docs/` 문서는 제품 변경과 같은 커밋에 넣는다. 워커는 커밋하지 않는다.
 4. 최종 보고 경로를 실어 `worker_done`을 보낸다.
 
 **승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask --wait`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 같은 방법으로 올린다.

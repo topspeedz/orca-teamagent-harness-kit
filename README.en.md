@@ -4,7 +4,7 @@
 
 **A Claude Code plugin that installs an Orca-based multi-agent harness into a new project in one step.**
 
-It packages a role hierarchy (front desk, coordinator, team lead, team member) and the rules that hierarchy follows (waiting, approval, model assignment, verification, documentation) as skills, hooks, scripts, and templates. The plugin provides `setup` for installation and `agent-author` for team composition. The files it installs live under `template/`, mirroring the paths they take in the target project.
+Before execution approval, the front desk assigns planning work to the PM and Planner. After approval, the coordinator starts execution teams and its direct reports. The plugin provides `setup` for installation and `agent-author` for team composition. Project files live under `template/` and optional Codex files under `template-codex/`.
 
 > **Base environment: Orca + Superpowers + TeamAgent Harness**
 >
@@ -22,12 +22,13 @@ It packages a role hierarchy (front desk, coordinator, team lead, team member) a
 User
   │
 Front desk (user session)          requirements interview and approvals, request triage, final report
-  ├── Product team                 requirements (PRD, SRS), backlog items, design doc and plan, review
-  │     prd-writer → product-manager → planner → pm-reviewer
-  └── Coordinator (own terminal)   starts workers, collects results, updates the ledger, commits and opens the PR
-        ├── Team lead ── Team member ×N
-        ├── Team lead ── Team member ×N
-        └── Verification lead ── QA, code review
+  ├── Operations team (no lead)
+  │     ├── product-manager        PRD, SRS, backlog, plan review
+  │     └── planner                requirements review, technical design, plan and DAG
+  └── Coordinator (after execution approval)
+        ├── Execution lead ── members     verification and project-specific teams
+        ├── doc-steward                   checks document consistency after QA
+        └── harness-engineer              runs the retro after the document check
 ```
 
 ## Quick Start
@@ -52,42 +53,40 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 | | revfactory/harness | This kit |
 | --- | --- | --- |
 | Approach | Single team | **Multi-Team Agent** |
-| Structure | One agent team does the work | Several teams sit under the coordinator, each with a team lead and team members |
+| Structure | One agent team does the work | A leadless operations team, execution teams with leads, and roles reporting directly to the coordinator |
 | Coordination | Coordinated inside the team | The coordinator uses a DAG to order and parallelize work across teams |
 
-- Teams with different roles, such as product, development, verification, and harness, work together inside one phase.
-- Each team has its own team skill. The team lead splits the team's tasks and supervises its members.
+- The PM and Planner are peers on the operations team. The front desk starts each worker, and they hand work over through the brief and their reports.
+- Execution leads use their team skill to divide approved Tasks and supervise members. A lead can ask the Planner to break down a Task that needs detailed design.
 - Step 7 of `setup` recommends teams from past work and creates the ones you pick. You can also add teams from templates by hand later.
 
 **Role hierarchy and size-based routing**
 
 - The hierarchy goes two levels below the coordinator. Team members do not start workers, and workers do not commit.
-- Requests are routed by size. The front desk handles small edits itself. For 1–2 tasks the coordinator starts workers directly. For 3 or more it starts a team lead. Large requests with unclear requirements start from the requirements interview.
+- With its lead ON, an execution team can receive one simple Task directly from the coordinator. Two or more Tasks, or one that needs expert decomposition, go through the lead. When its lead is OFF, assignments to the team wait.
 
-**A fixed phase workflow**
+**Phase workflow and approvals**
 
 ```
-1 Interview → 2 Product planning ✋ → 3 Design ✋ → 4 Plan ✋ → 5 Execution → 6 Close-out → 7 Harness retro → 8 Commit and PR ✋
+New requirements · named backlog IDs · delegated phase → design and plan → execution approval → execution and QA → close-out → retro → commit and PR approval
 ```
 
-- ✋ marks a user approval gate. Design and plan approvals come with a DAG swimlane diagram and a waterfall diagram.
-- In step 2 the product team writes the requirements into the PRD and SRS first, splits them into backlog items with complexity and priority (RICE), and proposes this phase's batch. The user approves the batch.
+- For new requirements, the PM writes the PRD, SRS and backlog items. The Planner checks coverage and feasibility. The user confirms coverage and the batch before design starts. Named backlog IDs go straight to the Planner. Both routes require design and execution-plan approval.
+- For a delegated phase, the PM selects the goal and items and gives the Planner the rationale. The user reviews the batch and estimated diagrams together at execution approval. Before execution the DAG shows pending Tasks and the waterfall shows T+ estimates. After approval, progress comes from the same Run.
 - The planner writes the design doc and implementation plan in the format of the superpowers `brainstorming` and `writing-plans` skills.
 - The retro is never skipped. If there is no evidence for a change, it records the measurements and "no change".
-- In step 6 `doc-steward` updates the live docs under `docs/` with what the phase changed.
+- During close-out, designated authors update their product documents. `doc-steward` checks them against the code and tests, maintains the index and links, and returns content defects to the author.
 
 **Built-in roles**
 
 | Team | Agent | Responsibility |
 | --- | --- | --- |
-| Product | `prd-writer` | Turns the request into PRD and SRS requirements |
-| Product | `product-manager` | Backlog items, acceptance criteria, complexity and priority, close-out |
-| Product | `planner` | Design doc, implementation plan, DAG |
-| Product | `pm-reviewer` | Checks requirements, items and tasks for gaps (read-only) |
-| (shared) | `doc-steward` | Live product docs (requirements, design, contracts, tests, operations): initialization, sync, audit |
+| Operations | `product-manager` | Writes the PRD, SRS and acceptance criteria, organizes and prioritizes backlog items, selects a batch, reviews the plan and closes completed items |
+| Operations | `planner` | Reviews requirements and produces the technical design, execution plan and DAG |
+| Direct report | `doc-steward` | Checks product documents after QA and maintains their index and links |
 | Verification | `qa-inspector` | Verification by running the product |
 | Verification | `code-reviewer` | Code review (read-only) |
-| Harness | `harness-engineer` | End-of-phase retro and harness improvements |
+| Direct report | `harness-engineer` | Runs the retro after document checks each phase and makes changes supported by the findings |
 
 Domain teams such as development or design are not included. Step 7 of `setup` recommends them from past work and creates the ones you pick, or you add them from templates by hand.
 
@@ -100,7 +99,7 @@ Domain teams such as development or design are not included. Step 7 of `setup` r
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
 | `secret-gate` hook | Blocks Playwright MCP calls that carry cookies, tokens or passwords, or that try to read cookies, so those values never land in the conversation log |
-| `orca-launch.mjs` | Looks up the model assignment table, starts the worker, and sets the tab title in the form `[BL-0012] qa-inspector : opus/medium - verify checkout flow`. It also registers the coordinator's Tasks in Orca with their dependencies, and provides subcommands to list ready Tasks, hold a Task behind a decision gate, handle a failed verdict, and retry |
+| `orca-launch.mjs` | Starts workers in the execution Run with the approved Task assignments and shows the role, model and effort in each tab. Supports dependency registration, ready Tasks, decision gates, failure handling and retries |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
 | `wait-contract-check.mjs` | Checks that the wait contract embedded in three skills matches its source file |
@@ -128,8 +127,8 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 **Model and effort managed in one table**
 
-- Each agent and task type has one row in `docs/harness/model-selection.md`. The planner does not pick models. It only assigns a task type.
-- The launch script compares the assignment line in the spec, the table, and the arguments it was given, and refuses to start on a mismatch. An exception is allowed only when the user's instruction is recorded verbatim as the reason.
+- The Planner records the runtime, model and effort from `docs/harness/model-selection.md` for each role and task type. The assignments approved for execution also apply to Tasks awaiting registration.
+- Editing the table changes the next plan. Changing a Task in the current Run requires an updated assignment and DAG and renewed approval.
 
 **Verification converges**
 
@@ -150,7 +149,8 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 - The working directory is `_workspace/<team>/<phase>/` and is excluded through `.gitignore`. File names follow one format: `NN_<agent>_<artifact>_v1.md`.
 - No rule is written in two places. The wait contract, the model assignment table, and the team roster each have a single source of truth.
-- Team outputs are history. Live docs that describe the product's current state are written by `doc-steward`, in the twelve numbered folders under `docs/`. The exception is the requirement lines in the PRD and SRS: the product team's `prd-writer` writes them before execution, marked `(계획됨)`, and `doc-steward` reconciles them with the code afterwards. Document forms are reference files of a skill and are read only when needed.
+- Team reports preserve the work history. Each designated author writes and maintains their assigned live document or section. The PM writes the PRD and SRS. `doc-steward` maintains the index and checks consistency. For a document without an owner, the user can create a role, defer the assignment or mark it inapplicable.
+- On a fresh install, setup uses the 12 forms under `docs/harness/templates/product-docs/` to prepare 13 drafts covering the codebase map and the twelve numbered folders. Existing canonical paths in the index and edited documents are preserved.
 
 **Claude and Codex side by side**
 
@@ -239,16 +239,16 @@ node "<plugin directory>/skills/setup/scripts/setup.mjs" verify --target .
 
 ### Adding a team
 
-After setup, run `/orca-teamagent-harness-kit:agent-author` or ask to create a team or add a member to an existing team. Describe the work you want it to handle. The skill checks existing roles and the requested work and proposes a lead, members, source references, workflow stages, and handoffs. Once approved, it updates the roster, agent definitions, team skill, and model table. [Team composition skill](skills/agent-author/SKILL.md)
+After setup, use `/orca-teamagent-harness-kit:agent-author` to add an independent role, a member of an existing team or a whole execution team. The skill checks existing roles and original sources, proposes specialist decisions, collaborators and unassigned documents or sections, then records the approved scope in the role definitions and roster and updates the relevant team skill and model rows. [Team composition skill](skills/agent-author/SKILL.md)
 
 To add a team by hand, follow these steps.
 
 1. Copy the team skill template `docs/harness/templates/team-skill.md` to `.claude/skills/team-<name>/SKILL.md` and fill it in.
 2. Copy the agent template `docs/harness/templates/agent.md` to `.claude/agents/<name>.md` and fill it in.
 3. Add a row for the team to the roster `docs/harness/team-org.md`.
-4. Add rows for the new agent to the model assignment table `docs/harness/model-selection.md` and validate with `node .claude/scripts/model-selection.mjs check`.
+4. Add task-type rows to `docs/harness/model-selection.md`. Run `node .claude/scripts/model-selection.mjs check` and `node .claude/scripts/agent-definition.mjs --agent <name>` for each new role.
 
-The roster defines what a team is. The team skill defines how it works.
+If the project uses Codex, add a matching team skill pointer and run `node "<plugin directory>/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <name>` for each new role.
 
 A completed example is in `examples/dev-team`: a team of one `developer` that works with `node --test` in a dependency-free Node project. The `setup` skill does not install this directory. To use it, follow the steps in that directory's `README.md`.
 
@@ -259,19 +259,19 @@ Requests to the front desk (your regular Claude Code session) are routed by the 
 | Request | Route |
 | --- | --- |
 | A simple question or a small edit to one file | The front desk handles it directly |
-| A small, well-defined job (1–2 tasks for one team) | The coordinator starts workers directly, without a team lead |
-| 3 or more tasks for one team, or splitting the work needs domain judgment | The coordinator starts a team lead, and the team lead starts team members |
-| A large request with unclear requirements | The full workflow starting from the requirements interview (`plan-orchestrate` skill) |
+| New requirements | The PM creates backlog items and the Planner reviews the requirements |
+| Named backlog IDs / delegated phase | Named IDs go directly to the Planner. For a delegated phase, the PM selects a batch |
+| Approved execution-team work | With the lead ON, a member can receive one simple Task directly. Two or more Tasks, or one needing expert decomposition, go through the lead. With the lead OFF, the team waits |
 
 ## Installed files
 
 ```
 AGENTS.md, CLAUDE.md             shared instructions and routing
 .claude/
-  agents/                        8 built-in agents
+  agents/                        6 built-in agents
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 docs-management, product-planning, team-product, team-qa, team-harness,
+                                 docs-management, prd-write, srs-write, product-review, team-qa,
                                  dag-swimlane, waterfall-timeline
   hooks/                         approval, waiting, context compaction, worker rule injection,
                                  browser secret blocking
@@ -283,10 +283,14 @@ AGENTS.md, CLAUDE.md             shared instructions and routing
   coordinator.keep.json          allowlist of plugins and skills enabled for the coordinator
 docs/
   backlog.md, backlog-archive.md
-  DOCUMENTATION_INDEX.md         index of product docs (doc-steward creates the docs themselves)
-  harness/                       model assignment table, team roster, changelog, 8 templates
+  DOCUMENTATION_INDEX.md         index of product docs
+  CODEBASE_MAP.md, 01-… to 12-…  13 drafts prepared by setup
+  harness/                       model table, team roster, changelog, harness templates
+    templates/product-docs/      12 live-document forms
 .agents/skills/                  pointers for Codex (only when Codex is selected)
 ```
+
+The live team chart shows assignments, direct collaboration, document ownership and models by role. Its update ships as a separate `agent-toggle` patch. Run `git apply --check <patch path>` in a working copy of the skill to check compatibility. Saving model choices requires a kit in the user's plugin cache that matches the project's installed survey assets. [Agent-toggle patch](integrations/agent-toggle/agent-toggle.patch)
 
 ## Untested environments
 

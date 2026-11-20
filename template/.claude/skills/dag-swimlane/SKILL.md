@@ -1,6 +1,6 @@
 ---
 name: dag-swimlane
-description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifact로 그리고 같은 URL로 갱신한다 — 계획 승인 직후, 실행 중 단계 전환, 팀 리더 통합 보고 때. 'DAG 그려줘', '스윔레인', '작업 흐름도 artifact', '진행 상황 다이어그램', 'dag 갱신해줘', '어느 정도 진행됐는지 그려줘'. 입력 JSON → scripts/render.mjs → 고정 px SVG·가로 스크롤·2줄 노드 카드·상태 표시. mermaid 자동 맞춤 렌더와 한 줄 노드는 쓰지 않는다."
+description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifact로 그리고 같은 URL로 갱신한다 — 설계·계획 승인 전, 실행 중 단계 전환, 팀 리더 통합 보고 때. 'DAG 그려줘', '스윔레인', '작업 흐름도 artifact', '진행 상황 다이어그램', 'dag 갱신해줘', '어느 정도 진행됐는지 그려줘'. 입력 JSON → scripts/render.mjs → 고정 px SVG·가로 스크롤·2줄 노드 카드·상태 표시. mermaid 자동 맞춤 렌더와 한 줄 노드는 쓰지 않는다."
 ---
 
 # DAG 스윔레인
@@ -13,17 +13,18 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
 
 | 때 | 하는 일 |
 |---|---|
-| 계획 승인 직후 | 모든 Task를 `wait`로 첫 게시 |
+| 설계 승인 전 | 팀 단위 흐름과 사람 승인 지점을 모두 대기로 표시 |
+| 실행 승인 전 | Task ID·BL·선행 의존·배정을 대조하고 모든 Task를 `wait`로 게시. 같은 버전의 T+ 워터폴을 함께 제시 |
 | 실행 중 단계 전환(웨이브 시작·끝, 검증 진입, 수정 루프) | 장부 상태로 `status`만 바꿔 재렌더·재게시 |
 | 팀 리더 통합 보고를 받았을 때 | 그 팀 노드 상태와 "지금" 메모 갱신 |
 | 사용자가 DAG·진행 상황을 그려 달라고 할 때 | 위와 같은 절차 |
 
-상태의 출처는 프로젝트의 Task 장부(예: `_workspace/<run>/00_ledger.md`)다. 기억으로 상태를 적지 않는다.
+하네스 실행 중에는 같은 phase의 `orca-tasks.json`에서 계획 ID와 실제 Task ID를 연결하고, `orca-launch.mjs ready --map <map>`의 상태와 장부의 게이트·팀원 보고를 대조한다. 새로 게시할 진행 사본의 상태만 갱신한다. 승인 파일과 검토 당시 DAG는 보존한다.
 
 ## 절차
 
 1. 입력 JSON을 쓴다(아래 형식, 예시 [examples/reference.json](examples/reference.json)). Run 작업 폴더에 둔다(예: `_workspace/<run>/dag.json`).
-2. `node ~/.claude/skills/dag-swimlane/scripts/render.mjs <dag.json> <dag.html>` — 실패하면 exit 1과 이유(어느 연결선이 어느 노드를 지나는지 등). 연결선이 노드를 지나면 `row`·`col`을 옮겨 출발 행이나 도착 행을 비우고 다시 돌린다. 겹친 채로 게시하지 않는다.
+2. 프로젝트 번들은 `node .claude/skills/dag-swimlane/scripts/render.mjs <dag.json> <dag.html>`로 렌더한다. 전역판을 선택한 프로젝트는 해당 스킬의 같은 스크립트를 사용한다 — 실패하면 exit 1과 이유(어느 연결선이 어느 노드를 지나는지 등). 연결선이 노드를 지나면 `row`·`col`을 옮겨 출발 행이나 도착 행을 비우고 다시 돌린다. 겹친 채로 게시하지 않는다.
 3. Artifact 도구로 `<dag.html>`을 게시한다(첫 게시 `icon: "chart"`). 갱신은 **같은 파일 경로로 재게시** = 같은 URL. 새 경로는 새 URL이 되니 경로를 바꾸지 않는다. 출력은 Artifact 페이지 계약(2~4단어 `<title>`, `:root` 토큰, 다크 두 경로, `body` 배경, 16px 거터)을 이미 지킨다.
 4. 게시·갱신 권한이 코디네이터에게만 있는 하네스(워커는 게시하지 않음)면 워커는 JSON·HTML까지만 만들고 경로를 보고한다.
 
@@ -48,6 +49,7 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
 - `row`: 레인 안의 워커 행(80px 간격) — 같은 워커의 노드는 같은 `row`. 생략하면 입력 순서로 0, 1, 2…. 소수(0.5)로 이웃 열과 높이를 맞춘다. 레인 높이는 자동.
 - `bl`: 백로그 번호. BL이 발급된 Run이면 모든 노드에 넣는다(계획서 `## DAG`의 그 Task의 `백로그:` 줄로 대조). 아래 규칙 **노드 라벨** 참고.
 - `sub`(2번째 줄) = **작업 내용**(backlog 제목에서 Task ID를 뺀 것). 역할·등급·플랫폼·BL 번호를 넣지 않는다 — 각각 레인·아이콘·라벨이 보여 준다. 길어도 자르지 않고 전문을 그대로 쓴다(카드 밖으로 넘쳐도 됨).
+- 실행 승인용 DAG는 각 워커 노드에 `role`(역할명)·`unit`(작업 단위)·`bl`을 적는다. `agent`는 런타임이다. effort가 없는 배정은 null을 쓴다. 팀장에게 허용한 내부 분해의 역할·단위·런타임·모델·effort는 부모 노드의 `members`에 같은 필드명으로 명시하고 승인 화면에도 싣는다. 사람 승인 노드는 `kind: "approval"`로, 워커 없는 이정표는 `kind: "milestone"`으로 표시하고 배정 필드를 생략한다. 각 실행 BL은 `BL-####` 형식이며 복수이면 배열 또는 쉼표로 나열한다. `edges`는 선행 입력, `loop`는 재검 경로다.
 - `agent`·`model`·`effort`: 카드 아래 테두리 오른쪽에 걸친 아이콘 태그(✳ Claude / ◎ Codex + effort 작은 글씨 L/M/H/XH/MAX). 모델명은 툴팁. gate처럼 워커가 없으면 생략.
 - `write: true`: 외부 데이터(운영 DB·커머스 API 등)를 쓰는 Task. 경고색 굵은 테두리 + 보조 줄 경고색. 메모 카드 하나를 범례로 쓴다(`<span class="key"></span>`).
 - `loop: true`: 앞 열로 되돌아가는 연결(재검 등) — 점선, 출발 노드 아래(또는 위) 가운데에서 내려가 대상 오른쪽으로 들어간다.

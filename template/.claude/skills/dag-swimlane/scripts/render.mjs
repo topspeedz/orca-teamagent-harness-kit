@@ -112,7 +112,7 @@ export function render(input) {
     if (ents.has(g.id)) fail(`duplicate id ${g.id}`);
     const ms = g.nodes.map(id => ents.get(id) ?? fail(`group ${g.id}: unknown node ${id}`));
     const x0 = Math.min(...ms.map(m => m.x)) - G.grpPad, y0 = Math.min(...ms.map(m => m.y)) - G.grpPad;
-    Object.assign(g, { members: ms, x: x0, y: y0, w: Math.max(...ms.map(m => m.x + m.w)) + G.grpPad - x0,
+    Object.assign(g, { groupNodes: ms, x: x0, y: y0, w: Math.max(...ms.map(m => m.x + m.w)) + G.grpPad - x0,
       h: Math.max(...ms.map(m => m.y + m.h)) + G.grpPad - y0, colIn: Math.min(...ms.map(m => m.col)),
       colOut: Math.max(...ms.map(m => m.col)), tone: laneById.get(ms[0].lane).tone, right: [], leftPorts: [] });
     ents.set(g.id, g);
@@ -121,17 +121,17 @@ export function render(input) {
   const ent = id => ents.get(id) ?? fail(`edge: unknown id ${id}`);
   for (const e of edges) {
     const f = ent(e.from), t = ent(e.to);
-    if (f.members) f.right.push(e);
-    if (t.members) (e.loop ? t.right : t.leftPorts).push(e);
+    if (f.groupNodes) f.right.push(e);
+    if (t.groupNodes) (e.loop ? t.right : t.leftPorts).push(e);
   }
   // Groups spread their ports evenly along a side; nodes have one out point (right-center) and one in point (left-center).
   const portY = (g, side, e) => g.y + g.h * (g[side].indexOf(e) + 1) / (g[side].length + 1);
-  const outPt = (o, e) => [o.x + o.w, o.members ? portY(o, 'right', e) : o.y + o.h / 2];
+  const outPt = (o, e) => [o.x + o.w, o.groupNodes ? portY(o, 'right', e) : o.y + o.h / 2];
   const inPt = (o, e) => e.loop
-    ? [o.x + o.w + 4, o.members ? portY(o, 'right', e) : o.y + o.h / 2]
-    : [o.x - 2, o.members ? portY(o, 'leftPorts', e) : o.y + o.h / 2];
-  const colIn = o => o.members ? o.colIn : o.col;
-  const colOut = o => o.members ? o.colOut : o.col;
+    ? [o.x + o.w + 4, o.groupNodes ? portY(o, 'right', e) : o.y + o.h / 2]
+    : [o.x - 2, o.groupNodes ? portY(o, 'leftPorts', e) : o.y + o.h / 2];
+  const colIn = o => o.groupNodes ? o.colIn : o.col;
+  const colOut = o => o.groupNodes ? o.colOut : o.col;
 
   function candidates(e, f, t) {
     const [ex, ey] = inPt(t, e);
@@ -155,7 +155,7 @@ export function render(input) {
   const errors = [];
   const routes = edges.map(e => {
     const f = ent(e.from), t = ent(e.to);
-    const skip = new Set([f, t].flatMap(o => o.members ? o.members.map(m => m.id) : [o.id]));
+    const skip = new Set([f, t].flatMap(o => o.groupNodes ? o.groupNodes.map(m => m.id) : [o.id]));
     const tried = candidates(e, f, t).map(r => ({ r, hit: nodes.filter(n => !skip.has(n.id) && samples(r)
       .some(([x, yy]) => x > n.x && x < n.x + n.w && yy > n.y && yy < n.y + n.h)) }));
     const ok = tried.find(c => !c.hit.length);
@@ -209,7 +209,21 @@ export function render(input) {
       + (AGENT[n.agent] ? agentTag(n) : '')
       + '</g>');
   }
-  out.push('</g></svg></div>', '<div class="notes">');
+  out.push('</g></svg></div>');
+  const leads = nodes.filter(n => n.members?.length);
+  if (leads.length) {
+    out.push('<section class="notes" aria-label="팀 내부 배정">');
+    for (const n of leads) {
+      out.push(`<div><b>${esc(n.id)} · 팀 내부 배정</b><ul>`);
+      for (const m of n.members) {
+        const row = `${m.role} / ${m.unit} · ${m.agent} ${m.model} · effort ${m.effort ?? '없음'}`;
+        out.push(`<li>${esc(row)}${m.overrideReason ? ' · 사용자 예외 ' + esc(m.overrideReason) : ''}</li>`);
+      }
+      out.push('</ul></div>');
+    }
+    out.push('</section>');
+  }
+  out.push('<div class="notes">');
   out.push(...notes.map(n => `<div><b>${n.title}</b>${n.body}</div>`), '</div>');
   return { html: out.join('\n') + '\n', counts: { lanes: lanes.length, columns: columns.length, nodes: nodes.length, edges: edges.length, groups: groups.length } };
 }
@@ -222,7 +236,20 @@ function selfTest() {
   let msg = '';
   try { render(load('crossing.json')); } catch (err) { msg = err.message; }
   if (!/crosses node\(s\) b/.test(msg)) fail(`self-test: crossing.json should fail on node b, got "${msg}"`);
-  console.log('self-test ok: reference counts match, crossing edge rejected');
+  const review = load('reference.json');
+  const gate = review.nodes.find(n => n.id === 'pm');
+  Object.assign(gate, { kind: 'approval', title: '실행 승인', agent: null, model: null, effort: null });
+  const lead = review.nodes.find(n => n.id === 't1');
+  Object.assign(lead, { role: 'qa-inspector', unit: '리드', members: [
+    { role: 'planner', unit: '내부 분해', agent: 'claude', model: 'opus', effort: 'high' },
+    { role: 'code-reviewer', unit: '코드 <리뷰>', agent: 'codex', model: 'review-model', effort: null },
+  ] });
+  const page = render(review).html; // existing edges enter and leave t1; pm → t1 is the approval gate
+  for (const v of ['실행 승인', 't1 · 팀 내부 배정', 'planner / 내부 분해 · claude opus · effort high',
+    'code-reviewer / 코드 &lt;리뷰&gt; · codex review-model · effort 없음']) {
+    if (!page.includes(v)) fail('팀장 DAG에 누락: ' + v);
+  }
+  console.log('self-test ok: reference counts, crossing edges, approval gate and team assignments');
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

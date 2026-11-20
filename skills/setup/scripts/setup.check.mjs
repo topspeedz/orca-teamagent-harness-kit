@@ -1,11 +1,13 @@
 // Self-test for setup.mjs — builds a small template in a temp folder. `node skills/setup/scripts/setup.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyInstall, mergeGitignore, planInstall } from './setup.mjs';
+import { lookup, parseTable } from '../../../template/.claude/scripts/model-selection.mjs';
+import { applyChoices } from './model-table.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'setup-check-'));
 const put = (base, rel, body) => {
@@ -28,7 +30,9 @@ put(tpl, '.claude/settings.json', JSON.stringify({
 }, null, 2));
 put(tpl, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
 put(tpl, '.claude/hooks/approval-gate.config.json', '{ "prefixes": [] }\n');
-put(tpl, 'docs/harness/model-selection.md', '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |\n| --- | --- | --- | --- | --- | --- |\n| `planner` | 설계, 계획 | claude | opus | max | 최고 추론 고정 |\n| `*` | 기본 | claude | opus | medium | |\n');
+const realTemplate = fileURLToPath(new URL('../../../template', import.meta.url));
+const tablePath = 'docs/harness/model-selection.md';
+put(tpl, tablePath, read(realTemplate, tablePath));
 put(tpl, '.claude/skills/dag-swimlane/SKILL.md', '---\nname: dag-swimlane\n---\n');
 put(tpl, '.claude/skills/waterfall-timeline/SKILL.md', '---\nname: waterfall-timeline\n---\n');
 put(codex, '.codex/hooks.json', '{}\n');
@@ -36,7 +40,7 @@ put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 
 const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'max' } };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
-const ALL = ['.claude/hooks/approval-gate.config.json', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', 'docs/harness/model-selection.md'];
+const ALL = ['.claude/hooks/approval-gate.config.json', '.claude/scripts/model-table.mjs', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', tablePath, 'docs/harness/templates/document-drafts.json', 'docs/harness/templates/model-survey.html'];
 let n = 0;
 const target = (name) => { const t = join(root, name); mkdirSync(t, { recursive: true }); return t; };
 const install = (t, answers = {}, ins = {}, approve = []) =>
@@ -74,6 +78,80 @@ test('user hook in settings.json is kept and template hooks added', () => {
   assert.deepEqual(s.permissions.deny, ['Bash(git push --force:*)']);
 });
 
+test('product drafts use the installed forms and preserve project documents on reinstall', () => {
+  const t = target('문서 초안');
+  const real = fileURLToPath(new URL('../../../template', import.meta.url));
+  const plan = () => planInstall(real, codex, t, ANSWERS, INS);
+  const first = applyInstall(plan());
+  const drafts = first.written.filter(path => /^docs\/(?:CODEBASE_MAP\.md|\d\d-)/.test(path));
+  const forms = JSON.parse(readFileSync(new URL('../references/document-drafts.json', import.meta.url), 'utf8'));
+  const pending = read(t, 'docs/DOCUMENTATION_INDEX.md').split('## 작성자 배정 대기')[1].split('## 이 폴더 밖의 문서')[0];
+  assert.equal(drafts.length, 13);
+  assert.deepEqual([...drafts].sort(), Object.keys(forms).sort());
+  assert.deepEqual(JSON.parse(read(t, 'docs/harness/templates/document-drafts.json')), forms);
+  const survey = 'docs/harness/templates/model-survey.html';
+  assert.equal(read(t, survey), readFileSync(new URL('../assets/model-survey.html', import.meta.url), 'utf8'));
+  assert.equal(read(t, '.claude/scripts/model-table.mjs'), readFileSync(new URL('./model-table.mjs', import.meta.url), 'utf8'));
+  put(t, 'recommend.json', '[]');
+  const page = spawnSync(process.execPath, ['.claude/scripts/model-table.mjs', 'page', '--table', tablePath, '--recommend', 'recommend.json', '--out', 'page.html'], { cwd: t, encoding: 'utf8' });
+  assert.equal(page.status, 0, page.stderr);
+  const data = JSON.parse(read(t, 'page.html').match(/const DATA = (.*);/)[1]);
+  assert.deepEqual(data.rows.filter(r => r.agent === 'planner').map(r => r.unit), ['요구사항 검토', '설계', '계획']);
+  assert.equal(new Set(Object.values(forms)).size, 12);
+  assert.equal(forms['docs/05-api/draft.md'], 'contract.md');
+  assert.equal(forms['docs/06-database/draft.md'], 'contract.md');
+  assert.equal(drafts.filter(path => path.endsWith('/draft.md')).length, 4);
+  const skill = '.claude/skills/docs-management';
+  const formRoot = 'docs/harness/templates/product-docs';
+  const skillRows = read(t, skill + '/SKILL.md').split(/\r?\n/);
+  for (const path of drafts) {
+    const body = read(t, path);
+    const link = body.match(/> 설치 초안 · \[작성 양식\]\((.+?)\)/)[1];
+    const canonical = join(t, formRoot, forms[path]);
+    assert.equal(resolve(t, dirname(path), link), canonical);
+    const rowPath = dirname(path) === 'docs' ? path : path.slice(0, path.lastIndexOf('/') + 1);
+    const skillRow = skillRows.find(line => line.startsWith('| `' + rowPath + '`'));
+    assert.equal(resolve(t, skill, skillRow.match(/\]\(([^)]+\.md)\)/)[1]), canonical);
+    assert.match(readFileSync(canonical, 'utf8'), /## 문서 구조/);
+    assert.match(read(t, skill + '/references/forms/' + forms[path]), /## 문서 구조/);
+    assert.doesNotMatch(body, /prd-writer|doc-steward/);
+    if (['prd.md', 'srs.md'].includes(forms[path])) {
+      assert.match(body, /소유 에이전트: `product-manager`/);
+      assert.ok(!pending.includes(path));
+    } else {
+      assert.ok(pending.includes('| `' + path + '` | 전체 | 미배정 |'));
+    }
+    assert.match(body, /^## /m);
+    assert.doesNotMatch(body, /\b(?:FR|SCR|ADR|API|US)-\d+|통과 \(<phase 이름>\)/);
+  }
+  assert.match(read(t, 'docs/05-api/draft.md'), /## 스키마: 연산/);
+  assert.doesNotMatch(read(t, 'docs/06-database/draft.md'), /## 스키마: 연산/);
+  assert.match(read(t, 'docs/06-database/draft.md'), /## 스키마: 객체/);
+  const prd = 'docs/01-product/prd.md';
+  put(t, prd, '# 우리 제품\n');
+  assert.deepEqual(applyInstall(plan()).written, []);
+  assert.equal(read(t, prd), '# 우리 제품\n');
+  const missing = 'docs/11-operations/draft.md';
+  unlinkSync(join(t, missing));
+  assert.deepEqual(applyInstall(plan()).written, [missing]);
+
+  const existing = target('기존 정본');
+  put(existing, 'CHANGELOG.md', '# Releases\n');
+  put(existing, 'docs/CODEBASE_MAP.md', '내 지도');
+  put(existing, 'docs/DOCUMENTATION_INDEX.md', [
+    '| `docs/01-product/` | PRD | `product.md` | | | 최신 |',
+    '| `docs/03-ui-ux/` | UI | 없음 | | | 해당 없음 |',
+  ].join('\n'));
+  put(existing, 'product.md', '기존 정본');
+  applyInstall(planInstall(real, codex, existing, ANSWERS, INS));
+  for (const skipped of [prd, 'docs/03-ui-ux/ui-spec.md', 'docs/12-changelog/CHANGELOG.md']) {
+    assert.equal(existsSync(join(existing, skipped)), false);
+  }
+  assert.equal(read(existing, 'docs/CODEBASE_MAP.md'), '내 지도');
+  assert.equal(read(existing, 'product.md'), '기존 정본');
+  assert.equal(read(existing, 'CHANGELOG.md'), '# Releases\n');
+});
+
 test('installed self-tests pass when settings.json already has user hooks', () => {
   const t = target('user hooks 한글');
   const mine = { type: 'command', command: 'echo mine' };
@@ -86,6 +164,86 @@ test('installed self-tests pass when settings.json already has user hooks', () =
     assert.equal(run.status, 0, `${check}
 ${run.stdout}${run.stderr}`);
   }
+});
+
+test('legacy links, OFF engines, custom owners and in-progress records survive two reinstalls', () => {
+  const t = target('기존 프로젝트');
+  const keep = '.claude/coordinator.keep.json';
+  put(t, keep, '{"permissionMode":"default"}\n');
+  put(t, 'answers.json', JSON.stringify({ ...ANSWERS, codex: true }));
+  const setup = fileURLToPath(new URL('./setup.mjs', import.meta.url));
+  const cli = (...args) => spawnSync(process.execPath, [setup, ...args, '--target', t], { encoding: 'utf8' });
+  const reinstall = () => cli('install', '--answers', join(t, 'answers.json'));
+  assert.equal(reinstall().status, 0);
+  const oldForm = '.claude/skills/docs-management/references/forms/prd.md';
+  const draft = 'docs/01-product/prd.md';
+  const index = 'docs/DOCUMENTATION_INDEX.md';
+  const contract = 'docs/contracts/team-api.md';
+  const md = '.claude/agents/planner.md', toml = '.codex/agents/doc-steward.toml';
+  for (const file of [md, toml]) renameSync(join(t, file), join(t, file + '.agent-toggle-off'));
+  const apiDraft = 'docs/05-api/draft.md';
+  unlinkSync(join(t, apiDraft));
+  const saved = {
+    [oldForm]: '# 우리 팀 양식\n## 작성 규칙\n기존 양식 표식\n',
+    [draft]: '# 배포된 PRD\n[작성 양식](../../' + oldForm + ')\n',
+    [contract]: '# API 계약\n응답 절 작성자: api-editor\n오류 절 작성자: api-errors\n',
+    [index]: '| `docs/05-api/` | API | `' + contract + '` | | 이전 phase | 최신 |\n',
+    [tablePath]: '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |\n| --- | --- | --- | --- | --- | --- |\n| `planner` | 설계, 계획 | codex | custom-id | high | 보존 |\n| `prd-writer` | 요구사항 정리 | claude | custom-claude | high | 유지 |\n| `*` | 기본 | claude | pinned-default | medium | 사용자 기본값 |\n',
+    'docs/harness/team-org.md': '# 옛 명단\n| harness | harness-engineer | 단독 |\n',
+    '.claude/agents/prd-writer.md': '# 옛 역할의 편집본\n',
+    '.agents/skills/product-planning/SKILL.md': '# 옛 사용자 포인터\n',
+    [md + '.agent-toggle-off']: read(t, md + '.agent-toggle-off') + '\n꺼진 원문의 편집\n',
+    [toml + '.agent-toggle-off']: '# 꺼진 TOML 편집본\n',
+    '.claude/scripts/model-table.mjs': '// 사용자 버전의 편집기\n',
+    'docs/harness/templates/model-survey.html': '<title>사용자 설문</title>',
+    'docs/harness/templates/document-drafts.json': '{"my-doc.md":"my-form.md"}',
+    'CHANGELOG.md': '# 프로젝트 릴리스 이력\n',
+    '_workspace/_run/old/01_prd-writer_requirements_v2.md': '# 구 요구 검토 이력\n',
+    '_workspace/_run/old/03_pm-reviewer_review_v2.md': '# 구 검토 이력\n',
+    '_workspace/_run/old/06_pm-reviewer_plan-check_v3.md': '# 구 승인 이력\n',
+    '_workspace/_run/old/ledger.md': '기존 Run · Task · Dispatch\n',
+  };
+  for (const [file, body] of Object.entries(saved)) put(t, file, body);
+  // An untracked canonical form at the new path belongs to this project.
+  const freshForm = 'docs/harness/templates/product-docs/prd.md';
+  const record = JSON.parse(read(t, '.claude/harness-install.json'));
+  delete record.files[freshForm];
+  put(t, '.claude/harness-install.json', JSON.stringify(record));
+  put(t, freshForm, '새 경로의 기존 사용자 양식\n');
+  for (let pass = 0; pass < 2; pass++) {
+    const result = reinstall();
+    assert.equal(result.status, 2, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.ok(report.conflicts.includes(freshForm));
+    assert.ok(report.skipped.some(s => s.to === '.codex/agents/' && s.reason.includes('충돌')));
+    for (const [file, body] of Object.entries(saved)) assert.equal(read(t, file), body, file);
+    const link = read(t, draft).match(/\[작성 양식\]\((.+?)\)/)[1];
+    assert.equal(readFileSync(resolve(t, dirname(draft), link), 'utf8'), saved[oldForm]);
+    assert.equal(read(t, freshForm), '새 경로의 기존 사용자 양식\n');
+    for (const path of [md, toml, apiDraft]) assert.equal(existsSync(join(t, path)), false);
+  }
+  // Claude and Codex toggle independently, including an explicit sync.
+  assert.equal(cli('sync-agent', '--agent', 'planner').status, 0);
+  assert.match(read(t, '.codex/agents/planner.toml'), /꺼진 원문의 편집/);
+  const syncOff = cli('sync-agent', '--agent', 'doc-steward');
+  assert.equal(syncOff.status, 0, syncOff.stderr);
+  assert.equal(JSON.parse(syncOff.stdout).skipped[0].to, toml);
+  assert.equal(existsSync(join(t, toml)), false);
+  assert.equal(read(t, toml + '.agent-toggle-off'), saved[toml + '.agent-toggle-off']);
+  const check = spawnSync(process.execPath, ['.claude/scripts/model-selection.mjs', 'check'], { cwd: t, encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stdout + check.stderr);
+});
+
+test('a role switched off after planning stays off when the plan is applied', () => {
+  const t = target('toggle during install');
+  const path = '.claude/agents/planner.md';
+  const plan = planInstall(realTemplate, codex, t, ANSWERS, INS);
+  assert.ok(plan.copy.some(c => c.to === path));
+  put(t, path + '.agent-toggle-off', '기존 비활성 정의');
+  const result = applyInstall(plan);
+  assert.ok(result.skipped.some(s => s.to === path && s.reason === '에이전트 OFF'));
+  assert.equal(existsSync(join(t, path)), false);
+  assert.equal(read(t, path + '.agent-toggle-off'), '기존 비활성 정의');
 });
 
 test('template env is installed; a value the user already set is kept', () => {
@@ -150,12 +308,27 @@ test('codex false installs no codex files', () => {
   assert.ok(existsSync(join(root, 'codex', '.codex/hooks.json')));
 });
 
-test('planner row gets the chosen effort and keeps the table model', () => {
-  const t = target('planner');
-  // a model left in an older answers file is ignored: setup no longer asks for it
-  install(t, { planner: { model: 'fable', effort: 'high' } });
-  const row = read(t, 'docs/harness/model-selection.md').split('\n').find((l) => l.startsWith('| `planner`'));
-  assert.deepEqual(row.split('|').map((c) => c.trim()).slice(4, 6), ['opus', 'high']);
+test('fresh PM and Planner rows resolve exactly for both effort answers', () => {
+  for (const template of [tpl, realTemplate]) {
+    for (const effort of ['max', 'high']) {
+      const t = mkdtempSync(join(root, 'planner-'));
+      applyInstall(planInstall(template, codex, t, { ...ANSWERS, planner: { model: 'opus', effort } }, INS));
+      const table = read(t, tablePath);
+      const { rows } = parseTable(table);
+      for (const [agent, unit, model, expected] of [
+        ['product-manager', '요구사항 정리', 'opus', 'max'], ['product-manager', '항목화', 'opus', 'high'],
+        ['product-manager', '계획 대조', 'opus', 'medium'], ['product-manager', '완료 처리', 'opus', 'medium'],
+        ['planner', '요구사항 검토', 'opus', 'high'], ['planner', '설계', 'fable', effort], ['planner', '계획', 'fable', effort],
+      ]) {
+        const r = lookup(rows, agent, unit);
+        assert.deepEqual([r.matched, r.runtime, r.model, r.effort], ['exact', 'claude', model, expected]);
+      }
+      assert.equal(rows.filter(r => r.agent === 'planner').length, 3);
+      assert.equal(rows.filter(r => r.agent === 'product-manager').length, 4);
+      const changed = applyChoices(table, [{ agent: 'planner', unit: '설계', model: 'opus', effort: 'high' }]);
+      assert.equal(changed, table.replace(`| 설계 | claude | fable | ${effort} |`, '| 설계 | claude | opus | high |'));
+    }
+  }
 });
 
 test('install refuses a planner effort other than high or max', () => {

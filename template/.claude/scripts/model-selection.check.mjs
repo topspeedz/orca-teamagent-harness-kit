@@ -85,7 +85,7 @@ t(() => assert.ok(errs(table.replace(/^\| `\*` \| 기본 .*$/m, '')).some((m) =>
 t(() => {
   const dir = mkdtempSync(join(tmpdir(), 'model-selection-'));
   mkdirSync(join(dir, '.claude', 'agents'), { recursive: true });
-  for (const a of AGENTS) writeFileSync(join(dir, '.claude', 'agents', `${a}.md`), '');
+  for (const a of AGENTS) writeFileSync(join(dir, '.claude', 'agents', a === 'planner' ? 'planner.md.agent-toggle-off' : `${a}.md`), '');
   const good = join(dir, 'good.md');
   const bad = join(dir, 'bad.md');
   writeFileSync(good, table);

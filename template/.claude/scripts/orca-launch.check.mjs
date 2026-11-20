@@ -74,6 +74,8 @@ t(() => {
   const specFile = 'D:/내 프로젝트/_workspace/qa/spec/a b.md';
   const a = workerStartArgs({ row, specFile, displayName: 'x', worktree: 'current' });
   assert.ok(a.includes(specFile));
+  assert.ok(!a.includes('--display-name'));
+  assert.equal(a[a.indexOf('--task-title') + 1], 'x');
   assert.equal(a[a.indexOf('--model') + 1], 'opus');
   assert.equal(a[a.indexOf('--effort') + 1], 'medium');
   assert.equal(a[a.indexOf('--agent') + 1], 'claude');
@@ -97,7 +99,7 @@ const keep = { permissionMode: 'default', plugins: { 'p@p': 'keep' }, skills: { 
 const files = (over = {}) => ({
   [TABLE_PATH]: TABLE, [SETTINGS_PATH]: '{}', [KEEP_PATH]: JSON.stringify(keep),
   'qa.md': ok, 'lead.md': '[역할: qa-inspector · 리드]\n배정: qa-inspector / 리드 (claude sonnet/high)', 'coord.md': '[역할: coordinator]',
-  'codex.md': '[역할: code-reviewer]\nTask: 리뷰\n배정: code-reviewer / 리뷰 (codex gpt-6.1-sol/high)', ...over,
+  'codex.md': '[역할: code-reviewer]\nTask: T09 리뷰\n배정: code-reviewer / 리뷰 (codex gpt-6.1-sol/high)', ...over,
 });
 const inventory = (skills) => () => JSON.stringify({ type: 'system', subtype: 'init', plugins: [{ source: 'p@p' }], skills });
 const val = (a, f) => (a.includes(f) ? a[a.indexOf(f) + 1] : undefined);
@@ -338,11 +340,12 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     'orchestration task-create': (a) => {
       const id = `task_${++n}`;
       const deps = JSON.parse(val(a, '--deps') ?? '[]');
-      tasks.set(id, { status: deps.length ? 'pending' : 'ready', deps });
+      const path = val(a, '--spec-file');
+      tasks.set(id, { status: deps.length ? 'pending' : 'ready', deps, spec: fs[path] ?? readFileSync(path, 'utf8') });
       return { ok: true, result: { task: { id, status: tasks.get(id).status } } };
     },
     'orchestration task-list': () => ({ ok: true, result: { tasks: [...tasks].map(([id, t]) => (
-      { id, status: t.status, deps: JSON.stringify(t.deps), completed_at: ['completed', 'failed'].includes(t.status) ? T10 : null })) } }),
+      { id, spec: t.spec, status: t.status, deps: JSON.stringify(t.deps), completed_at: ['completed', 'failed'].includes(t.status) ? T10 : null })) } }),
     'orchestration task-update': (a) => { tasks.get(val(a, '--id')).status = val(a, '--status'); return { ok: true, result: { taskId: val(a, '--id'), status: val(a, '--status') } }; },
     'orchestration gate-create': (a) => { tasks.get(val(a, '--task')).status = 'blocked'; gates.set('gate_1', val(a, '--task')); return { ok: true, result: { gate: { id: 'gate_1', status: 'pending' } } }; },
     // measured: resolving sets the Task ready even when a dependency is unfinished
@@ -350,11 +353,13 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     'orchestration dispatch-show': () => ({ ok: true, result: { dispatch: { id: 'ctx_old', status: dispatchStatus } } }),
     // measured: only a ready Task starts; --retry-of restarts a failed one
     'orchestration worker-start': (a) => {
-      const t = tasks.get(val(a, '--task'));
+      const taskId = val(a, '--task') ?? `task_${++n}`;
+      if (!val(a, '--task')) tasks.set(taskId, { status: 'ready', deps: [] });
+      const t = tasks.get(taskId);
       const retry = a.includes('--retry-of') && t.status === 'failed';
       if (t.status !== 'ready' && !retry) return refuse('task_not_startable', `Task ${val(a, '--task')} is ${t.status}; only a ready Task can start.`, { unmetDependencies: t.deps.filter((d) => tasks.get(d).status !== 'completed') });
       t.status = 'dispatched';
-      return { ok: true, result: { taskId: val(a, '--task'), dispatchId: 'ctx_new', runId: val(a, '--run'), turnStart: 'observed',
+      return { ok: true, result: { taskId, dispatchId: 'ctx_new', runId: val(a, '--run') ?? 'run_child', turnStart: 'observed',
         launch: { effective: { model: val(a, '--model') ?? null, effort: val(a, '--effort') ?? null } }, effects: [{ kind: 'terminal', id: 'term_w' }] } };
     },
     'terminal rename': () => ({ ok: true, result: {} }),
@@ -369,28 +374,298 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     hookLines: () => RULES,
   };
   const count = (name) => calls.filter((a) => a[1] === name).length;
-  return { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['m.json']), call: (name) => calls.findLast((a) => a[1] === name) };
+  return { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['orca-tasks.json']), call: (name) => calls.findLast((a) => a[1] === name) };
 }
-const M = ['--map', 'm.json'];
+const M = ['--map', 'orca-tasks.json'];
 const reg = (id, spec, ...more) => ['register', ...M, '--id', id, '--spec-file', spec, ...more];
 const go = (id, ...more) => ['worker', ...M, '--id', id, '--bracket', 'BL-0012', '--does', '흐름 검증', ...more];
 async function registered(opts) {
   const f = fakeDag(opts);
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f, [['T01', 'T02']]);
   await main(reg('T01', 'a.md'), f.deps);
   await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps);
   return f;
 }
 
+const approval = 'approved-plan.v1.json';
+const reviewArgs = (v) => ['--version', v, '--plan', 'plan.md', '--dag', 'dag.json'];
+async function approve(f, nodes, edges = [], version = 'v1') {
+  f.fs['plan.md'] ??= 'phase-a 실행 계획';
+  f.fs['dag.json'] = JSON.stringify({ nodes, edges });
+  const args = reviewArgs(version);
+  const reviewed = await main(['review', ...args], f.deps);
+  assert.equal(reviewed.code, 0, JSON.stringify(reviewed.out));
+  const result = await main(['approve', ...args, '--review', reviewed.out.review, '--response', '이 버전으로 실행'], f.deps);
+  assert.equal(result.code, 0, JSON.stringify(result.out));
+  return result.out.approval;
+}
+const node = (id, more = {}) => ({ id, bl: 'BL-0012', role: row.agent, unit: '흐름 검증', agent: 'claude', model: 'opus', effort: 'medium', ...more });
+const runArgs = ['exec-run', '--phase', 'phase-a', ...M];
+async function execRun(f, edges = []) {
+  const ids = ['T01', 'T02', 'T03', 'T04', 'T05'].map(id => node(id));
+  ids.push(node('T09', { role: 'code-reviewer', unit: '리뷰', agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' }));
+  await approve(f, ids, edges.map(([from, to]) => ({ from, to })));
+  return main([...runArgs, '--approval', approval], f.deps);
+}
+
+// No Run until the exact reviewed plan and DAG have a recorded execution approval.
+await ta(async () => {
+  const f = fakeDag();
+  assert.equal((await main(runArgs, f.deps)).code, 1);
+  await approve(f, [node('T01')]);
+  const args = reviewArgs('v1');
+  const review = (await main(['review', ...args], f.deps)).out.review;
+  assert.equal((await main(['approve', ...args, '--review', review, '--response', 'v2 실행 승인'], f.deps)).code, 1);
+  f.fs['plan.md'] += ' changed';
+  assert.equal((await main(['approve', ...args, '--review', review, '--response', '실행'], f.deps)).code, 1);
+  f.fs['plan.md'] = 'phase-a 실행 계획';
+  f.fs['dag.json'] = f.fs['dag.json'].replace('medium', 'high');
+  assert.equal((await main(['approve', ...args, '--review', review, '--response', '실행'], f.deps)).code, 1);
+  assert.equal(f.count('run-create'), 0);
+});
+
+// Both placements of a table edit: before the Run exists, or after only T01 has an Orca ID.
+for (const beforeRun of [true, false]) await ta(async () => {
+  const f = fakeDag();
+  f.fs[TABLE_PATH] = TABLE.replace('opus | medium', 'opus | high');
+  for (const path of ['a.md', 'b.md']) f.fs[path] = f.fs[path].replace('opus/medium', 'opus/high');
+  const nodes = ['T01', 'T02'].map(id => node(id, { effort: 'high' }));
+  await approve(f, nodes);
+  const editTable = () => { f.fs[TABLE_PATH] = TABLE.replace('opus | medium', 'sonnet | medium'); };
+  if (beforeRun) editTable();
+  assert.equal((await main([...runArgs, '--approval', approval], f.deps)).code, 0);
+  assert.equal((await main(reg('T01', 'a.md'), f.deps)).code, 0);
+  editTable();
+  assert.equal((await main(reg('T02', 'b.md'), f.deps)).code, 0);
+  for (const id of ['T01', 'T02']) {
+    assert.match(f.tasks.get(f.map().tasks[id].orca).spec, /opus\/high/);
+    const receipt = await main(go(id), f.deps);
+    assert.equal(receipt.code, 0, JSON.stringify(receipt.out));
+    assert.equal(receipt.out.matched && receipt.out.turnStarted, true);
+    assert.deepEqual(receipt.out.applied, { model: 'opus', effort: 'high' });
+    assert.deepEqual(['--agent','--model','--effort'].map(k => val(f.call('worker-start'), k)), ['claude','opus','high']);
+  }
+  const fresh = fake({ fileOver: { [TABLE_PATH]: f.fs[TABLE_PATH], 'qa.md': ok.replace('opus/medium', 'sonnet/medium') } });
+  assert.deepEqual((await main(workerArgv, fresh.deps)).out.applied, { model: 'sonnet', effort: 'medium' });
+  const next = fakeDag({ fileOver: { [TABLE_PATH]: f.fs[TABLE_PATH], 'a.md': f.fs['a.md'].replace('opus/high','sonnet/medium') } });
+  await approve(next, [node('T01', { model:'sonnet' })]);
+  await main([...runArgs,'--approval',approval], next.deps);
+  await main(reg('T01','a.md'), next.deps);
+  assert.deepEqual((await main(go('T01'), next.deps)).out.applied, { model:'sonnet', effort:'medium' });
+});
+
+// Reapproval before first registration and with immutable, dependent Orca Tasks and an open gate.
+for (const registered of [false, true]) await ta(async () => {
+  const f = fakeDag();
+  const nodes = ['T01','T02','T03'].map(id => node(id));
+  const edges = [{ from: 'T01', to: 'T02' }];
+  await approve(f, nodes, edges);
+  assert.equal((await main([...runArgs, '--approval', approval], f.deps)).code, 0);
+  f.fs['c.md'] = f.fs['a.md'].replace('T01', 'T03');
+  await main(reg('T03','c.md'), f.deps);
+  const settled = (await main(go('T03'), f.deps)).out;
+  f.tasks.get(settled.task).status = 'completed';
+  const untouched = f.map().tasks.T03;
+  let old, successor;
+  if (registered) {
+    old = (await main(reg('T01','a.md'), f.deps)).out.orca;
+    successor = (await main(reg('T02','b.md'), f.deps)).out.orca;
+    await main(['gate', ...M, '--id','T01','--question','승인 조건?'], f.deps);
+  }
+  f.fs['a.md'] = f.fs['a.md'].replace('opus/medium','sonnet/medium');
+  f.fs[TABLE_PATH] = TABLE.replace('opus | medium','sonnet | medium');
+  nodes[0].model = 'sonnet';
+  const v2 = await approve(f, nodes, edges, 'v2');
+  const change = ['reapprove', ...M, '--id','T01','--approval',v2];
+  assert.equal((await main(reg('T01','a.md','--approval',v2), f.deps)).code, 1);
+  if (registered) {
+    assert.equal((await main(change, f.deps)).code, 1);
+    assert.equal((await main(go('T01'), f.deps)).code, 1);
+    assert.equal(f.map().tasks.T01.orca, old);
+    await main(['resolve', ...M, '--id','T01','--resolution','허용'], f.deps);
+    assert.equal((await main(go('T01'), f.deps)).code, 1);
+  }
+  assert.equal(f.count('worker-start'), 1);
+  const changed = await main(change, f.deps);
+  assert.equal(changed.code, 0, JSON.stringify(changed.out));
+  assert.equal((await main(change, f.deps)).out.existing, true);
+  assert.equal((await main(reg('T01','a.md'), f.deps)).code, 0);
+  const replacement = f.map().tasks.T01.orca;
+  if (registered) {
+    assert.notEqual(old, replacement);
+    assert.equal(f.tasks.get(old).status, 'failed');
+    assert.match(f.tasks.get(old).spec, /opus\/medium/);
+    assert.equal(f.map().tasks.T01.previous[0].gates[0].id, 'gate_1');
+    assert.equal(f.map().tasks.T02.orca, successor);
+    assert.equal((await main(go('T02'), f.deps)).code, 1);
+  }
+  assert.equal((await main(go('T01','--approval',approval), f.deps)).code, 1);
+  const receipt = await main(go('T01'), f.deps);
+  assert.equal(receipt.code, 0);
+  assert.deepEqual(receipt.out.applied, { model: 'sonnet', effort: 'medium' });
+  assert.match(f.tasks.get(replacement).spec, /sonnet\/medium/);
+  assert.equal((await main(go('T01'), f.deps)).code, 1);
+  assert.deepEqual(f.map().tasks.T03, untouched);
+  f.tasks.get(replacement).status = 'completed';
+  if (registered) assert.equal((await main(go('T02'), f.deps)).code, 0);
+});
+
+// Replaying a replacement after loss of its creation receipt adopts its immutable Orca Task.
+await ta(async () => {
+  const f = fakeDag();
+  await approve(f,[node('T01')]);
+  await main([...runArgs,'--approval',approval], f.deps);
+  await main(reg('T01','a.md'), f.deps);
+  f.fs[TABLE_PATH] = TABLE.replace('opus | medium','sonnet | medium');
+  f.fs['a.md'] = f.fs['a.md'].replace('opus/medium','sonnet/medium');
+  const v2 = await approve(f,[node('T01',{ model:'sonnet' })],[],'v2');
+  const change = ['reapprove',...M,'--id','T01','--approval',v2];
+  const call = f.deps.orca;
+  f.deps.orca = args => {
+    const r = call(args);
+    return args[1] === 'task-create' ? { stdout:'', stderr:'lost receipt' } : r;
+  };
+  assert.equal((await main(change,f.deps)).code, 1);
+  assert.equal((await main(go('T01'),f.deps)).code, 1);
+  f.deps.orca = call;
+  assert.equal((await main(change,f.deps)).code, 0);
+  assert.equal(f.count('task-create'), 2);
+  assert.equal((await main(go('T01'),f.deps)).code, 0);
+});
+
+// Team launch uses the current approval, including the permitted internal assignments on the parent.
+await ta(async () => {
+  const f = fakeDag();
+  const member = { role: 'code-reviewer', unit: '리뷰', agent: 'codex', model: 'gpt-6.1-sol', effort: null, overrideReason: 'effort 생략' };
+  const planner = { role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' };
+  const nodes = [node('T01', { unit: '리드', model: 'sonnet', effort: 'high', members: [planner, member] }), node('T02')];
+  f.fs['a.md'] = '[역할: qa-inspector · 리드]\nTask: T01 QA 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)';
+  await approve(f, nodes);
+  await main([...runArgs,'--approval',approval], f.deps);
+  f.fs[TABLE_PATH] = TABLE.replace('opus | medium','sonnet | medium');
+  const direct = [...workerArgv, '--approval',approval,'--id','T02'];
+  f.fs['qa.md'] = f.fs['b.md'];
+  const a = await main(direct, f.deps);
+  assert.equal(a.code, 0, JSON.stringify(a.out));
+  assert.equal(val(f.call('worker-start'),'--run'), f.map().run);
+  assert.deepEqual(a.out.applied, { model: 'opus', effort: 'medium' });
+  assert.equal((await main(direct, f.deps)).code, 1);
+  assert.equal((await main(reg('T02','b.md'), f.deps)).code, 1);
+  assert.equal((await main(reg('T01','a.md','--lead'), f.deps)).code, 0);
+  assert.equal((await main(go('T01'), f.deps)).code, 0);
+  f.fs['planner.md'] = '[역할: planner]\nTask: T01-P QA 내부 분해\n배정: planner / 계획 (claude sonnet/medium)\n보고: 배정한 QA 팀장';
+  const decomposition = await main(['worker','--approval',approval,'--parent','T01','--id','T01-P','--agent','planner',
+    '--unit','계획','--spec-file','planner.md','--bracket','BL-0012','--does','QA 내부 분해'], f.deps);
+  assert.equal(decomposition.code, 0, JSON.stringify(decomposition.out));
+  assert.equal(f.map().direct['T01-P'].parent, 'T01');
+  f.fs['member.md'] = '[역할: code-reviewer]\nTask: T01-A 코드 리뷰\n배정: code-reviewer / 리뷰 (codex gpt-6.1-sol)\n사용자 예외: effort 생략';
+  const child = ['worker','--approval',approval,'--parent','T01','--id','T01-A','--agent','code-reviewer','--unit','리뷰',
+    '--spec-file','member.md','--bracket','BL-0012','--does','코드 리뷰','--override-reason','effort 생략'];
+  assert.equal((await main(child.slice(0,-2), f.deps)).code, 1);
+  assert.equal((await main([...child, '--run','run_other'], f.deps)).code, 1);
+  const b = await main(child, f.deps);
+  assert.equal(b.code, 0, JSON.stringify(b.out));
+  assert.equal(b.out.requested.runtime, 'codex');
+  assert.equal(val(f.call('worker-start'),'--effort'), undefined);
+  assert.ok(readFileSync(val(f.call('worker-start'),'--spec-file'),'utf8').endsWith(RULES + '\n'));
+  assert.equal((await main(child.map(x => x === 'code-reviewer' ? 'another-role' : x), f.deps)).code, 1);
+});
+
+// Old Runs keep their registered values. An unregistered Task needs its own historical approval.
+await ta(async () => {
+  const f = await registered();
+  const old = f.map();
+  delete old.approval;
+  delete old.review;
+  delete old.tasks.T02;
+  f.fs[M[1]] = JSON.stringify(old);
+  f.fs[TABLE_PATH] = 'unavailable';
+  assert.equal((await main(runArgs, f.deps)).out.existing, true);
+  assert.equal((await main(go('T01'), f.deps)).code, 0);
+  f.tasks.get(old.tasks.T01.orca).status = 'completed';
+  assert.equal((await main(go('T01'), f.deps)).code, 1);
+  assert.equal((await main(go('T01','--retry'), f.deps)).code, 1);
+  assert.equal(f.count('worker-start'), 1);
+  assert.equal((await main(reg('T02','b.md'), f.deps)).code, 1);
+  const args = [...reviewArgs('v2'), '--legacy-map', M[1]];
+  const reviewed = await main(['review', ...args], f.deps);
+  assert.equal(reviewed.code, 0);
+  const restored = await main(['approve', ...args, '--review', reviewed.out.review, '--response', '당시 승인 원문'], f.deps);
+  assert.equal(restored.code, 0);
+  assert.equal((await main(['reapprove', ...M, '--id','T02','--approval',restored.out.approval], f.deps)).code, 0);
+  assert.equal((await main(reg('T02','b.md'), f.deps)).code, 0);
+});
+
+await ta(async () => {
+  const f = fakeDag();
+  for (const bad of [{ id: 'T01', bl: 'BL-0001' }, node('T01',{ bl: ['BL-0001','bad'] }), node('T01',{ kind:'approval' }),
+    node('T01',{ members: [node('child')] })]) {
+    f.fs['plan.md'] = 'plan';
+    f.fs['dag.json'] = JSON.stringify({ nodes: [bad, node('T02')], edges: [] });
+    assert.equal((await main(['review', ...reviewArgs('v1')], f.deps)).code, 1);
+  }
+  await approve(f, [node('T01',{ bl:['BL-0001','BL-0002'] }), { id:'USER', kind:'approval' }, node('T02')],
+    [{ from:'T01',to:'USER' }, { from:'USER',to:'T02' }]);
+  assert.deepEqual(JSON.parse(f.fs[approval]).tasks.T02.deps, ['T01']);
+  const staged = JSON.parse(f.fs[approval]);
+  staged.tasks.T01.model = 'changed';
+  f.fs[approval] = JSON.stringify(staged);
+  assert.equal((await main([...runArgs,'--approval',approval], f.deps)).code, 1);
+  assert.equal(f.count('run-create'), 0);
+});
+
+await ta(async () => {
+  const f = fakeDag();
+  await approve(f, [node('T01'),node('T02')]);
+  await main([...runArgs, '--approval',approval], f.deps);
+  const v2 = await approve(f, [node('T01'),node('T02')], [], 'v2');
+  await main(['reapprove', ...M, '--id','T01','--approval',v2], f.deps);
+  const direct = (id,file,version=v2) => ['worker','--agent',row.agent,'--unit','흐름 검증','--spec-file',file,
+    '--bracket','phase-a','--does','검증','--approval',version,'--id',id];
+  assert.equal((await main(direct('T01','a.md',approval), f.deps)).code, 1);
+  const call = f.deps.orca;
+  f.deps.orca = args => args[1] === 'worker-start'
+    ? { stdout: JSON.stringify({ ok:false, error:{ code:'invalid_argument', message:'refused' } }) } : call(args);
+  assert.equal((await main(direct('T01','a.md'), f.deps)).code, 1);
+  assert.equal(f.map().direct.T01, undefined);
+  f.deps.orca = call;
+  const receipts = await Promise.all([main(direct('T01','a.md'), f.deps), main(direct('T02','b.md'), f.deps)]);
+  assert.ok(receipts.every(r => r.code === 0));
+  assert.deepEqual(Object.keys(f.map().direct).sort(), ['T01','T02']);
+  assert.equal(f.count('worker-start'), 2);
+});
+
 // 28. exec-run creates the execution Run once and keeps it in the map
 await ta(async () => {
   const f = fakeDag();
-  const a = await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await approve(f, [node('T01')]);
+  const opts = v => ['--approval', `approved-plan.${v}.json`, ...reviewArgs(v)];
+  const launch = async (args, code) => {
+    const g = fake({ fileOver: f.fs });
+    const result = await main([...coordArgv, ...args], g.deps);
+    assert.equal(result.code, code, JSON.stringify(result.out));
+    for (const step of ['run-create','terminal create','worker-start']) assert.equal(g.names().filter(n => n === step).length, code === 0 ? 1 : 0);
+  };
+  f.fs['plan.md'] += '수정 v2';
+  await launch(opts('v1'), 1);
+  await launch(opts('v2'), 1);
+  f.fs['plan.md'] = 'phase-a 실행 계획';
+  const nodes = [node('T01'),node('T02')];
+  f.fs['dag.json'] = JSON.stringify({nodes,edges:[]});
+  await launch(opts('v1'), 1);
+  await launch(['--approval', approval], 1);
+  await approve(f, nodes, [], 'v2');
+  await launch(opts('v2'), 0);
+});
+
+await ta(async () => {
+  const f = fakeDag();
+  const a = await execRun(f);
   assert.equal(a.code, 0, JSON.stringify(a.out));
   assert.equal(a.out.run, 'run_exec');
   assert.equal(f.map().run, 'run_exec');
   assert.match(val(f.call('run-create'), '--objective'), /^phase-a /);
-  const b = await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  const b = await execRun(f);
   assert.equal(b.out.run, 'run_exec');
   assert.equal(f.count('run-create'), 1);
 });
@@ -399,13 +674,13 @@ await ta(async () => {
 await ta(async () => {
   const f = fakeDag();
   assert.equal((await main(reg('T01', 'a.md'), f.deps)).code, 1);
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f);
   const { code, out } = await main(reg('T01', 'a.md'), f.deps);
   assert.equal(code, 0, JSON.stringify(out));
   const c = f.call('task-create');
   assert.equal(val(c, '--run'), 'run_exec');
   assert.equal(val(c, '--task-title'), 'T01 로그인 흐름');
-  assert.equal(val(c, '--spec-file'), 'a.md');
+  assert.ok(f.tasks.get(out.orca).spec.includes(f.fs['a.md']));
   assert.equal(f.map().tasks.T01.orca, out.orca);
   assert.equal(f.map().tasks.T01.model, 'opus');
   await main(reg('T01', 'a.md'), f.deps);
@@ -415,7 +690,7 @@ await ta(async () => {
 // 30. register: an assignment that differs from the table → code 1, nothing created
 await ta(async () => {
   const f = fakeDag({ fileOver: { 'a.md': '[역할: qa-inspector]\nTask: T01 x\n배정: qa-inspector / 흐름 검증 (claude opus/high)' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f);
   const { code, out } = await main(reg('T01', 'a.md'), f.deps);
   assert.equal(code, 1);
   assert.match(out.error, /배정/);
@@ -425,7 +700,7 @@ await ta(async () => {
 // 31. register with deps: plan ids become Orca ids; a dependency that is not registered yet → code 1
 await ta(async () => {
   const f = fakeDag();
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f, [['T01','T02']]);
   assert.equal((await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps)).code, 1);
   await main(reg('T01', 'a.md'), f.deps);
   const { code, out } = await main(reg('T02', 'b.md', '--deps', 'T01'), f.deps);
@@ -438,12 +713,12 @@ await ta(async () => {
 // 32. register a codex row: the six lines are appended to the spec Orca stores
 await ta(async () => {
   const f = fakeDag();
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
-  const { code } = await main(reg('T09', 'codex.md'), f.deps);
+  await execRun(f);
+  const { code, out } = await main(reg('T09', 'codex.md'), f.deps);
   assert.equal(code, 0);
   const p = val(f.call('task-create'), '--spec-file');
   assert.notEqual(p, 'codex.md');
-  assert.ok(readFileSync(p, 'utf8').endsWith(`${RULES}\n`));
+  assert.ok(f.tasks.get(out.orca).spec.endsWith(`${RULES}\n`));
 });
 
 // 33. worker by plan id: starts the registered Task in the execution Run with the registered model, records dispatch and start time
@@ -456,6 +731,7 @@ await ta(async () => {
   assert.equal(val(c, '--run'), 'run_exec');
   assert.equal(val(c, '--model'), 'opus');
   assert.ok(!c.includes('--spec-file'));
+  assert.ok(!c.includes('--display-name') && !c.includes('--task-title'));
   assert.equal(out.title, '[BL-0012] qa-inspector : opus/medium - 흐름 검증');
   assert.equal(f.map().tasks.T01.dispatch, 'ctx_new');
   assert.equal(f.map().tasks.T01.started, T0);
@@ -549,7 +825,7 @@ await ta(async () => {
 // 41. register keeps --edits and --resource in the map (what launchable compares)
 await ta(async () => {
   const f = fakeDag();
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f);
   const { code, out } = await main(reg('T01', 'a.md', '--edits', 'web/ui/,tests/a.spec.mjs', '--resource', 'gpu'), f.deps);
   assert.equal(code, 0, JSON.stringify(out));
   assert.deepEqual(f.map().tasks.T01.edits, ['web/ui/', 'tests/a.spec.mjs']);
@@ -563,7 +839,7 @@ await ta(async () => {
     'd.md': '[역할: qa-inspector]\nTask: T04 D\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
     'e.md': '[역할: qa-inspector]\nTask: T05 E\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
   } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f, [['T03','T05']]);
   await main(reg('T01', 'a.md', '--edits', 'web/character.js'), f.deps);            // running
   await main(reg('T02', 'b.md', '--edits', 'web/character.js,web/ui/'), f.deps);    // ready, overlaps T01's file
   await main(reg('T03', 'c.md', '--resource', 'blender'), f.deps);                  // ready, free
@@ -587,7 +863,7 @@ await ta(async () => {
   const full = await main(['launchable', ...M, '--slots', '1'], f.deps);
   assert.deepEqual(full.out.launch, []);
   assert.deepEqual(full.out.held, [{ id: 'T02', reason: 'no free slot' }]);
-  const m = f.map(); m.tasks.T01.edits = ['web/ui/']; m.tasks.T02.edits = ['web/ui/team-select.js']; f.fs['m.json'] = JSON.stringify(m);
+  const m = f.map(); m.tasks.T01.edits = ['web/ui/']; m.tasks.T02.edits = ['web/ui/team-select.js']; f.fs['orca-tasks.json'] = JSON.stringify(m);
   const overlap = await main(['launchable', ...M, '--slots', '8'], f.deps);
   assert.deepEqual(overlap.out.held, [{ id: 'T02', reason: 'edits overlap T01 (web/ui/team-select.js)' }]);
 });
@@ -595,7 +871,7 @@ await ta(async () => {
 // 45. pull: a pending Task's dependencies become its real inputs; it goes ready only when those are all completed, and the map keeps why
 await ta(async () => {
   const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f, [['T01','T03'],['T02','T03']]);
   await main(reg('T01', 'a.md'), f.deps);
   await main(reg('T02', 'b.md'), f.deps);
   await main(reg('T03', 'c.md', '--deps', 'T01,T02'), f.deps);
@@ -620,23 +896,23 @@ await ta(async () => {
 // 48. exec-run freezes the approved plan once: waterfall.json next to the map → waterfall.plan.json, never overwritten
 await ta(async () => {
   const f = fakeDag({ fileOver: { 'waterfall.json': '{"v":1}' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f);
   assert.equal(f.fs['waterfall.plan.json'], '{"v":1}');
   f.fs['waterfall.json'] = '{"v":2}';
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f);
   assert.equal(f.fs['waterfall.plan.json'], '{"v":1}');
   const g = fakeDag({ fileOver: { 'waterfall.json': '{"v":2}', 'waterfall.plan.json': '{"v":1}' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], g.deps);
+  await execRun(g);
   assert.equal(g.fs['waterfall.plan.json'], '{"v":1}');
   const none = fakeDag();
-  assert.equal((await main(['exec-run', '--phase', 'phase-a', ...M], none.deps)).code, 0);
+  assert.equal((await execRun(none)).code, 0);
   assert.equal(none.fs['waterfall.plan.json'], undefined);
 });
 
 // 49. launchable lists waiting Tasks as pull candidates: the unfinished Tasks each waits on and its spec's 먼저 읽을 것 lines
 await ta(async () => {
   const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)\n\n먼저 읽을 것:\n- web/stage.js\n- 메모 T03.memo.md\n\n편집 범위: tests/c.spec.mjs' } });
-  await main(['exec-run', '--phase', 'phase-a', ...M], f.deps);
+  await execRun(f, [['T01','T03'],['T02','T03']]);
   await main(reg('T01', 'a.md'), f.deps);
   await main(reg('T02', 'b.md'), f.deps);
   await main(reg('T03', 'c.md', '--deps', 'T01,T02'), f.deps);
