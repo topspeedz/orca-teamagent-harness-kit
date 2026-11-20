@@ -38,6 +38,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 #status.ok { color: var(--new); font-weight: 600; }
 #status.err { color: var(--warn); }
 #fallback { display: grid; gap: 8px; }
+#fallback[hidden] { display: none; }
 textarea { width: 100%; box-sizing: border-box; min-height: 12em; font: 0.85rem/1.4 var(--mono); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 </style>
 
@@ -70,7 +71,7 @@ const COLLECTION = 'model-selection', DOC_ID = 'choices';
 const noEffort = (s) => s.runtime === 'claude' && s.model === 'haiku';
 const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, effort: noEffort(r) ? '' : r.effort }));
 let touched = false;
-const dbReady = window.claude && window.claude.use ? window.claude.use('db').catch(() => null) : Promise.resolve(null);
+const dbReady = !DATA.localSave && window.claude && window.claude.use ? window.claude.use('db').catch(() => null) : Promise.resolve(null);
 
 function el(tag, attrs, text) {
   const e = document.createElement(tag);
@@ -157,6 +158,7 @@ function render() {
 function change(id) { touched = true; render(); document.getElementById(id)?.focus(); }
 
 const choices = () => DATA.rows.map((r, i) => ({ agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
+let saved = choices();
 
 async function save() {
   const status = document.getElementById('status'), fallback = document.getElementById('fallback');
@@ -172,6 +174,25 @@ async function save() {
   status.className = '';
   status.textContent = '저장하는 중…';
   try {
+    if (DATA.localSave) {
+      const current = choices();
+      const changed = current.filter((c, i) => ['runtime', 'model', 'effort'].some(k => c[k] !== saved[i][k]));
+      const response = await fetch('/model-selection', {
+        method: 'POST', mode: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'x-agent-toggle': DATA.localSave.token },
+        body: JSON.stringify({ choices: changed, revision: DATA.localSave.revision }),
+      });
+      if (!response.ok) throw new Error(response.status === 409
+        ? '표가 다른 곳에서 변경되었습니다. 다시 열어 현재 값을 확인하세요.'
+        : `서버가 저장 요청을 거절했습니다 (HTTP ${response.status}).`);
+      const result = await response.json();
+      if (typeof result.revision !== 'string' || !result.revision) throw new Error('저장한 표의 버전을 확인할 수 없습니다.');
+      DATA.localSave.revision = result.revision;
+      saved = current;
+      status.className = 'ok';
+      status.textContent = '프로젝트 모델 표에 저장했습니다.';
+      return;
+    }
     const db = await dbReady;
     if (!db) throw new Error('이 화면에서는 저장소를 쓸 수 없습니다');
     await db.doc(`${COLLECTION}/${DOC_ID}`).set({ savedAt: new Date().toISOString(), choices: choices() });
@@ -180,6 +201,10 @@ async function save() {
     fallback.hidden = true;
   } catch (e) {
     status.className = 'err';
+    if (DATA.localSave) {
+      status.textContent = `저장하지 못했습니다. ${e.message}`;
+      return;
+    }
     status.textContent = `저장하지 못했습니다(${(e && (e.message || e.code)) || e}). 아래 내용을 복사해 채팅에 붙여 넣어 주세요.`;
     document.getElementById('json').value = JSON.stringify(choices(), null, 2);
     fallback.hidden = false;

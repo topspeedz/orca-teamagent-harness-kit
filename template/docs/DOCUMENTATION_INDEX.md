@@ -8,10 +8,11 @@
 ## 규칙
 
 - 이 파일은 `doc-steward`만 고친다. 다른 에이전트는 읽기만 하고, 고칠 것이 있으면 자기 리포트에 적어 넘긴다.
-- PRD와 SRS의 요구사항 줄은 기획 팀의 `prd-writer`가 실행 전에 쓴다. 그 파일을 처음 만들어도 이 색인의 줄은 6단계 문서 동기화 때까지 `없음`이다.
-- 문서는 쓸 내용이 생길 때 만든다. 아직 없는 문서는 `없음`이다.
+- PRD·SRS는 `product-manager`가 작성하고 `planner`가 검토한다. 각 문서·절의 작성 및 검토 범위는 역할 정의에서 확인한다.
+- setup은 코드 지도와 아래 12개 영역에 작성용 초안을 준비한다. 파일명은 [문서 배치와 양식](../.claude/skills/docs-management/SKILL.md#문서-배치와-양식)을 따른다. API·DB 계약, ADR, 런북은 각 폴더의 `draft.md`에서 시작한다.
+- 아래 표는 근거를 채운 정본을 추적한다. 설치 초안만 있는 줄은 첫 동기화나 초기화까지 `없음`으로 둔다.
 - 다른 경로에 이미 있는 문서는 옮기지 않고 정본 문서 칸에 그 경로를 적는다.
-- 양식과 절차는 `docs-management` 스킬에 있다.
+- 작성 양식은 `docs/harness/templates/product-docs/`, 초기화·동기화·감사 절차는 `docs-management` 스킬에 있다.
 
 ## 문서
 
@@ -31,6 +32,24 @@
 | `docs/11-operations/` | 배포 · 운영 가이드 | 없음 | | | 없음 |
 | `docs/12-changelog/` | 변경 이력 · 릴리스 노트 | 없음 | | | 없음 |
 
+## 작성자 배정 대기
+
+문서·절에 지정 작성자가 없으면 `미배정`, 사용자가 제외하면 `해당 없음`으로 기록한다. 작성자가 수락되면 역할 정의에 범위를 기록하고 해당 범위를 이 표에서 뺀다. 문서 최신성은 위 문서 표에 기록한다.
+
+| 문서 | 범위 | 배정 상태 |
+| --- | --- | --- |
+| `docs/CODEBASE_MAP.md` | 전체 | 미배정 |
+| `docs/03-ui-ux/ui-spec.md` | 전체 | 미배정 |
+| `docs/04-architecture/architecture.md` | 전체 | 미배정 |
+| `docs/05-api/draft.md` | 전체 | 미배정 |
+| `docs/06-database/draft.md` | 전체 | 미배정 |
+| `docs/07-decisions/draft.md` | 전체 | 미배정 |
+| `docs/08-implementation/wbs.md` | 전체 | 미배정 |
+| `docs/09-testing/test-cases.md` | 전체 | 미배정 |
+| `docs/10-traceability/rtm.md` | 전체 | 미배정 |
+| `docs/11-operations/draft.md` | 전체 | 미배정 |
+| `docs/12-changelog/CHANGELOG.md` | 전체 | 미배정 |
+
 ## 이 폴더 밖의 문서
 
 `doc-steward`가 고치지 않는 문서다. 찾을 때만 쓴다.
@@ -40,7 +59,8 @@
 | `docs/backlog.md`, `docs/backlog-archive.md` | `product-manager` | 진행 중인 작업 항목과 수락 기준, 끝난 항목의 보관 |
 | `docs/superpowers/specs/`, `docs/superpowers/plans/` | `planner` | phase별 설계서와 계획서 (그때의 기록) |
 | `docs/history/<phase>/` | 코디네이터 | phase별 최종 보고, 장부, 회고 (그때의 기록) |
-| `docs/harness/` | `harness-engineer` | 하네스 문서: 모델 표, 명단, 양식, 변경 이력 |
+| `docs/harness/model-selection.md` | 사용자 | 작업별 런타임·모델·effort |
+| `docs/harness/`의 나머지 문서 | `harness-engineer` | 명단, 양식, 변경 이력 |
 
 ## 상태 값
 

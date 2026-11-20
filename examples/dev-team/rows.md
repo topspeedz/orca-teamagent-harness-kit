@@ -12,5 +12,5 @@
 ## 명단 `docs/harness/team-org.md`
 
 ```markdown
-| `dev` | `developer` | `developer` | `team-dev` | `src/`, `test/`, `package.json`, `_workspace/dev/` |
+| `dev` | `developer` | `developer` | `team-dev` | `src/`, `test/`, `package.json`, `_workspace/dev/` | 실행팀 |
 ```

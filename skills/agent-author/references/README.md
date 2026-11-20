@@ -8,7 +8,7 @@
 | --- | --- |
 | `AGENT_AUTHORING_MASTER.md` | 사람이 읽거나 다른 AI에 붙여넣어 사용할 제작 원칙·메타 프롬프트 |
 | [SKILL.md](../SKILL.md) | Claude Code에서 `/agent-author`로 실행 가능한 제작 워크플로우 |
-| [agent-definition-template.md](./agent-definition-template.md) | 생성할 Agent의 YAML + 본문 내용 골격 |
+| [agent-definition-template.md](./agent-definition-template.md) | 설치 하네스용 전문 판단 질문과 독립 설치용 YAML·본문 골격 |
 | [domain-patterns.md](./domain-patterns.md) | Unity, 모바일 UI, Blender, 게임 기획, 문서, QA 전문 판단의 예시 |
 | [expertise-research-protocol.md](./expertise-research-protocol.md) | 전문성 심화 조사·공식 근거 검증·판단 규칙 추출·불확실성 처리 |
 | [agent-corpus-research.md](./agent-corpus-research.md) | **v1.2 신규:** 6개 GitHub Agent/Prompt 컬렉션 후보 발굴·비교·선별·재작성 절차 |

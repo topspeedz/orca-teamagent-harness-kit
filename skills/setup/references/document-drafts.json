@@ -1,0 +1,15 @@
+{
+  "docs/CODEBASE_MAP.md": "codebase-map.md",
+  "docs/01-product/prd.md": "prd.md",
+  "docs/02-requirements/srs.md": "srs.md",
+  "docs/03-ui-ux/ui-spec.md": "ui-spec.md",
+  "docs/04-architecture/architecture.md": "architecture.md",
+  "docs/05-api/draft.md": "contract.md",
+  "docs/06-database/draft.md": "contract.md",
+  "docs/07-decisions/draft.md": "adr.md",
+  "docs/08-implementation/wbs.md": "wbs.md",
+  "docs/09-testing/test-cases.md": "test-cases.md",
+  "docs/10-traceability/rtm.md": "rtm.md",
+  "docs/11-operations/draft.md": "runbook.md",
+  "docs/12-changelog/CHANGELOG.md": "changelog.md"
+}

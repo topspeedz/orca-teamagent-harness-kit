@@ -1,0 +1,45 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>예제 — 홈 UI 워터폴 (실측 + 예상)</title><style>:root{--bg:#f7f6f3;--surface:#fff;--fg:#24211d;--muted:#6e675e;--line:#e2ddd4;--plan:#5b6fb0;--coord:#7a6a55;--design:#b0743a;--dev:#8b5bb0;--verify:#b04f5b;--harness:#3f8a96;--done:#2f8f4e;--crit:#24211d;--now:#d0412f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171614;--surface:#201e1b;--fg:#ece7df;--muted:#a59d91;--line:#37322c;--crit:#ece7df;--now:#ff7a63;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171614;--surface:#201e1b;--fg:#ece7df;--muted:#a59d91;--line:#37322c;--crit:#ece7df;--now:#ff7a63;color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding-block:32px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1{margin:0;font-size:1.7rem;text-wrap:balance} .sub{color:var(--muted);margin:.3rem 0 0}
+.legend{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:13px}
+.legend span{display:inline-flex;align-items:center;gap:6px}.legend i{width:14px;height:10px;display:inline-block;border-radius:2px}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line)}
+.row{display:flex;min-height:30px;border-bottom:1px solid var(--line)}
+.name{position:sticky;left:0;z-index:2;background:var(--surface);flex:0 0 300px;padding:5px 10px;border-right:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lane{display:inline-block;width:46px;font-size:12px;color:var(--muted)}
+.track{position:relative;flex:none}
+.track i{position:absolute;top:0;bottom:0;border-left:1px dashed var(--line)}
+.track i.now{border-left:2px solid var(--now)}
+.track i.uw{border-left:1.5px dashed var(--muted);border-right:1.5px dashed var(--muted);background:color-mix(in srgb,var(--muted) 7%,transparent)}
+.axis .track b{position:absolute;top:6px;font-size:12px;color:var(--muted);font-weight:500;transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.axis .track b.nowlbl{color:var(--now);top:auto;bottom:-1px;font-weight:700}
+.bar{position:absolute;top:5px;height:20px;border-radius:3px}
+.bar span{position:absolute;left:calc(100% + 6px);top:1px;white-space:nowrap;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar.lbl-l span{left:auto;right:calc(100% + 6px)}
+.plan{background:var(--plan)}.coord{background:var(--coord)}.design{background:var(--design)}.dev{background:var(--dev)}.verify{background:var(--verify)}.harness{background:var(--harness)}
+.lane.plan,.lane.coord,.lane.design,.lane.dev,.lane.verify,.lane.harness{background:none}
+.bar.wait{opacity:.45}.bar.done{background:var(--done)}.bar.run{box-shadow:0 0 0 2px var(--fg)}
+.bar.crit{outline:2px solid var(--crit);outline-offset:1px}
+.bar.uwait{background:transparent;border:2px dashed var(--muted);box-sizing:border-box;outline:none}.bar.uwait.done{border-color:var(--done)}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.notes div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.notes b{display:block;margin-bottom:4px}</style></head><body>
+<div class="wrap">
+<header><h1>예제 — 홈 UI 워터폴 (실측 + 예상)</h1><p class="sub">Run run_example · 시각 KST · 시작 09:20 → 예상 종료 <b>~13:00</b> · 기준 11:40 · 의존 관계: <a href="https://claude.ai/artifact/Uvn5SPchu1joQkrMZFizbj">DAG 스윔레인</a></p></header>
+<div class="legend"><span><i style="background:var(--done)"></i>완료(실측)</span><span><i style="background:var(--dev);box-shadow:0 0 0 2px var(--fg)"></i>진행(시작 실측 · 끝 예상)</span><span><i style="background:var(--dev);opacity:.45"></i>대기(예상)</span><span><i style="outline:2px solid var(--crit);background:transparent"></i>임계 경로</span><span><i style="border:2px dashed var(--muted);background:transparent;box-sizing:border-box"></i>사용자 승인·결정 대기(작업 시간 아님 — 세로 점선 띠)</span><span><i style="background:var(--now);width:3px"></i>지금</span></div>
+<div class="scroll"><div class="row axis"><div class="name">지금 11:40</div><div class="track" style="width:660px"><b style="left:0px">09:00</b><b style="left:66px">09:30</b><b style="left:132px">10:00</b><b style="left:198.00000000000003px">10:30</b><b style="left:264px">11:00</b><b style="left:330px">11:30</b><b style="left:396.00000000000006px">12:00</b><b style="left:462.00000000000006px">12:30</b><b style="left:528px">13:00</b><b style="left:594px">13:30</b><b class="nowlbl" style="left:352px">지금</b></div></div>
+<div class="row"><div class="name" title="설계 문서 (planner S)"><span class="lane plan">기획</span>설계 문서 (planner S)</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar plan done crit" style="left:44px;width:99px" title="09:20–10:05 · 45분"><span>09:20–10:05 · 45분</span></div></div></div>
+<div class="row"><div class="name" title="✋ 설계 승인"><span class="lane coord">조정</span>✋ 설계 승인</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar coord done crit uwait" style="left:143px;width:33px" title="10:05–10:20 · 15분"><span>10:05–10:20 · 15분</span></div></div></div>
+<div class="row"><div class="name" title="화면 구현 · BL-0001"><span class="lane dev">개발</span>화면 구현 · BL-0001</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar dev run crit" style="left:180.4px;width:215.60000000000005px" title="10:22–12:00 · 1시간 38분"><span>10:22–12:00 · 1시간 38분</span></div></div></div>
+<div class="row"><div class="name" title="데이터 조사 · BL-0002"><span class="lane plan">기획</span>데이터 조사 · BL-0002</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar plan done" style="left:180.4px;width:61.60000000000002px" title="10:22–10:50 · 28분"><span>10:22–10:50 · 28분</span></div></div></div>
+<div class="row"><div class="name" title="코드·디자인 리뷰"><span class="lane verify">검증</span>코드·디자인 리뷰</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar verify wait crit" style="left:396.00000000000006px;width:88px" title="12:00–12:40 · 40분"><span>12:00–12:40 · 40분</span></div></div></div>
+<div class="row"><div class="name" title="하네스 회고"><span class="lane harness">하네스</span>하네스 회고</div><div class="track" style="width:660px"><i class="uw" style="left:143px;width:33px"></i><i style="left:0px"></i><i style="left:66px"></i><i style="left:132px"></i><i style="left:198.00000000000003px"></i><i style="left:264px"></i><i style="left:330px"></i><i style="left:396.00000000000006px"></i><i style="left:462.00000000000006px"></i><i style="left:528px"></i><i style="left:594px"></i><i class="now" style="left:352px"></i><div class="bar harness wait crit" style="left:484.00000000000006px;width:43.99999999999994px" title="12:40–13:00 · 20분"><span>12:40–13:00 · 20분</span></div></div></div></div>
+<div class="notes">
+<div><b>예상 근거</b>완료·시작은 Orca Dispatch 실측 시각, 대기 막대는 같은 크기 과거 Task 실측으로 잡은 추정.</div>
+<div><b>임계 경로</b>설계 → 승인 → 화면 구현 → 리뷰 → 회고.</div>
+</div>
+</div>
+</body></html>

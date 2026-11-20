@@ -4,12 +4,14 @@
 //        node model-table.mjs add --table <path> --rows <json file>        exit 1 and the table untouched on an error
 //        node model-table.mjs apply --table <path> --choices <json file>  exit 1 and the table untouched on an error
 //        node model-table.mjs page --table <path> --recommend <json file> --out <html path> [--codex]   the survey page
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const { parseTable, NO_EFFORT_MODELS } = await import(new URL('../../../template/.claude/scripts/model-selection.mjs', import.meta.url));
+const installed = existsSync(new URL('./model-selection.mjs', import.meta.url));
+const parser = installed ? './model-selection.mjs' : '../../../template/.claude/scripts/model-selection.mjs';
+const { parseTable, NO_EFFORT_MODELS } = await import(new URL(parser, import.meta.url));
 
 export const MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
 
@@ -28,7 +30,7 @@ const norm = (s) => s.trim().replace(/\s+/g, ' ');
 const cell = (v) => (v ? ` ${v} ` : ' ');
 const runtimeError = (runtime) => (RUNTIMES.includes(runtime) ? null : `런타임 \`${runtime}\`은 ${RUNTIMES.join(', ')} 중 하나가 아님`);
 const modelError = (model, runtime) => {
-  if (runtime === 'codex') return model ? null : 'model이 빔';
+  if (runtime === 'codex') return typeof model === 'string' && model.trim() ? null : 'model이 빔';
   return MODELS.includes(model) ? null : `model \`${model}\`은 ${MODELS.join(', ')} 중 하나가 아님`;
 };
 const effortError = (effort, runtime) =>
@@ -79,7 +81,12 @@ export function addRows(tableText, rows) {
 
 export function applyChoices(tableText, choices) {
   const { lines, rows } = open(tableText);
+  if (!Array.isArray(choices)) throw new Error('choices는 배열이어야 함');
   for (const c of choices) {
+    if (typeof c?.agent !== 'string' || typeof c.unit !== 'string') throw new Error('agent와 unit이 필요함');
+    for (const key of ['runtime', 'model', 'effort']) {
+      if (c[key] !== undefined && (typeof c[key] !== 'string' || /[|\r\n]/.test(c[key]))) throw new Error(`${key}: 잘못된 표 값`);
+    }
     const name = `${c.agent} (${c.unit})`;
     const row = rows.find((r) => r.agent === c.agent && norm(r.cells[2]) === norm(c.unit));
     if (!row) throw new Error(`${name}: 표에 줄이 없음`);
@@ -91,7 +98,7 @@ export function applyChoices(tableText, choices) {
     // only changed cells are checked: an old or pinned value the user keeps stays as it is
     const err = (c.runtime !== undefined ? runtimeError(c.runtime) : null)
       ?? (changed('model') || changed('runtime') ? modelError(next.model, next.runtime) : null)
-      ?? (changed('effort') ? effortError(next.effort, next.runtime) : null)
+      ?? (changed('effort') || changed('runtime') ? effortError(next.effort, next.runtime) : null)
       ?? (['runtime', 'model', 'effort'].some(changed) ? haikuError(next.model, next.effort, next.runtime) : null);
     if (err) throw new Error(`${name}: ${err}`);
     [['runtime', 3], ['model', 4], ['effort', 5]].forEach(([k, i]) => { if (changed(k)) cells[i] = cell(next[k]); });
@@ -101,7 +108,7 @@ export function applyChoices(tableText, choices) {
 }
 
 const PLACEHOLDER = '/*__DATA__*/null';
-const TEMPLATE = new URL('../assets/model-survey.html', import.meta.url);
+const TEMPLATE = new URL(installed ? '../../docs/harness/templates/model-survey.html' : '../assets/model-survey.html', import.meta.url);
 
 export function buildPage(templateHtml, data) {
   if (templateHtml.split(PLACEHOLDER).length !== 2) throw new Error(`틀에 ${PLACEHOLDER} 자리표가 정확히 한 번 있어야 함`);
@@ -112,7 +119,7 @@ export function buildPage(templateHtml, data) {
 const listRows = (text) => open(text).rows.map((r) => ({ agent: r.agent, unit: norm(r.cells[2]), runtime: r.runtime, model: r.model, effort: r.effort ?? '', note: r.note }));
 
 // new rows start at the recommendation; existing rows keep the table's value and show the recommendation beside it
-function pageData(tableText, recommend, codex) {
+export function pageData(tableText, recommend = [], codex = false) {
   const rows = listRows(tableText);
   for (const r of recommend) {
     if (!rows.some((x) => x.agent === r.agent && x.unit === norm(r.unit))) throw new Error(`${r.agent} (${r.unit}): 표에 줄이 없음`);
@@ -160,4 +167,4 @@ function main(argv) {
 }
 
 // realpath on both sides: a junction or symlink in the plugin path must not stop the CLI from running
-if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && existsSync(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) process.exitCode = main(process.argv.slice(2));

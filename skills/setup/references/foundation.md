@@ -43,7 +43,7 @@
 
 역할은 router / canonical / contract / runbook / spec / history 여섯 개면 충분하다([principles.md §2](principles.md)). 처음부터 다 만들지 않는다.
 
-1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다. Orca 틀을 깔았으면 제품 문서의 router는 틀이 깐 `docs/DOCUMENTATION_INDEX.md` 하나다. 따로 만들지 않는다. 문서 본문은 쓸 내용이 생길 때 정본 소유 담당이 만든다.
+1. router는 문서가 실제로 여럿일 때만, 도메인당 하나씩 1~2개로 시작한다. 각 router의 끝은 코드 경로나 검증 명령이어야 한다. Orca 틀의 제품 문서 router는 `docs/DOCUMENTATION_INDEX.md`다. 지정 작성자가 색인의 정본이나 설치 초안에 근거가 생긴 절부터 채운다. 양식은 `docs/harness/templates/product-docs/`에 있다. 미배정과 해당 없음은 색인의 작성자 배정 대기 표에 절별로 남긴다.
 2. 활성 문서 첫 화면에 상단 계약 3줄을 둔다: 읽는 시점, 역할과 소유 범위, 소유자와 상태([templates.md §2](templates.md)).
 3. 날짜 붙은 계획과 사고 기록은 history 폴더로 분리하고 본문을 고치지 않는다. 현재 규칙과 섞어 읽히면 안 된다.
 4. 깊이는 T0 → router → canonical → 코드, **3단을 넘기지 않는다.**
@@ -65,7 +65,7 @@
 
 기본은 **인라인 직접 처리**다. 에이전트와 스킬은 같은 절차가 반복된 증거와 독립 책임이 생긴 뒤에 만든다([principles.md §5](principles.md)).
 
-- Orca 틀을 깔았으면 팀과 팀원은 7단계([team-composition.md](team-composition.md))에서 지난 작업을 근거로 추천하고, 사용자가 고른 것만 만든다. 나중에 하나를 더할 때는 `docs/harness/templates/`의 양식으로 직접 넣어도 된다.
+- Orca 틀을 깔았으면 팀과 팀원은 7단계([team-composition.md](team-composition.md))에서 지난 작업과 미배정 문서·절을 근거로 추천하고, 사용자가 고른 것만 만든다. 나중에 추가할 때도 agent-author가 프로젝트의 `docs/harness/templates/agent.md`를 읽고 같은 기준으로 문서 담당을 제안한다.
 - Orca를 쓰지 않으면 이 스킬은 팀과 에이전트를 만들지 않는다.
 
 ## 6. 측정과 성장 규칙

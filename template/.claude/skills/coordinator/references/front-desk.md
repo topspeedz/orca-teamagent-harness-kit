@@ -8,10 +8,10 @@
 
 `SKILL.md`의 "요청 규모별 경로" 표로 고른다. 팀은 `docs/harness/team-org.md`의 명단으로 정한다.
 
-- 단순 질문이나 한 파일의 작은 수정은 창구가 직접 한다. Run도 phase 폴더도 만들지 않는다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.
-- 요구사항이 흐릿하거나 많은 작업은 `plan-orchestrate`의 1~4단계(설문, 기획, 설계, 계획)를 창구가 먼저 한다. 코디네이터는 계획 승인 뒤에 띄운다.
-- 코디네이터를 띄우기 전에 브리프의 `## 백로그 항목`이 채워져 있어야 한다. 비어 있으면 창구가 `product-manager`를 작업 단위 `항목화` Task 하나로 띄워 항목과 수락 기준을 쓰게 하고(`team-product`의 단일 모드), 그 ID를 적은 뒤 띄운다.
-- 그 밖(답이 정해진 작업, 한 팀의 Task가 3개 이상인 작업)은 브리프를 쓰고 코디네이터를 띄운다.
+- 단순 질문이나 백로그 ID 지정이 없는 한 파일의 작은 수정은 창구가 직접 한다. Run도 phase 폴더도 만들지 않는다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.
+- 새 요구는 PM 항목화와 Planner 검토, 지정 BL은 Planner 직행, 한 phase 위임은 PM 묶음 선정부터 시작한다. 지정 ID는 ‘답이 정해진 작업’보다 우선한다. 설계·계획 승인 횟수와 단독 PRD·계획 검토는 `plan-orchestrate`의 접수 표를 따른다.
+- 브리프에 승인된 BL과 동일한 버전의 배정·DAG·검토 기록을 전달한다. 일반 소규모 수정은 원래 창구 경로를 따른다. 승인된 실행 팀의 단순 Task 1개만 팀장을 거치지 않을 수 있다.
+
 
 ## 2. 브리프 작성
 
@@ -24,9 +24,10 @@
 코디네이터 spec을 `_workspace/_run/<phase>/spec/`에 쓴다. 담는 것은 브리프 경로, 로드할 스킬(`coordinator`), 보고 경로(`_workspace/_run/<phase>/report.md`)다.
 
 ```text
-node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <spec> --does <요청> [--backlog BL-0001,BL-0002]
+node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <spec> --does <요청> --approval <승인 파일> --version <vN> --plan <계획.md> --dag <dag.json> [--backlog BL-0001,BL-0002]
 ```
 
+- 승인 파일은 PM이 검토하고 사용자가 승인한 버전이어야 한다. 현재 계획·DAG가 그 버전과 다르면 변경된 범위부터 다시 검토한다.
 - 스크립트가 같은 phase 이름이나 같은 백로그 ID의 Run을 찾으면 띄우지 않는다. 사용자에게 알리고 어느 쪽이 맡을지 묻는다.
 - 코디네이터 설정 파일이 없으면 스크립트가 `coordinator-settings.mjs generate`를 먼저 돌리라고 안내한다. 그대로 따른다.
 - 스크립트가 코드 1로 끝나면 그 안내를 사용자에게 그대로 전한다. 다시 띄우지 않는다. 예를 들어 처음 여는 폴더의 신뢰 확인 화면이 막고 있으면 사용자가 그 터미널에서 확인해야 한다.
