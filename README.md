@@ -285,7 +285,7 @@ docs/
 .agents/skills/                  Codex용 포인터 (Codex 사용을 선택했을 때만)
 ```
 
-실시간 팀 구조도에서 배정·직접 협업·문서 책임과 역할별 모델을 확인할 수 있다. 구조도 변경은 별도 `agent-toggle` 패치로 제공한다. 적용 가능 여부는 스킬 작업 사본에서 `git apply --check <패치 경로>`로 확인한다. 모델 표를 저장하려면 프로젝트의 설치본과 일치하는 키트가 사용자 플러그인 캐시에 있어야 한다. [agent-toggle 패치](integrations/agent-toggle/agent-toggle.patch)
+플러그인을 설치한 뒤 대상 프로젝트에서 `/orca-teamagent-harness-kit:agent-toggle`을 실행하면 에이전트 토글과 실시간 팀 구조도가 열린다. [스킬 안내](skills/agent-toggle/SKILL.md)
 
 ## 테스트하지 않은 환경
 

@@ -1,0 +1,40 @@
+  :root { --bg:#f7f7f5; --card:#fff; --fg:#1c1c1a; --muted:#6b6b66; --line:#e3e3de; --on:#1f7a4d; --off:#b23b3b; --mid:#9a6b12; --accent:#2f5bd3; --card-plugin:#eef2fb; --line-plugin:#cfd9f0; --card-project:#f1f7ef; --line-project:#d3e5cc; --card-builtin:#fbf6ec; --line-builtin:#ecdfc4; --card-synced:#f5f0fa; --card-codex:#eaf5f6; --line-codex:#c3e0e3; --line-synced:#ddd0ec; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151514; --card:#1e1e1c; --card-synced:#231d2b; --card-codex:#17262a; --line-codex:#2a4a50; --line-synced:#3c3149; --card-builtin:#26221a; --line-builtin:#43392a; --card-plugin:#1b2030; --line-plugin:#2c3550; --card-project:#1b251c; --line-project:#2d4230; --fg:#ecece8; --muted:#9a9a93; --line:#2f2f2c; --on:#4cc38a; --off:#e5706f; --mid:#d9a845; --accent:#7d9bff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, "Segoe UI", "Malgun Gothic", sans-serif; }
+  header { position:sticky; top:0; z-index:1; background:var(--bg); border-bottom:1px solid var(--line); padding:16px 20px 14px; }
+  h1 { margin:0 0 4px; font-size:21px; letter-spacing:-0.01em; }
+  .sub { color:var(--muted); font-size:12px; }
+  #meta { display:flex; flex-wrap:wrap; gap:4px 20px; margin:6px 0 4px; font-variant-numeric:tabular-nums; }
+  #meta b { color:var(--fg); font-weight:600; margin-right:6px; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  input[type=search] { flex:1; min-width:180px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); }
+  .chip { border:1px solid var(--line); background:var(--card); color:var(--fg); border-radius:0; padding:6px 12px; cursor:pointer; }
+  .chip[aria-pressed=true] { border-color:var(--accent); color:var(--accent); }
+  main { padding:16px 20px 32px; }
+  details.section { margin:0 0 12px; font-size:14px; }
+  details.section > summary { cursor:pointer; color:var(--fg); font-weight:600; padding:6px 2px; }
+  details.section > summary .full-btn { margin:0 0 0 6px; vertical-align:middle; }
+  details.section > summary .compact-toggle { vertical-align:middle; }
+  details.section > summary span { color:var(--muted); font-weight:400; font-size:12px; margin-left:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:12px; margin-top:8px; align-items:start; }
+  .row { display:grid; grid-template-columns:1fr auto; gap:8px 12px; align-items:center; align-content:start; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .row .body { grid-column:1 / -1; grid-row:2; }
+  .row .seg { grid-column:2; grid-row:1; }
+  .row.off { opacity:.6; }
+  .name { font-family:ui-monospace, Consolas, monospace; font-weight:600; word-break:break-all; }
+  .row.project { background:var(--card-project); border-color:var(--line-project); }
+  .row.synced { background:var(--card-synced); border-color:var(--line-synced); }
+  .seg { display:flex; border:1px solid var(--line); border-radius:0; overflow:hidden; }
+  .seg button { border:0; background:var(--card); color:var(--muted); padding:6px 10px; cursor:pointer; font:inherit; font-size:12px; white-space:nowrap; }
+  .seg button + button { border-left:1px solid var(--line); }
+  .seg button:disabled { cursor:not-allowed; opacity:.5; }
+  .seg button[aria-pressed=true][data-v=on] { background:var(--on); color:#fff; }
+  .seg button[aria-pressed=true][data-v=off] { background:var(--off); color:#fff; }
+  .seg button[aria-pressed=true][data-v=name-only], .seg button[aria-pressed=true][data-v=user-invocable-only] { background:var(--mid); color:#fff; }
+  .seg button:focus-visible, .chip:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--fg); color:var(--bg); padding:8px 14px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  .row .guide-btn { grid-column:1 / -1; grid-row:4; justify-self:end; align-self:end; }
+  @media (max-width: 420px) { .grid { grid-template-columns:1fr; } .row { grid-template-columns:1fr; } .row .seg { grid-column:1; grid-row:3; flex-wrap:wrap; } }
+[hidden]{display:none!important}.sub{overflow-wrap:anywhere}

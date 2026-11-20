@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "_workspace/agent-toggle-work/team.css"
+        ],
+        "createdAt": "2026-11-20T02:27:04.060Z",
+        "reason": "Agent review: the original agent-toggle team.css line 36 uses the same per-team color stripe to identify team panels, and the approved T8 brief calls for reusing that UI."
+      }
+    ]
+  }
+}
