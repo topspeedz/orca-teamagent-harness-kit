@@ -290,7 +290,7 @@ docs/
 .agents/skills/                  pointers for Codex (only when Codex is selected)
 ```
 
-The live team chart shows assignments, direct collaboration, document ownership and models by role. Its update ships as a separate `agent-toggle` patch. Run `git apply --check <patch path>` in a working copy of the skill to check compatibility. Saving model choices requires a kit in the user's plugin cache that matches the project's installed survey assets. [Agent-toggle patch](integrations/agent-toggle/agent-toggle.patch)
+After installing the plugin, run `/orca-teamagent-harness-kit:agent-toggle` in the target project to open the agent toggles and live team chart. [Skill guide](skills/agent-toggle/SKILL.md)
 
 ## Untested environments
 

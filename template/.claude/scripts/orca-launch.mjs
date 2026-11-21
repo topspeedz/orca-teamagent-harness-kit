@@ -36,7 +36,7 @@ const fmt = (model, effort) => (effort ? `${model}/${effort}` : model);
 const fmtRow = (runtime, model, effort) => `${runtime} ${fmt(model, effort)}`;
 
 export function tabTitle({ bracket, agent, model, effort, does }) {
-  return `[${bracket}] ${agent} : ${fmt(model, effort)} - ${does}`;
+  return `[${bracket} - ${agent}] ${does} ${fmt(model, effort)}`;
 }
 
 export function parseAssignLine(spec) {

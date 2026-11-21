@@ -80,7 +80,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
    ```text
    node .claude/scripts/orca-launch.mjs launchable --map <map> --slots <브리프의 슬롯 수>
-   node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일>
+   node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일 또는 백로그 제목>
    ```
 
 - **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
