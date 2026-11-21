@@ -19,12 +19,12 @@ const verify = (p) => verifyAssignment({ spec: ok, agent: 'qa-inspector', unit: 
 // 1. tab title
 t(() => assert.equal(
   tabTitle({ bracket: 'BL-0012', agent: 'qa-inspector', model: 'opus', effort: 'medium', does: '결제 흐름 검증' }),
-  '[BL-0012] qa-inspector : opus/medium - 결제 흐름 검증'));
+  '[BL-0012 - qa-inspector] 결제 흐름 검증 opus/medium'));
 
 // 2. tab title without effort
 t(() => assert.equal(
   tabTitle({ bracket: 'BL-0012', agent: 'qa-inspector', model: 'haiku', effort: null, does: '결제 흐름 검증' }),
-  '[BL-0012] qa-inspector : haiku - 결제 흐름 검증'));
+  '[BL-0012 - qa-inspector] 결제 흐름 검증 haiku'));
 
 // 3. assign line: five values, unit with spaces, no-effort form, missing line
 t(() => {
@@ -732,7 +732,7 @@ await ta(async () => {
   assert.equal(val(c, '--model'), 'opus');
   assert.ok(!c.includes('--spec-file'));
   assert.ok(!c.includes('--display-name') && !c.includes('--task-title'));
-  assert.equal(out.title, '[BL-0012] qa-inspector : opus/medium - 흐름 검증');
+  assert.equal(out.title, '[BL-0012 - qa-inspector] 흐름 검증 opus/medium');
   assert.equal(f.map().tasks.T01.dispatch, 'ctx_new');
   assert.equal(f.map().tasks.T01.started, T0);
 });
