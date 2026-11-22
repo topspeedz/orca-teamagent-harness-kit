@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 const installed = existsSync(new URL('./model-selection.mjs', import.meta.url));
 const parser = installed ? './model-selection.mjs' : '../../../template/.claude/scripts/model-selection.mjs';
-const { parseTable, NO_EFFORT_MODELS } = await import(new URL(parser, import.meta.url));
+const { parseTable, checkRules, NO_EFFORT_MODELS, BY_COMPLEXITY } = await import(new URL(parser, import.meta.url));
 
 export const MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
 
@@ -31,12 +31,12 @@ const cell = (v) => (v ? ` ${v} ` : ' ');
 const runtimeError = (runtime) => (RUNTIMES.includes(runtime) ? null : `런타임 \`${runtime}\`은 ${RUNTIMES.join(', ')} 중 하나가 아님`);
 const modelError = (model, runtime) => {
   if (runtime === 'codex') return typeof model === 'string' && model.trim() ? null : 'model이 빔';
-  return MODELS.includes(model) ? null : `model \`${model}\`은 ${MODELS.join(', ')} 중 하나가 아님`;
+  return model === BY_COMPLEXITY || MODELS.includes(model) ? null : `model \`${model}\`은 ${MODELS.join(', ')} 중 하나가 아님`;
 };
 const effortError = (effort, runtime) =>
   runtime === 'codex' || !effort || EFFORTS.includes(effort) ? null : `effort \`${effort}\`은 ${EFFORTS.join(', ')} 중 하나가 아님`;
 const haikuError = (model, effort, runtime) =>
-  runtime === 'claude' && effort && NO_EFFORT_MODELS.includes(model) ? `${model}은 effort를 받지 않음(\`${effort}\`)` : null;
+  effort && (model === BY_COMPLEXITY || runtime === 'claude' && NO_EFFORT_MODELS.includes(model)) ? `${model}은 effort를 받지 않음(\`${effort}\`)` : null;
 
 export function validate(choice, runtime) {
   const effort = choice.effort ?? '';
@@ -82,7 +82,24 @@ export function addRows(tableText, rows) {
 export function applyChoices(tableText, choices) {
   const { lines, rows } = open(tableText);
   if (!Array.isArray(choices)) throw new Error('choices는 배열이어야 함');
+  const rules = parseTable(tableText);
   for (const c of choices) {
+    if (c?.rule === 'complexity' || c?.rule === 'codex') {
+      const complexity = c.rule === 'complexity';
+      const entry = complexity ? rules.complexity.find(x => String(x.value) === c.unit) : rules.codex.find(x => x.from === c.unit);
+      if (!entry || !c.model || typeof c.model !== 'string' || typeof c.effort !== 'string' || /[|/\s]/.test(c.model + c.effort)) throw new Error('잘못된 기준표 값');
+      const cells = lines[entry.line - 1].split('|');
+      cells[2] = cell(complexity ? c.model : [c.model, c.effort].join('/'));
+      if (complexity) cells[3] = cell(c.effort);
+      lines[entry.line - 1] = cells.join('|');
+      continue;
+    }
+    if (c.rule === 'approval') {
+      const index = lines.findIndex(l => l.startsWith('승인 화면 Task 선택: '));
+      if (index < 0 || !['켬','끔'].includes(c.model)) throw new Error('잘못된 승인 화면 설정');
+      lines[index] = lines[index].replace(/켬|끔/, c.model);
+      continue;
+    }
     if (typeof c?.agent !== 'string' || typeof c.unit !== 'string') throw new Error('agent와 unit이 필요함');
     for (const key of ['runtime', 'model', 'effort']) {
       if (c[key] !== undefined && (typeof c[key] !== 'string' || /[|\r\n]/.test(c[key]))) throw new Error(`${key}: 잘못된 표 값`);
@@ -102,9 +119,17 @@ export function applyChoices(tableText, choices) {
       ?? (['runtime', 'model', 'effort'].some(changed) ? haikuError(next.model, next.effort, next.runtime) : null);
     if (err) throw new Error(`${name}: ${err}`);
     [['runtime', 3], ['model', 4], ['effort', 5]].forEach(([k, i]) => { if (changed(k)) cells[i] = cell(next[k]); });
+    if (c.fixed !== undefined) {
+      if (typeof c.fixed !== 'boolean' || (c.fixed && next.model === BY_COMPLEXITY)) throw new Error('고정할 모델을 지정하세요');
+      if (c.fixed !== row.note.startsWith('고정')) cells[6] = cell(c.fixed ? '고정 ' + row.note : row.note.replace(/^고정(?:\([^)]*\))?[. ]*/, ''));
+    }
     lines[row.line - 1] = cells.join('|');
   }
-  return lines.join('\n');
+  const nextText = lines.join('\n');
+  const next = parseTable(nextText);
+  const errors = checkRules(next.rows, next);
+  if (errors.length) throw new Error(errors.join('\n'));
+  return nextText;
 }
 
 const PLACEHOLDER = '/*__DATA__*/null';
@@ -121,6 +146,16 @@ const listRows = (text) => open(text).rows.map((r) => ({ agent: r.agent, unit: n
 // new rows start at the recommendation; existing rows keep the table's value and show the recommendation beside it
 export function pageData(tableText, recommend = [], codex = false) {
   const rows = listRows(tableText);
+  const rules = parseTable(tableText);
+  const settings = [
+    ...rules.complexity.map(x => ({ rule: 'complexity', agent: '복잡도 기준', unit: String(x.value), runtime: 'claude', model: x.model, effort: x.effort ?? '' })),
+    ...(codex ? rules.codex.map(x => {
+      const [model, effort] = x.to.split('/');
+      return { rule: 'codex', agent: 'Codex 치환', unit: x.from, runtime: 'codex', model, effort };
+    }) : []),
+  ];
+  const enabled = /^승인 화면 Task 선택: (켬|끔)/m.exec(tableText);
+  if (enabled) settings.push({ rule: 'approval', agent: '승인 화면', unit: 'Task별 직접 지정', runtime: '', model: enabled[1], effort: '' });
   for (const r of recommend) {
     if (!rows.some((x) => x.agent === r.agent && x.unit === norm(r.unit))) throw new Error(`${r.agent} (${r.unit}): 표에 줄이 없음`);
   }
@@ -130,6 +165,7 @@ export function pageData(tableText, recommend = [], codex = false) {
       const rec = r ? { model: r.model, effort: r.effort ?? '', reason: r.reason ?? '' } : null;
       return { ...x, ...(r?.isNew ? { model: rec.model, effort: rec.effort } : {}), isNew: Boolean(r?.isNew), recommend: rec };
     }),
+    settings,
     models: MODELS,
     efforts: EFFORTS,
     codex,

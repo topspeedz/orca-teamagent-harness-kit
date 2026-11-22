@@ -56,6 +56,9 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
 - `merge: true`: 멀리서 합류하는 연결 — 출발 행을 따라 대상 열 가운데까지 간 뒤 대상 위(또는 아래)로 들어간다.
 - 텍스트(`title`·`sub`·레인·열·라벨)는 이스케이프하고 `sub`(부제)·`notes`만 HTML로 넣는다. 사용자·외부 입력을 그 두 필드에 그대로 넣지 않는다.
 
+- `choices`(선택): 계획 승인 때 사용자가 워커마다 배정을 고르게 한다. 워커 노드 카드 아래에 복잡도 줄(`복잡도 5 (기술 · 도메인 · 불확실성)`, 없으면 `BL 없음 · 모델 표 값`), Claude model/effort `<select>` 하나(모델별 `<optgroup>`, 모든 조합), `codex` 체크박스, 근거 줄(`추천 <값>: <why>`)을 그린다. 기준값 선택지 끝에 `(기준값)`, 추천값에 `(추천)`, 둘이 같으면 `(기준값·추천)`. 처음 선택은 `base`(생략하면 노드의 `model/effort` — codex 노드는 Claude 값의 `base`가 필요하다), 체크박스 처음 상태는 `agent`가 `codex`인지. 체크하면 옆에 `→ <치환 값>`. 기준값과 다른 카드는 노란 바탕이 되고 그림 위 "기준값과 다른 Task" 목록에 든다. `fixed: true` 노드는 값과 `(고정)`만 보인다. 고를 수 있는 노드에 `recommended`·`why`가 없으면 exit 1. 열·행 간격이 선택 칸만큼 늘고 연결선 검사도 선택 칸을 피한다.
+- 선택 저장: 페이지가 Artifact `db` 기능(`await claude.use("db")`)으로 바뀔 때만 `choices/<노드 id>` 문서에 `{model, effort, codex, at}`(Claude 값, `at`은 ms 시각)를 한 번 쓴다. 로드할 때는 쓰지 않고, 저장된 값이 있으면 그 값으로 그린다. db가 없으면 저장되지 않는다고 안내하고 화면에서만 선택을 바꿀 수 있다. 렌더러는 HTML만 만들고, 게시하는 쪽이 `capabilities: {db: {}}`로 게시한다. 저장된 선택은 `ArtifactData`의 `list`(`collection: "choices"`)로 읽는다.
+
 ## 규칙 (기준 파일에서 추출)
 
 - **캔버스:** 고정 px SVG + `.scroll` 가로 스크롤. 축소해서 화면에 맞추지 않는다. mermaid 같은 자동 맞춤 렌더는 쓰지 않는다.

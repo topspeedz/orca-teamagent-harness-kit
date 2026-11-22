@@ -27,7 +27,7 @@ function assignments(dag) {
   }
   const normalized = n => {
     required(n.role && n.unit && ['codex', 'claude'].includes(n.agent) && n.model, 'DAG 배정에 role/unit/agent/model이 필요함');
-    return { agent: n.role, unit: n.unit, runtime: n.agent, model: n.model, effort: n.effort ?? null, overrideReason: n.overrideReason ?? null };
+    return { ...(n.complexity == null ? {} : { complexity: n.complexity }), agent: n.role, unit: n.unit, runtime: n.agent, model: n.model, effort: n.effort ?? null, overrideReason: n.overrideReason ?? null };
   };
   const tasks = {};
   const frontier = new Map(), visiting = new Set();

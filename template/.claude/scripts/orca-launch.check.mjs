@@ -400,6 +400,16 @@ async function approve(f, nodes, edges = [], version = 'v1') {
   return result.out.approval;
 }
 const node = (id, more = {}) => ({ id, bl: 'BL-0012', role: row.agent, unit: '흐름 검증', agent: 'claude', model: 'opus', effort: 'medium', ...more });
+await ta(async () => {
+  const rules = TABLE.replace('흐름 검증 | claude | opus | medium', '흐름 검증 | claude | 복잡도 |')
+    + '\n\n| 복잡도 | model | effort |\n| --- | --- | --- |\n| 3 | opus | medium |';
+  const f = fakeDag({ fileOver: { [TABLE_PATH]: rules } });
+  await approve(f, [node('T01', { complexity: 3 })]);
+  const changed = node('T01', { complexity: 3, effort: 'high' });
+  f.fs['dag.json'] = JSON.stringify({ nodes: [changed], edges: [] });
+  assert.equal((await main(['review', ...reviewArgs('v2')], f.deps)).code, 1);
+  await approve(f, [{ ...changed, overrideReason: 'T01은 opus/high로 승인' }], [], 'v2');
+});
 const runArgs = ['exec-run', '--phase', 'phase-a', ...M];
 async function execRun(f, edges = []) {
   const ids = ['T01', 'T02', 'T03', 'T04', 'T05'].map(id => node(id));

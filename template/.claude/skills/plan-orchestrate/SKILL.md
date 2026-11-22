@@ -81,7 +81,8 @@ PM은 `prd-write`·`srs-write`·`backlog-management`로 작성하고 Planner는 
 | 리포트 경로 | `_workspace/_run/<phase>/NN_planner_<design 또는 plan>_v<N>.md`. `NN`은 이 스킬의 단계 번호(03 설계, 04 계획) |
 
 - 배정 줄은 모델 표에서 읽는다: `node .claude/scripts/model-selection.mjs lookup --agent planner --unit <설계 또는 계획>`. spec에는 `배정: planner / <작업 단위> (<런타임> <model>/<effort>)` 한 줄로 적는다.
-- 역할명과 작업 단위로 조회한 사용자 설정을 그대로 쓴다. 기술 설계와 실행 계획의 작업별 설정은 서로 다를 수 있다.
+- 기술 설계는 `planner / 설계` 설정으로 기동한다. 계획서를 작성할 때마다 창구는 기동 전에 `planner / 계획` 설정을 조회하고 “이번 계획서는 Planner의 현재 설정인 <model>/<effort>로 작성할까요? 다른 값을 원하면 알려 주세요.”라고 묻는다. 사용자가 답한 뒤 그 값으로 spec의 배정 줄을 작성한다.
+- 사용자가 다른 값을 고르면 이번 계획서 작성에만 적용한다. 사용자 답변 원문을 브리프와 spec의 `사용자 예외:` 줄에 적고 기동 명령에 같은 원문을 `--override-reason`으로 넘긴다. 계획서가 나온 뒤에는 승인용 DAG에서 실행 Task의 배정을 별도로 확인한다.
 - 기동은 `node .claude/scripts/orca-launch.mjs worker --agent planner --unit <설계 또는 계획> --spec-file <spec> --bracket <phase> --does <하는 일>`만 쓴다. 영수증의 Run ID를 브리프의 `창구 Run` 칸에 적는다.
 - 띄운 뒤에는 아래 대기 계약대로 기다린다. 정산은 `worker_done`마다 기대한 Dispatch인가, 리포트 파일이 있는가, `node .claude/scripts/report-check.mjs <리포트 경로>`가 통과하는가를 본다.
 
@@ -122,7 +123,10 @@ planner는 문서 형식을 위해 `superpowers:brainstorming`(설계서)과 `su
 | 계획 승인 | Task 단위 | 같은 두 스킬. 스윔레인 노드마다 런타임, model, effort가 보인다 |
 
 - 계획 승인 질문에 폭을 숫자로 넣는다: 작업 시간 합 ÷ 임계 경로 길이, 슬롯 수, 최대 동시 Task 수. 값은 계획서의 `## DAG` 절 끝에서 옮긴다.
-- 질문은 "계획을 승인하면 Orca로 실행합니다"로 한다. 사용자는 승인 화면에서 배정을 보고 고칠 수 있다. 고친 배정은 `사용자 예외: <원문>`으로 브리프에 적는다.
+- 최종 계획을 PM이 검토하면 창구는 승인 대상 버전과 준비된 그림을 보여 주고 ask(Claude의 `AskUserQuestion` 또는 Codex의 선택형 질문 도구)로 “이 계획을 Orca로 실행할까요?”를 묻는다. 기본 선택지는 1·2번이다. setup에서 Task 선택이 켜져 있고 해당 버전의 `dag.json`에 직접 지정할 수 있는 Task가 있을 때만 3번을 추가한다. 선택용 DAG가 없으면 경로를 묻지 않고 기본 질문을 띄운다. 3번을 고른 뒤 선택용 DAG가 없어진 경우에도 1·2번으로 다시 묻고 답을 기다린다.
+  1. **승인** — 표시한 버전과 배정으로 승인 파일을 만들고 실행한다.
+  2. **거절** — 응답을 브리프에 기록하고 실행 절차를 멈춘다.
+  3. **모델 직접 지정 후 승인** — 선택용 DAG를 열어 고정 역할을 제외한 실행 Task의 모델·effort와 Codex 여부를 고르게 한다. 키트 렌더러로 팀장 구성원까지 표시하고 `capabilities: {db: {}}`로 게시한다. 사용자가 선택을 마치면 `ArtifactData list choices`에서 이번 그림의 선택을 읽는다. 바뀐 Task에만 모델·effort·런타임과 사용자 예외 원문을 계획·DAG·브리프·spec에 반영한다(DAG는 `overrideReason`, Codex 치환은 `model-selection.mjs codex --pair <Claude 조합>`). 바뀐 버전을 PM이 검토한 뒤 최종 배정을 보여 주고 사용자 승인을 받아 실행한다. 프로젝트의 에이전트 설정은 유지한다.
 - PM이 `node .claude/scripts/orca-launch.mjs review --version <vN> --plan <계획.md> --dag <dag.json>` 결과의 review 해시를 검토 리포트에 남긴다. 창구는 같은 버전·해시로 그림을 보여 주고 사용자 원문과 날짜를 브리프에 적는다. 승인 대상이 바뀌었으면 새 버전으로 다시 검토한다.
 - `node .claude/scripts/orca-launch.mjs approve --version <vN> --plan <계획.md> --dag <dag.json> --review <PM이 확인한 해시> --response "<승인 원문>"`으로 승인 파일을 고정한다. 코디네이터 spec에 그 경로를 싣는다. 실행 중에는 코디네이터가 같은 파일 경로로 다시 게시해 같은 주소에서 진행을 보여 준다.
 

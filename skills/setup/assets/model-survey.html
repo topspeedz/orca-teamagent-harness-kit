@@ -49,7 +49,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 12em; font: 0.85rem/
   </header>
   <div class="scroll">
     <table>
-      <thead><tr><th>에이전트</th><th>작업 단위</th><th>런타임</th><th>model</th><th>effort</th><th>추천</th></tr></thead>
+      <thead><tr><th>에이전트</th><th>작업 단위</th><th>런타임</th><th>model</th><th>effort</th><th>추천</th><th>고정</th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -68,8 +68,9 @@ textarea { width: 100%; box-sizing: border-box; min-height: 12em; font: 0.85rem/
 const DATA = /*__DATA__*/null;
 const COLLECTION = 'model-selection', DOC_ID = 'choices';
 // the same condition locks the effort select and clears it
-const noEffort = (s) => s.runtime === 'claude' && s.model === 'haiku';
-const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, effort: noEffort(r) ? '' : r.effort }));
+const noEffort = (s) => s.model === '복잡도' || s.runtime === 'claude' && s.model === 'haiku';
+DATA.rows.push(...(DATA.settings ?? []));
+const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, fixed: r.note?.startsWith('고정') ?? false, effort: noEffort(r) ? '' : r.effort }));
 let touched = false;
 const dbReady = !DATA.localSave && window.claude && window.claude.use ? window.claude.use('db').catch(() => null) : Promise.resolve(null);
 
@@ -106,13 +107,14 @@ function render() {
     const s = state[i], tr = el('tr');
     tr.append(td(el('code', {}, r.agent)), el('td', {}, r.unit));
     const rt = el('td');
-    if (DATA.codex) {
+    if (DATA.codex && !r.rule) {
       const sel = select(`runtime-${i}`, ['claude', 'codex'], s.runtime);
       sel.setAttribute('aria-label', `${r.agent} ${r.unit} 런타임`);
       sel.onchange = () => {
         s.runtime = sel.value;
         // claude keeps only a model from its list; codex starts from an empty box the user fills
-        if (s.runtime === 'codex') s.model = '';
+        if (s.model === '복잡도') s.effort = '';
+        else if (s.runtime === 'codex') s.model = '';
         else if (!DATA.models.includes(s.model)) s.model = DATA.models[0];
         if (noEffort(s)) s.effort = '';
         change(sel.id);
@@ -127,14 +129,15 @@ function render() {
       // Codex's own model list as suggestions; any other ID can still be typed
       model.setAttribute('list', 'codex-models');
     } else {
-      model = select(`model-${i}`, DATA.models, s.model);
+      const models = r.rule === 'approval' ? ['켬', '끔'] : r.rule ? DATA.models : [...DATA.models, '복잡도'];
+      model = select(`model-${i}`, models, s.model);
       model.onchange = () => { s.model = model.value; if (noEffort(s)) s.effort = ''; change(model.id); };
     }
     model.setAttribute('aria-label', `${r.agent} ${r.unit} model`);
     md.append(model);
-    const ef = select(`effort-${i}`, ['', ...DATA.efforts], s.effort, { '': '(없음)' });
+    const ef = select(`effort-${i}`, ['', ...DATA.efforts, ...(s.runtime === 'codex' ? ['ultra'] : [])], s.effort, { '': '(없음)' });
     ef.setAttribute('aria-label', `${r.agent} ${r.unit} effort`);
-    ef.disabled = noEffort(s);
+    ef.disabled = noEffort(s) || r.rule === 'approval';
     ef.onchange = () => { s.effort = ef.value; change(ef.id); };
     const recTd = el('td'), line = el('div', { className: 'rec' });
     if (r.isNew) {
@@ -150,14 +153,17 @@ function render() {
     }
     recTd.append(line);
     if (r.recommend && r.recommend.reason) recTd.append(el('div', { className: 'reason' }, r.recommend.reason));
-    tr.append(rt, md, td(ef), recTd);
+    const fixed = el('input', { type: 'checkbox', checked: s.fixed, disabled: s.model === '복잡도' });
+    fixed.setAttribute('aria-label', r.agent + ' ' + r.unit + ' 고정');
+    fixed.onchange = () => { s.fixed = fixed.checked; touched = true; };
+    tr.append(rt, md, td(ef), recTd, r.rule ? td() : td(fixed));
     body.append(tr);
   });
 }
 // the table is drawn again, so focus goes back to the control the user just changed
 function change(id) { touched = true; render(); document.getElementById(id)?.focus(); }
 
-const choices = () => DATA.rows.map((r, i) => ({ agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
+const choices = () => DATA.rows.map((r, i) => ({ ...(r.rule ? { rule: r.rule } : { fixed: state[i].fixed && state[i].model !== '복잡도' }), agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
 let saved = choices();
 
 async function save() {
@@ -176,7 +182,7 @@ async function save() {
   try {
     if (DATA.localSave) {
       const current = choices();
-      const changed = current.filter((c, i) => ['runtime', 'model', 'effort'].some(k => c[k] !== saved[i][k]));
+      const changed = current.filter((c, i) => ['runtime', 'model', 'effort', 'fixed'].some(k => c[k] !== saved[i][k]));
       const response = await fetch('/model-selection', {
         method: 'POST', mode: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'x-agent-toggle': DATA.localSave.token },
@@ -229,7 +235,7 @@ async function loadSaved() {
     if (!Array.isArray(saved) || touched) return;
     for (const c of saved) {
       const i = DATA.rows.findIndex((r) => r.agent === c.agent && r.unit === c.unit);
-      if (i >= 0) state[i] = { runtime: c.runtime ?? state[i].runtime, model: c.model ?? state[i].model, effort: c.effort ?? state[i].effort };
+      if (i >= 0) state[i] = { fixed: c.fixed ?? state[i].fixed, runtime: c.runtime ?? state[i].runtime, model: c.model ?? state[i].model, effort: c.effort ?? state[i].effort };
     }
     render();
   } catch { /* the page keeps its initial values */ }

@@ -182,4 +182,19 @@ test('the local survey opens at the project values and carries the current revis
   assert.equal(pageData(current).localSave, undefined);
 });
 
+test('setup rules and fixed assignments round-trip through the same choices array', () => {
+  const table = readFileSync(new URL('../../../template/docs/harness/model-selection.md', import.meta.url), 'utf8');
+  const { settings } = pageData(table, [], true);
+  assert.equal(settings.filter(x => x.rule === 'complexity').length, 6);
+  assert.equal(settings.filter(x => x.rule === 'codex').length, 16);
+  assert.equal(applyChoices(table, settings), table);
+  const edits = [{rule:'complexity',unit:'3',model:'sonnet',effort:'max'},
+    {rule:'codex',unit:'sonnet/max',model:'local-sol',effort:'high'},
+    {rule:'approval',model:'끔'}, {agent:'planner',unit:'설계',fixed:true}];
+  const next = pageData(applyChoices(table, edits), [], true);
+  assert.equal(next.settings.find(x => x.unit === '3').model, 'sonnet');
+  assert.equal(next.settings.find(x => x.unit === 'sonnet/max').model, 'local-sol');
+  assert.equal(next.settings.find(x => x.rule === 'approval').model, '끔');
+  assert.match(next.rows.find(x => x.unit === '설계').note, /^고정/);
+});
 console.log(`model-table.check: ${n} cases passed`);

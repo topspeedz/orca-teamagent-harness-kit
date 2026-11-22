@@ -79,6 +79,7 @@ Task마다 아래 항목을 모두 적는다. 빈 칸을 두지 않는다. 없�
 | `_workspace/_run/<phase>/waterfall.json` | `waterfall-timeline` | Task마다 low, likely, high와 그 근거, 선행 Task |
 
 - 스윔레인 입력의 워커 노드마다 런타임(`agent`: `claude` 또는 `codex`), `model`, `effort`를 적는다. 값은 배정 줄과 같아야 한다. 사용자는 승인 화면에서 배정을 보고 고친다.
+- BL을 맡은 실행 Task의 기준값은 `model-selection.mjs lookup --agent <역할> --unit <작업 단위> --bl <BL 목록> --json`으로 조회한다. 복잡도와 차원은 `complexity`·`dims`에 적는다. 선택용 그림 입력에는 `model-selection.mjs choices`의 출력을 `choices`로 넣는다. 노드에는 Claude 기준 조합 `base`, 추천 조합 `recommended`, 근거 `why`를 적고 고정 줄은 `fixed: true`로 표시한다.
 - 승인에 쓰는 워커 노드에는 계획 Task와 같은 `id`, `bl`, `role`(역할명), `unit`, `agent`(런타임), `model`, `effort`(없으면 null)를 쓴다. 팀 내부 분해를 맡기는 노드는 승인 받을 Planner·팀원 배정을 `members`에 같은 역할·작업 단위·런타임·모델·effort로 싣고 승인 화면에서 함께 보여 준다. 6·7단계 PM 정산·문서 확인·회고 배정도 포함한다.
 - 사람 승인은 `kind: approval`, 그 밖의 비실행 이정표는 `kind: milestone`으로 명시한다. 두 종류에는 모델 배정을 적지 않는다.
 - 필드 형식은 각 스킬의 입력 절이 정본이다. 여기에 옮겨 적지 않는다.

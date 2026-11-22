@@ -103,7 +103,7 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
     'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason',
-    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map'].map((k) => [k, { type: 'string' }]),
+    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity'].map((k) => [k, { type: 'string' }]),
   ['lead', { type: 'boolean' }],
   ['retry', { type: 'boolean' }],
 ]);
@@ -164,25 +164,27 @@ async function execute(cmd, o, deps, locks) {
     return { code: inbox.ok === false || workers.ok === false ? 1 : 0, out: { run: o.run, inbox, workers } };
   }
 
-  const table = (agent, unit) => {
-    const row = lookup(parseTable(deps.read(TABLE_PATH)).rows, agent, unit);
+  const table = (agent, unit, complexity) => {
+    const rules = parseTable(deps.read(TABLE_PATH));
+    const row = lookup(rules.rows, agent, unit, { complexity, rules });
     if (!row) throw new Error(`모델 표에 (${agent}, ${unit}) 줄이 없음`);
     return row;
   };
 
   if (cmd === 'review' || cmd === 'approve') {
     const record = reviewPlan(o, io);
-    if (cmd === 'approve') return { code: 0, out: approvePlan(o, record, io) };
     const prevPath = join(dirname(o.dag), `approved-plan.v${Number(o.version.slice(1)) - 1}.json`);
     const previous = io.optional(prevPath) === null ? {} : loadApproval(prevPath, io).tasks;
     for (const [id, t] of Object.entries(record.tasks)) {
       for (const a of [t, ...t.members]) {
         const same = b => b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]);
-        if (record.legacyRun || [previous[id], ...(previous[id]?.members ?? [])].some(same)) continue;
-        const row = table(a.agent, a.unit);
-        if (!a.overrideReason && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
+        if (record.legacyRun || (JSON.stringify(t.bl) === JSON.stringify(previous[id]?.bl) &&
+          t.complexity === previous[id]?.complexity && [previous[id], ...(previous[id]?.members ?? [])].some(b => same(b) && a.complexity === b.complexity))) continue;
+        const row = table(a.agent, a.unit, a.complexity ?? t.complexity);
+        if ((!a.overrideReason || row.note.startsWith('고정')) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
       }
     }
+    if (cmd === 'approve') return { code: 0, out: approvePlan(o, record, io) };
     return { code: 0, out: { version: record.version, review: record.review } };
   }
 
@@ -557,7 +559,7 @@ async function execute(cmd, o, deps, locks) {
       if (map.tasks[o.id] || map.direct?.[o.id]) return fail('이미 등록 또는 직접 기동한 Task');
     } else {
       if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');
-      row = table(o.agent, unit);
+      row = table(o.agent, unit, o.complexity);
     }
     const errors = verifyAssignment({ spec, agent: o.agent, unit, row, overrideReason, lead: !!o.lead });
     if (errors.length) return fail('배정 불일치 — 띄우지 않음', { errors });

@@ -1,0 +1,214 @@
+{
+  "title": "승인 배정 고르기",
+  "heading": "승인 배정 고르기 — 선택지 예",
+  "sub": "<b>예시:</b> 카드 아래에서 Task마다 model/effort와 codex 실행 여부를 고릅니다.",
+  "columns": [
+    "t0 · 승인",
+    "t1",
+    "t2",
+    "t3 · 회고"
+  ],
+  "lanes": [
+    {
+      "id": "coord",
+      "name": "창구",
+      "tone": "coord",
+      "roles": [
+        "coordinator"
+      ]
+    },
+    {
+      "id": "dev",
+      "name": "제작 팀",
+      "roles": [
+        "행0 unity-gameplay-engineer",
+        "행1 technical-artist"
+      ],
+      "tone": "dev"
+    },
+    {
+      "id": "verify",
+      "name": "검증 팀",
+      "roles": [
+        "qa-inspector"
+      ],
+      "tone": "verify"
+    },
+    {
+      "id": "harness",
+      "name": "하네스 팀",
+      "tone": "harness"
+    }
+  ],
+  "choices": {
+    "claude": {
+      "opus": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "sonnet": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "haiku": [],
+      "fable": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "codex": {
+      "opus/low": "gpt-6.2-astra/low",
+      "opus/medium": "gpt-6.2-astra/medium",
+      "opus/high": "gpt-6.2-astra/high",
+      "opus/xhigh": "gpt-6.2-astra/xhigh",
+      "opus/max": "gpt-6.2-astra/max",
+      "sonnet/low": "gpt-6.2-sol/low",
+      "sonnet/medium": "gpt-6.2-sol/medium",
+      "sonnet/high": "gpt-6.2-sol/high",
+      "sonnet/xhigh": "gpt-6.2-sol/xhigh",
+      "sonnet/max": "gpt-6.2-sol/max",
+      "haiku": "gpt-6.2-sol/low",
+      "fable/low": "gpt-6.2-astra/medium",
+      "fable/medium": "gpt-6.2-astra/high",
+      "fable/high": "gpt-6.2-astra/xhigh",
+      "fable/xhigh": "gpt-6.2-astra/max",
+      "fable/max": "gpt-6.2-astra/ultra"
+    }
+  },
+  "nodes": [
+    {
+      "id": "ok",
+      "lane": "coord",
+      "col": 0,
+      "title": "실행 승인",
+      "sub": "사용자가 배정을 고른다",
+      "status": "wait"
+    },
+    {
+      "id": "co",
+      "lane": "coord",
+      "col": 1,
+      "title": "실행 감독",
+      "sub": "전 Task 감독",
+      "status": "wait",
+      "agent": "claude",
+      "model": "opus",
+      "effort": "high",
+      "fixed": true
+    },
+    {
+      "id": "t1",
+      "lane": "dev",
+      "col": 1,
+      "row": 0,
+      "bl": "BL-0101",
+      "complexity": 5,
+      "title": "T1",
+      "sub": "턴 규칙 구현",
+      "status": "wait",
+      "agent": "claude",
+      "model": "opus",
+      "effort": "high",
+      "base": "opus/high",
+      "recommended": "opus/high",
+      "dims": "기술 5 · 도메인 3 · 불확실성 3",
+      "why": "기준값 그대로: 바꿀 규칙과 시험이 수락 기준에 정해져 있음"
+    },
+    {
+      "id": "t2",
+      "lane": "dev",
+      "col": 1,
+      "row": 1,
+      "bl": "BL-0102",
+      "complexity": 13,
+      "title": "T2",
+      "sub": "건물 재질",
+      "status": "wait",
+      "agent": "codex",
+      "model": "gpt-6.2-astra",
+      "effort": "xhigh",
+      "base": "fable/high",
+      "recommended": "opus/xhigh",
+      "dims": "기술 8 · 도메인 5 · 불확실성 13",
+      "why": "불확실성은 재질 실험 때문이라 opus/xhigh로 충분"
+    },
+    {
+      "id": "qa",
+      "lane": "verify",
+      "col": 2,
+      "bl": "BL-0101",
+      "complexity": 2,
+      "title": "QA",
+      "sub": "흐름 검증",
+      "status": "wait",
+      "agent": "claude",
+      "model": "sonnet",
+      "effort": "high",
+      "recommended": "opus/medium",
+      "dims": "기술 2 · 도메인 2 · 불확실성 2",
+      "why": "흐름이 길어 놓치는 결함을 줄이려 opus"
+    },
+    {
+      "id": "retro",
+      "lane": "harness",
+      "col": 3,
+      "title": "회고",
+      "sub": "하네스 측정(BL 없음)",
+      "status": "wait",
+      "agent": "claude",
+      "model": "opus",
+      "effort": "high",
+      "recommended": "opus/high",
+      "why": "기준값 그대로: 측정 위주 회고"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ok",
+      "to": "t1"
+    },
+    {
+      "from": "ok",
+      "to": "t2"
+    },
+    {
+      "from": "t1",
+      "to": "qa"
+    },
+    {
+      "from": "t2",
+      "to": "qa"
+    },
+    {
+      "from": "qa",
+      "to": "retro"
+    },
+    {
+      "from": "ok",
+      "to": "co"
+    }
+  ],
+  "notes": [
+    {
+      "title": "읽는 법",
+      "body": "열 = 시간 순, 행 = 워커. 같은 열은 병렬입니다."
+    },
+    {
+      "title": "기준값과 추천",
+      "body": "(기준값)은 BL 복잡도 규칙 값, (추천)은 계획자 추천입니다. 처음 선택은 기준값입니다."
+    },
+    {
+      "title": "codex 체크와 고정",
+      "body": "체크하면 Codex로 돌고 옆에 치환표 값이 보입니다. 코디네이터와 보안·돈 리뷰는 고정이라 고르지 않습니다."
+    }
+  ]
+}

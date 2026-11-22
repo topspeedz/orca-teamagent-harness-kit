@@ -119,6 +119,8 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    ```
 
 3. `artifact-capabilities` 스킬을 로드한다. 만든 파일을 끝까지 읽은 뒤 Artifact로 게시한다: `capabilities: {"db": {}}`, 첫 게시에는 `icon`. 새 파일 이름이므로 저장소가 빈 새 Artifact가 된다. 옛 Artifact에 다시 게시하지 않는다(옛 저장 문서가 남는다). 링크를 주고 "고친 뒤 저장을 누르고 알려 달라"고 한다. 페이지는 비공개다.
+복잡도 기준 여섯 줄, 고정할 역할, 승인 화면 Task 선택(기본 켬)을 함께 확인한다. Codex를 쓰면 치환표에 이 PC의 모델과 effort를 지정한다. 저장한 배열에는 기준표 행의 `rule`과 역할 행의 `fixed`도 있으므로 그대로 반영한다.
+
 4. 사용자가 저장했다고 하면 ArtifactData로 읽는다: action `get`, 그 Artifact의 `url`, `collection` `model-selection`, `doc_id` `choices`. 문서는 `{ savedAt, choices: [{ agent, unit, runtime, model, effort }] }`이고 모든 줄이 들어 있다. `choices` 배열만 `_workspace/setup/model-choices.json`에 쓰고 반영한다.
 
    ```sh
