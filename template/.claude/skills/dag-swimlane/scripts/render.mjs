@@ -2,7 +2,6 @@
 // DAG swimlane spec (JSON) -> fixed-px SVG artifact page in the format of assets/reference.html. Node built-ins only.
 // Usage: node render.mjs <spec.json> <out.html>   |   node render.mjs --self-test
 // Exit 1 on invalid spec or when any edge passes through a node rectangle.
-import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -248,11 +247,24 @@ export function render(input) {
   });
   if (errors.length) fail(`${errors.join('\n')}\nmove rows/columns so the source or target row is empty between them`);
 
-  const css = readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').match(/<style>[\s\S]*?<\/style>/)[0];
+  const css = readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').match(/<style>[\s\S]*?<\/style>/)[0].replace(/\r\n/g, '\n');
   const colX = i => G.left + i * G.colW;
   const out = [];
   out.push(`<title>${esc(spec.title)}</title>`, '<meta name="claude:viewport-fit-sides" content="cover">', css,
     '<style>.n .tag rect{stroke:none}.n .tag text{font:600 11px var(--sans);fill:var(--node)}.n .ag rect{stroke:none}.n .ag .bg{fill:var(--node);stroke:var(--line);stroke-width:1}.n .ag text{font:700 12px var(--sans)}.n .ag.claude text{fill:#d97757}.n .ag.codex text{fill:var(--fg)}.n .ag .ef{font:600 10px var(--sans);fill:var(--muted)}</style>');
+  out.push(`<style>
+.n{cursor:pointer}.n:focus-visible>rect{stroke:var(--fg);stroke-width:3}
+.node-copy strong,.node-copy span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.node-copy strong{margin-right:48px;font:700 15px/22px var(--sans);color:var(--fg)}
+.node-copy span{font:14px/20px var(--sans);color:var(--muted)}.write .node-copy span{color:var(--write)}
+#node-preview,#node-dialog{box-sizing:border-box;background:var(--node);color:var(--fg);border:1px solid var(--line);border-radius:8px;box-shadow:0 5px 18px #0003;font:14px/1.45 var(--sans);overflow-wrap:anywhere}
+#node-preview{position:fixed;z-index:2;width:max-content;min-width:min(190px,96vw);max-width:min(430px,96vw);max-height:96vh;overflow:auto;padding:8px 12px;text-align:left;cursor:pointer}
+#node-preview strong,#node-preview span{display:block;white-space:pre-wrap}#node-preview span{color:var(--muted)}
+#node-dialog{width:min(520px,94vw);max-height:85vh;padding:20px}#node-dialog::backdrop{background:#0005}
+#node-dialog header{display:flex;align-items:start;justify-content:space-between;gap:16px}#node-dialog h2{margin:0;font-size:1.2rem}
+#node-dialog button{color:inherit;background:var(--node);border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer;flex:none}
+#node-dialog dl{display:grid;grid-template-columns:minmax(5em,auto) minmax(0,1fr);gap:8px 14px}#node-dialog dt{color:var(--muted)}#node-dialog dd{margin:0;white-space:pre-wrap}
+</style>`);
   if (choices) out.push('<style>:root{--pick:#fff6d6;--pick-line:#d9a514}@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--pick:#3a3218;--pick-line:#e2b43a}}:root[data-theme="dark"]{--pick:#3a3218;--pick-line:#e2b43a}'
     + '.pick{display:flex;flex-direction:column;gap:3px;padding:3px 4px;border-radius:6px;font:13px var(--sans);color:var(--muted)}.pick.changed{background:var(--pick)}.n.changed>rect{fill:var(--pick);stroke:var(--pick-line)}'
     + '.pick .cplx,.pick .cx,.pick .fx{font:12px var(--mono)}.pick .fx{font-size:13px;color:var(--fg);padding:4px 6px;border:1px dashed var(--line);border-radius:4px}'
@@ -270,7 +282,7 @@ export function render(input) {
     + '</div>');
   if (choices) out.push('<p class="sub" id="pick-note" hidden></p><div class="pick-diff" aria-live="polite"><b>기준값과 다른 Task (사용자 예외가 됨)</b><ul id="pick-diff"><li>없음</li></ul></div>');
   const aria = spec.aria ?? `열 순서: ${columns.join(' → ')}. 같은 열은 병렬.`;
-  out.push(`<div class="scroll"><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px" role="img" aria-label="${esc(aria)}">`);
+  out.push(`<div class="scroll"><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px" role="group" aria-label="${esc(aria)}">`);
   out.push('<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>');
   out.push(columns.map((c, i) => `<text class="colh" x="${colX(i) + G.colW / 2}" y="26" text-anchor="middle">${esc(c)}</text>`
     + (i ? `<line class="colline" x1="${colX(i)}" y1="${G.top}" x2="${colX(i)}" y2="${H - G.bottomPad}"/>` : '')).join(''));
@@ -292,9 +304,10 @@ export function render(input) {
     }
     out.push(s);
   }
-  for (const n of nodes) {
+  for (const [index, n] of nodes.entries()) {
     const tone = laneById.get(n.lane).tone;
-    out.push(`<g${n.pick ? ` id="n-${esc(n.id)}"` : ''} class="n ${tone}${n.write ? ' write' : ''} ${n.status}"><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6"/>`      + `<text class="t" x="${n.x + 12}" y="${n.y + 23}">${esc(n.title)}</text><text class="s" x="${n.x + 12}" y="${n.y + 45}">${esc(n.sub)}</text>`
+    out.push(`<g${n.pick ? ` id="n-${esc(n.id)}"` : ''} data-index="${index}" role="button" tabindex="0" aria-haspopup="dialog" aria-label="${esc(n.title)} 상세 정보" class="n ${tone}${n.write ? ' write' : ''} ${n.status}"><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6"/>`
+      + `<foreignObject x="${n.x+12}" y="${n.y+6}" width="${n.w-24}" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="node-copy"><strong>${esc(n.title)}</strong><span>${esc(n.sub)}</span></div></foreignObject>`
       + `<text class="st" x="${n.x + n.w - 10}" y="${n.y + 23}" text-anchor="end">${STATUS[n.status]}</text>`
       // Backlog number: diagonal tag centred on the top-left corner.
       + (n.bl ? `<g class="tag" transform="translate(${n.x} ${n.y}) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--${tone}-s)"/><text x="0" y="4" text-anchor="middle">${esc(n.bl)}</text></g>` : '')
@@ -319,6 +332,10 @@ export function render(input) {
   }
   out.push('<div class="notes">');
   out.push(...notes.map(n => `<div><b>${n.title}</b>${n.body}</div>`), '</div>');
+  out.push('<button id="node-preview" type="button" tabindex="-1" hidden><strong></strong><span></span></button>',
+    '<dialog id="node-dialog" aria-labelledby="node-heading"><header><h2 id="node-heading"></h2><button type="button" autofocus>닫기</button></header><dl></dl></dialog>',
+    `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns }).replaceAll('<', '\\u003c')}</script>`,
+    `<script>${readFileSync(join(HERE, 'node-details.js'), 'utf8').replace(/\r\n/g, '\n')}</script>`);
   // '<' escaped so no value can close the script
   if (choices) out.push(`<script>${PICK_JS.replace('__CX__', () => JSON.stringify(choices.codex).replaceAll('<', '\\u003c'))}</script>`);
   return { html: out.join('\n') + '\n', counts: { lanes: lanes.length, columns: columns.length, nodes: nodes.length, edges: edges.length, groups: groups.length } };
@@ -345,7 +362,7 @@ function selfTest() {
     'code-reviewer / 코드 &lt;리뷰&gt; · codex review-model · effort 없음']) {
     if (!page.includes(v)) fail('팀장 DAG에 누락: ' + v);
   }
-  if (createHash('sha256').update(render(load('reference.json')).html).digest('hex') !== 'de9ec8661e14c9af76d92f8ba4f464bd58733eeb3c6b02876a758fd65de903fb') fail('reference output changed');
+  if (render(load('reference.json')).html !== readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').replace(/\r\n/g, '\n')) fail('reference output changed');
   // With `choices`: one pick per worker node, marks on the base/recommended options, codex box from the runtime.
   const pick = load('choices.json'), html = render(pick).html;
   const has = (re, what) => { if (!re.test(html)) fail(`self-test: choices.json — ${what}`); };
