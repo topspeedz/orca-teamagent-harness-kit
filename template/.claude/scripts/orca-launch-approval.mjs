@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
+import { validateCodexPair, validateRouting } from './model-routing.mjs';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
-const digest = ({ version, planHash, dagHash, tasks, legacyRun }) => hash(JSON.stringify([version, planHash, dagHash, tasks, legacyRun ?? null]));
+const digest = ({ version, planHash, dagHash, tasks, legacyRun, routingVersion }) => hash(JSON.stringify([version, planHash, dagHash, tasks, legacyRun ?? null, ...(routingVersion == null ? [] : [routingVersion])]));
 const validVersion = v => /^v[1-9]\d*$/.test(v);
 const required = (value, message) => { if (!value) throw new Error(message); };
 
@@ -10,6 +11,7 @@ const required = (value, message) => { if (!value) throw new Error(message); };
 // human checkpoints pass through their prerequisites, and review loops are not prerequisites.
 function assignments(dag) {
   const nodes = new Map(), groups = new Map(), incoming = new Map();
+  const routed = dag.routingVersion === 2 || dag.nodes.some(n => n.routing || n.members?.some(m => m.routing));
   for (const node of dag.nodes) {
     required(typeof node.id === 'string' && /^[\w-]+$/.test(node.id) && !(node.id in {}) && !nodes.has(node.id), '중복 또는 잘못된 DAG 노드 ID');
     nodes.set(node.id, node);
@@ -27,7 +29,31 @@ function assignments(dag) {
   }
   const normalized = n => {
     required(n.role && n.unit && ['codex', 'claude'].includes(n.agent) && n.model, 'DAG 배정에 role/unit/agent/model이 필요함');
-    return { ...(n.complexity == null ? {} : { complexity: n.complexity }), agent: n.role, unit: n.unit, runtime: n.agent, model: n.model, effort: n.effort ?? null, overrideReason: n.overrideReason ?? null };
+    const row = { ...(n.complexity == null ? {} : { complexity: n.complexity }), agent: n.role, unit: n.unit, runtime: n.agent, model: n.model, effort: n.effort ?? null, overrideReason: n.overrideReason ?? null };
+    if (routed && row.runtime === 'codex' && row.effort !== null) validateCodexPair(row.model, row.effort);
+    if (routed && n.fixed === true && !n.routing) row.routing = { version: 2, mode: 'manual', fixed: true };
+    if (n.routing) {
+      const { mode = 'auto', ...assessment } = n.routing;
+      required(['auto', 'manual'].includes(mode), 'routing.mode는 auto 또는 manual');
+      const needsMap = n.agent === 'codex' || assessment.evaluatedRuntime === 'codex';
+      const codexMap = needsMap ? dag.choices?.codex : undefined;
+      required(!needsMap || codexMap, 'Codex 라우팅 승인에는 DAG choices.codex 필요');
+      validateRouting(assessment, n.agent, codexMap);
+      required(assessment.scores.F === 0, '계획 승인에서는 실패 이력 F=0');
+      required(!n.recommended || n.recommended === assessment.claude, 'DAG 추천과 라우팅 결과 불일치');
+      const fixed = n.fixed === true;
+      if (!fixed && mode === 'auto') {
+        required(!row.overrideReason && row.model === assessment.model && row.effort === assessment.effort, '자동 배정과 추천 불일치');
+      }
+      if (!fixed && (mode === 'manual' || n.base)) {
+        const base = n.base ?? assessment.claude;
+        required(/^(haiku|(opus|sonnet|fable)\/(low|medium|high|xhigh|max))$/.test(base), '승인할 Claude 조합 확인 필요');
+        const actual = row.effort ? row.model + '/' + row.effort : row.model;
+        required(actual === (n.agent === 'codex' ? codexMap[base] : base), 'DAG에서 선택한 조합과 승인 배정 불일치');
+      }
+      row.routing = { version: 2, mode, fixed, assessment, ...(codexMap ? { codexMap } : {}) };
+    }
+    return row;
   };
   const tasks = {};
   const frontier = new Map(), visiting = new Set();
@@ -38,7 +64,7 @@ function assignments(dag) {
     const deps = [...new Set(incoming.get(id).flatMap(visit))].sort();
     const n = nodes.get(id);
     if (n.kind === 'approval' || n.kind === 'milestone') {
-      required(![n.role, n.unit, n.agent, n.model, n.effort, n.members, n.overrideReason].some(Boolean), `${id}의 비실행 노드에 배정이 있음`);
+      required(![n.role, n.unit, n.agent, n.model, n.effort, n.members, n.overrideReason, n.routing].some(Boolean), `${id}의 비실행 노드에 배정이 있음`);
     } else {
       const bl = Array.isArray(n.bl) ? n.bl : String(n.bl ?? '').trim().split(/[,\s·]+/);
       required(bl.length && bl.every(value => typeof value === 'string' && /^BL-\d{4}$/.test(value)), `${id}의 BL-#### 확인 필요`);
@@ -59,10 +85,14 @@ function assignments(dag) {
 export function reviewPlan(o, io) {
   required(validVersion(o.version) && o.plan && o.dag, 'review/approve --version v<N> --plan <계획> --dag <DAG>');
   const dag = io.read(o.dag);
-  const record = { version: o.version, planHash: hash(io.read(o.plan)), dagHash: hash(dag), tasks: assignments(JSON.parse(dag)) };
+  const drawing = JSON.parse(dag);
+  required(drawing.routingVersion == null || drawing.routingVersion === 2, '지원하지 않는 DAG routingVersion');
+  const record = { version: o.version, planHash: hash(io.read(o.plan)), dagHash: hash(dag), tasks: assignments(drawing) };
+  if (drawing.routingVersion === 2 || Object.values(record.tasks).some(t => [t, ...t.members].some(a => a.routing))) record.routingVersion = 2;
   if (o['legacy-map']) {
     const map = JSON.parse(io.read(o['legacy-map']));
     required(map.run && !map.approval && resolve(dirname(o['legacy-map'])) === resolve(dirname(o.dag)), '이전 Run의 대응표가 필요함');
+    required(!record.routingVersion, '구 Run 복원은 당시 승인 배정만 가능');
     record.legacyRun = map.run;
   }
   return { ...record, review: digest(record) };

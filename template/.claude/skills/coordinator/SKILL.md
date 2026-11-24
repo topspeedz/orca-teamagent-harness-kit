@@ -80,9 +80,10 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
    ```text
    node .claude/scripts/orca-launch.mjs launchable --map <map> --slots <브리프의 슬롯 수>
-   node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일 또는 백로그 제목>
+   node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <백로그 ID 또는 phase 이름> --does <하는 일 또는 백로그 제목> [--assessment <이번 시도의 평가.json>]
    ```
 
+- **워커 생성 직전 평가.** 사용자 위임(`routing.mode=auto`)이면 최종 역할 지침·실제 spec·선행 산출물·재시도 메모와 승인된 축별 근거를 대조한다. `node .claude/scripts/orca-launch.mjs assessment-context --approval <승인 파일> --id <실행 Task ID> --spec-file <작성한 원본 spec>`의 출력으로 평가 JSON을 시작한다. 여기에 `reason`으로 대조 결과를 적는다. 근거가 달라진 Opus 세션은 계획 때와 같은 형식의 `input`에 갱신한 전체 점수·근거를 담는다. 다른 모델이거나 근거가 부족하면 사유만 남겨 승인 추천을 사용한다. 직접 지정·표 고정·구 승인에는 평가 파일을 붙이지 않는다. 기동 뒤 영수증의 요청·적용값을 기록한다.
 - **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
 - **`worker_done`을 정산할 때마다 대기 중인 Task를 당길 수 있는지 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. `launchable`의 `candidates`는 대기 중인 Task마다 아직 안 끝난 앞 Task(`waitingOn`)와 spec의 `먼저 읽을 것`(`reads`)을 보여 준다. 빈 슬롯이 있고, `reads`가 `waitingOn` Task의 산출물(그 Task의 편집 범위나 리포트)을 하나도 읽지 않으면, 실제 입력만 의존으로 남겨 당긴다: `node .claude/scripts/orca-launch.mjs pull --map <map> --id <Task ID> --deps <실제 입력 Task,…> --reason "<이유>"`. 실제 입력이 모두 끝났을 때만 준비 상태가 되고, 아니면 `waitingOn`을 돌려주고 아무것도 바꾸지 않는다. 당긴 뒤 `launchable`을 다시 돌린다(편집 겹침과 자원은 거기서 걸러진다). 검증·리뷰 Task는 바로 당기고(혼자 써야 하는 자원을 쓰는 검증 Task는 당기지 않는다), 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다. 판단은 `candidates`의 줄만으로 하고 spec 전체를 다시 읽지 않는다.
 - **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.

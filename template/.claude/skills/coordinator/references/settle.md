@@ -38,12 +38,14 @@ phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/t
 
 ## 4. 적용값을 장부에 적기
 
-- 기동 영수증의 `requested`와 `applied`를 배정 열에 함께 적는다. 예: `요청 claude opus/medium · 적용 opus/medium`. 요청한 값만 보고 적지 않는다.
+- 기동 영수증의 `requested`와 `applied`를 배정 열에 함께 적는다. 자동 재평가로 배정이 달라졌으면 계획값과 최종값, 바뀐 축과 사유도 남긴다.
 - 영수증의 `matched`가 거짓이거나 적용값이 비어 있으면 그대로 적고 최종 보고에 남긴다.
 - 코디네이터 자신의 적용값은 기동 줄에 넣은 model과 effort다. 미리 만든 터미널에 Task를 배정하면 영수증에 적용값이 없기 때문이다.
 - `사용자 예외:`로 띄운 Task는 그 원문을 `## 결정`에 적는다.
 
 ## 5. 실패 처리
+
+자동 위임한 Task의 재시도는 `--retry --assessment <새 시도의 평가.json>`으로 기동한다. 같은 범위의 실제 판단·수행 실패를 확인했으면 `failureDispatches`에 해당 Dispatch ID를 명시하고 `input.scores.F`에 누적 확정 건수(상한 2)를 적는다. 의도된 RED, 미기동, 장비·권한 부재는 제외한다. 같은 Dispatch는 한 번만 센다. 직접 지정과 구 승인에는 승인값을 사용한다.
 
 | 상황 | 처리 |
 | --- | --- |

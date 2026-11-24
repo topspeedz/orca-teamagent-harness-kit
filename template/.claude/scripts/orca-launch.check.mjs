@@ -1,11 +1,13 @@
 // Self-test for orca-launch.mjs — no Orca needed. `node .claude/scripts/orca-launch.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { tabTitle, parseAssignLine, parseOverrideLine, verifyAssignment, workerStartArgs, coordinatorCommand, main } from './orca-launch.mjs';
-import { TABLE_PATH } from './model-selection.mjs';
+import { choices, parseTable, TABLE_PATH } from './model-selection.mjs';
+import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH } from './coordinator-settings.mjs';
 
 let passed = 0;
@@ -354,7 +356,10 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     // measured: only a ready Task starts; --retry-of restarts a failed one
     'orchestration worker-start': (a) => {
       const taskId = val(a, '--task') ?? `task_${++n}`;
-      if (!val(a, '--task')) tasks.set(taskId, { status: 'ready', deps: [] });
+      if (!val(a, '--task')) {
+        const path = val(a, '--spec-file');
+        tasks.set(taskId, { status: 'ready', deps: [], spec: fs[path] ?? readFileSync(path, 'utf8') });
+      }
       const t = tasks.get(taskId);
       const retry = a.includes('--retry-of') && t.status === 'failed';
       if (t.status !== 'ready' && !retry) return refuse('task_not_startable', `Task ${val(a, '--task')} is ${t.status}; only a ready Task can start.`, { unmetDependencies: t.deps.filter((d) => tasks.get(d).status !== 'completed') });
@@ -389,9 +394,9 @@ async function registered(opts) {
 
 const approval = 'approved-plan.v1.json';
 const reviewArgs = (v) => ['--version', v, '--plan', 'plan.md', '--dag', 'dag.json'];
-async function approve(f, nodes, edges = [], version = 'v1') {
+async function approve(f, nodes, edges = [], version = 'v1', drawing = {}) {
   f.fs['plan.md'] ??= 'phase-a 실행 계획';
-  f.fs['dag.json'] = JSON.stringify({ nodes, edges });
+  f.fs['dag.json'] = JSON.stringify({ nodes, edges, ...drawing });
   const args = reviewArgs(version);
   const reviewed = await main(['review', ...args], f.deps);
   assert.equal(reviewed.code, 0, JSON.stringify(reviewed.out));
@@ -942,6 +947,199 @@ t(() => {
   const home = spawnSync(process.execPath, [script, 'codex-rules'], { cwd: root, encoding: 'utf8' });
   assert.equal(home.status, 0, home.stdout + home.stderr);
   assert.match(home.stdout, /⑥/);
+});
+
+const projectTable = [
+  TABLE, '| code-reviewer | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정 |', '',
+  '| Claude | Codex | 메모 |', '| --- | --- | --- |', '| haiku | gpt-6.2-sol/low | |',
+  ...['sonnet','opus','fable'].flatMap(model => ['low','medium','high','xhigh','max'].map(effort => {
+    const target = model === 'sonnet' ? 'gpt-6.2-sol' : 'gpt-6.2-astra';
+    const level = model === 'fable' && effort === 'max' ? 'ultra' : effort;
+    return `| ${model}/${effort} | ${target}/${level} | |`;
+  })),
+].join('\n');
+const projectChoices = choices(parseTable(projectTable).codex);
+const v2Drawing = { routingVersion: 2, choices: projectChoices };
+const evidence = { C: '여러 모듈 계약', U: '대안 검토', R: '공유 데이터', V: '통합 검사', F: '동일 작업 실패 없음' };
+const v2Input = { scores: { C: 2, U: 1, R: 2, V: 1, F: 0 }, evidence };
+function v2Row(agent = 'claude', mode = 'auto') {
+  const r = assessRouting(v2Input, agent, projectChoices.codex);
+  return { agent, model: r.model, effort: r.effort, base: r.claude, recommended: r.claude, routing: { ...r, mode } };
+}
+const assign = (id, row, role = 'qa-inspector', unit = '흐름 검증') => `[역할: ${role}${unit === '리드' ? ' · 리드' : ''}]\nTask: ${id} 검증\n배정: ${role} / ${unit} (${row.agent} ${row.model}${row.effort ? '/' + row.effort : ''})`;
+const preflight = (f, id, input, failureDispatches) => {
+  const spec = f.fs[f.map().tasks[id]?.spec] ?? Object.values(f.fs).find(body => /^Task:\s*(\S+)/m.exec(body)?.[1] === id);
+  const specHash = createHash('sha256').update(spec.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd()).digest('hex');
+  f.fs['check.json'] = JSON.stringify({ id, review: f.map().review, specHash, reason: '최종 역할 지침과 실제 작업 spec 대조', input, failureDispatches });
+  return ['--assessment', 'check.json'];
+};
+
+// Score/evidence, the user's same-value lock and the approved Codex map survive review and registration.
+await ta(async () => {
+  const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable } });
+  const auto = node('T01', v2Row('codex')), manual = node('T02', v2Row('claude','manual'));
+  const fixed = node('T03', { fixed: true, role: 'code-reviewer', unit: '보안·돈이 걸린 변경 리뷰', model: 'fable', effort: 'xhigh' });
+  await approve(f, [auto, manual, fixed], [], 'v1', v2Drawing);
+  const snapshot = JSON.parse(f.fs[approval]);
+  assert.equal(snapshot.tasks.T02.routing.mode, 'manual');
+  assert.ok(snapshot.tasks.T03.routing.fixed);
+  f.fs['dag.json'] = JSON.stringify({ nodes: [auto, node('T02', v2Row()), fixed], edges: [], ...v2Drawing });
+  assert.notEqual((await main(['review', ...reviewArgs('v1')], f.deps)).out.review, snapshot.review);
+  f.fs['dag.json'] = JSON.stringify({ nodes: [auto, manual, { ...fixed, effort: 'max' }], edges: [], ...v2Drawing });
+  assert.equal((await main(['review', ...reviewArgs('v2')], f.deps)).code, 1);
+  f.fs['dag.json'] = JSON.stringify({ nodes: [auto, node('T02')], edges: [], ...v2Drawing });
+  assert.equal((await main(['review', ...reviewArgs('v2')], f.deps)).code, 1);
+  await main([...runArgs, '--approval', approval], f.deps);
+  f.fs[TABLE_PATH] = projectTable.replace('gpt-6.2-astra/ultra','changed/high');
+  for (const r of [auto, manual, fixed]) {
+    f.fs[r.id + '.md'] = assign(r.id, r, r.role, r.unit);
+    assert.equal((await main(reg(r.id, r.id + '.md'), f.deps)).code, 0);
+  }
+  let calls = 0;
+  f.deps.classify = () => { calls++; return { scores: { R: 3 }, reason: '영속 데이터 유실 가능' }; };
+  const changed = { scores: { C: 3, U: 3, R: 2, V: 3, F: 0 }, evidence: { ...evidence, V: '자동 검증 불가' },
+    ambiguities: [{ axis: 'R', value: 3, evidence: '영속 데이터 유실 가능' }] };
+  assert.equal((await main(go('T01'), f.deps)).code, 1);
+  assert.equal((await main(go('T01', ...preflight(f,'T02')), f.deps)).code, 1);
+  assert.equal((await main(go('T01', ...preflight(f,'T01',{ ...changed, scores: { ...changed.scores, F: 1 } })), f.deps)).code, 1);
+  const result = await main(go('T01', ...preflight(f, 'T01', changed)), f.deps);
+  assert.equal(result.code, 0, JSON.stringify(result.out));
+  assert.deepEqual(result.out.requested, { runtime: 'codex', model: 'gpt-6.2-astra', effort: 'ultra' });
+  assert.equal(val(f.call('worker-start'),'--effort'), 'ultra');
+  assert.match(result.out.title, /astra\/ultra/);
+  assert.equal(result.out.routing.assessment.haiku.status, 'classified');
+  assert.equal(f.map().tasks.T01.effort, auto.effort);
+  assert.equal(f.map().tasks.T01.attempts[0].review, snapshot.review);
+  assert.equal(f.map().tasks.T01.attempts[0].matched, true);
+  for (const [r, decision] of [[manual, 'manual'], [fixed, 'fixed']]) {
+    const launch = await main(go(r.id, ...preflight(f, r.id, changed)), f.deps);
+    assert.equal(launch.code, 0, JSON.stringify(launch.out));
+    assert.equal(launch.out.routing.decision, decision);
+    assert.equal(launch.out.requested.effort, r.effort);
+  }
+  assert.equal(calls, 1);
+});
+
+// The author can bind an evaluation locally. A different immutable spec or a newer approval invalidates it.
+await ta(async () => {
+  const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable } });
+  const row = node('T01', v2Row());
+  await approve(f, [row], [], 'v1', v2Drawing);
+  await main([...runArgs, '--approval',approval], f.deps);
+  f.fs['a.md'] = assign('T01',row);
+  await main(reg('T01','a.md'), f.deps);
+  const context = async version => (await main(['assessment-context','--id','T01','--spec-file','a.md','--approval',version], f.deps)).out;
+  const original = { ...await context(approval), reason: '최종 지시 확인' };
+  const args = go('T01','--assessment','check.json');
+  f.fs['a.md'] += '\n새 입출력 조건';
+  f.fs['check.json'] = JSON.stringify({ ...await context(approval), reason: '편집된 파일 검토' });
+  assert.equal((await main(args, f.deps)).code, 1);
+  const next = await approve(f, [row], [], 'v2', v2Drawing);
+  assert.equal((await main(['reapprove',...M,'--id','T01','--approval',next], f.deps)).code, 0);
+  f.fs['check.json'] = JSON.stringify(original);
+  assert.equal((await main(args, f.deps)).code, 1);
+  assert.equal(f.count('worker-start'), 0);
+  f.fs['check.json'] = JSON.stringify({ ...await context(next), reason: '새 승인과 spec 대조' });
+  const launched = await main(args, f.deps);
+  assert.equal(launched.code, 0, JSON.stringify(launched.out));
+  assert.notEqual(launched.out.routing.specHash, launched.out.routing.launchSpecHash);
+});
+
+// A lead's manual setting does not lock its delegated member. A settled failed member can retry its own immutable Task.
+await ta(async () => {
+  const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable }, dispatchStatus: 'failed' });
+  const member = { role: 'code-reviewer', unit: '일반 변경 리뷰', ...v2Row() };
+  const lead = node('T01', { ...v2Row('claude','manual'), unit: '리드', members: [member] });
+  await approve(f, [lead], [], 'v1', v2Drawing);
+  await main([...runArgs, '--approval', approval], f.deps);
+  f.fs['a.md'] = assign('T01', lead, lead.role, lead.unit);
+  await main(reg('T01','a.md','--lead'), f.deps);
+  assert.equal((await main(go('T01'), f.deps)).code, 0);
+  f.fs['m.md'] = assign('M01', member, member.role, member.unit);
+  const args = ['worker','--approval',approval,'--parent','T01','--id','M01','--agent',member.role,
+    '--unit',member.unit,'--spec-file','m.md','--bracket','BL-0012','--does','리뷰'];
+  const checked = preflight(f,'M01');
+  f.fs['m.md'] += '\n추가 통합 검증 조건';
+  assert.equal((await main([...args,...checked], f.deps)).code, 1);
+  const first = await main([...args,...preflight(f,'M01')], f.deps);
+  assert.equal(first.code, 0, JSON.stringify(first.out));
+  assert.equal(first.out.routing.decision, 'reuse');
+  assert.equal((await main([...args,'--retry'], f.deps)).code, 1);
+  f.tasks.get(first.out.task).status = 'failed';
+  const input = { scores: { C: 3, U: 3, R: 2, V: 3, F: 1 }, evidence: { ...evidence, F: '첫 기동에서 확인된 판단 실패' } };
+  for (const ids of [undefined, ['다른-Dispatch'], [first.out.dispatch, first.out.dispatch]]) {
+    assert.equal((await main([...args,'--retry',...preflight(f,'M01',input,ids)], f.deps)).code, 1);
+  }
+  const retry = await main([...args,'--retry',...preflight(f,'M01',input,[first.out.dispatch])], f.deps);
+  assert.equal(retry.code, 0, JSON.stringify(retry.out));
+  assert.equal(retry.out.requested.effort, 'max');
+  assert.equal(val(f.call('worker-start'),'--task'), first.out.task);
+  assert.equal(retry.out.routing.number, 2);
+  assert.deepEqual(retry.out.routing.failureDispatches, [first.out.dispatch]);
+  assert.equal(retry.out.routing.specHash, first.out.routing.specHash);
+});
+
+// A runner or hook failure counts only if a turn started and the coordinator identifies a worker failure.
+await ta(async () => {
+  const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable }, dispatchStatus: 'failed' });
+  const row = node('T01', v2Row());
+  await approve(f, [row], [], 'v1', v2Drawing);
+  await main([...runArgs,'--approval',approval], f.deps);
+  f.fs['a.md'] = assign('T01',row);
+  await main(reg('T01','a.md'), f.deps);
+  const call = f.deps.orca;
+  let i = 0;
+  f.deps.orca = args => {
+    const response = call(args);
+    if (args[1] !== 'worker-start') return response;
+    const receipt = JSON.parse(response.stdout);
+    receipt.result.dispatchId = 'dispatch-' + (++i);
+    if (i === 1) receipt.result.turnStart = 'unobserved';
+    return { stdout: JSON.stringify(receipt) };
+  };
+  const first = await main(go('T01',...preflight(f,'T01')), f.deps);
+  assert.equal(first.out.turnStarted, false);
+  f.tasks.get(first.out.task).status = 'failed';
+  const failure = { scores: { ...v2Input.scores, F: 1 }, evidence: { ...evidence, F: '실행 후 검토에서 수락 조건 누락 확인' } };
+  assert.equal((await main(go('T01','--retry',...preflight(f,'T01',failure,[first.out.dispatch])), f.deps)).code, 1);
+  const second = await main(go('T01','--retry',...preflight(f,'T01',v2Input)), f.deps);
+  assert.equal(second.code, 0);
+  f.tasks.get(first.out.task).status = 'failed';
+  const third = await main(go('T01','--retry',...preflight(f,'T01',failure,[second.out.dispatch])), f.deps);
+  assert.equal(third.code, 0, JSON.stringify(third.out));
+  assert.equal(third.out.routing.assessment.scores.F, 1);
+  f.tasks.get(first.out.task).status = 'failed';
+  assert.equal((await main(go('T01','--retry',...preflight(f,'T01',v2Input)), f.deps)).code, 1);
+  const fourth = await main(go('T01','--retry',...preflight(f,'T01',failure)), f.deps);
+  assert.equal(fourth.code, 0);
+  assert.deepEqual(fourth.out.routing.failureDispatches, [second.out.dispatch]);
+});
+
+// Ambiguous transport results never send a second worker-start. A provider mismatch persists for inspection.
+await ta(async () => {
+  for (const outcome of ['lost','mismatch']) {
+    const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable } });
+    const row = node('T01', v2Row());
+    await approve(f, [row], [], 'v1', v2Drawing);
+    await main([...runArgs, '--approval', approval], f.deps);
+    f.fs['a.md'] = assign('T01', row);
+    await main(reg('T01','a.md'), f.deps);
+    const call = f.deps.orca;
+    f.deps.orca = args => {
+      const response = call(args);
+      if (args[1] !== 'worker-start') return response;
+      assert.equal(f.map().tasks.T01.attempts[0].status, 'starting');
+      if (outcome === 'lost') return { stdout: '' };
+      const receipt = JSON.parse(response.stdout);
+      receipt.result.launch.effective.effort = 'low';
+      return { stdout: JSON.stringify(receipt) };
+    };
+    const start = go('T01', ...preflight(f,'T01'));
+    assert.equal((await main(start, f.deps)).code, 1);
+    assert.equal(f.map().tasks.T01.attempts[0].matched, false);
+    assert.equal((await main(start, f.deps)).code, 1);
+    assert.equal(f.count('worker-start'), 1);
+  }
 });
 
 console.log(`orca-launch.check: ${passed} passed`);

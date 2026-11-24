@@ -59,6 +59,15 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
 - `choices`(선택): 계획 승인 때 사용자가 워커마다 배정을 고르게 한다. 워커 노드 카드 아래에 복잡도 줄(`복잡도 5 (기술 · 도메인 · 불확실성)`, 없으면 `BL 없음 · 모델 표 값`), Claude model/effort `<select>` 하나(모델별 `<optgroup>`, 모든 조합), `codex` 체크박스, 근거 줄(`추천 <값>: <why>`)을 그린다. 기준값 선택지 끝에 `(기준값)`, 추천값에 `(추천)`, 둘이 같으면 `(기준값·추천)`. 처음 선택은 `base`(생략하면 노드의 `model/effort` — codex 노드는 Claude 값의 `base`가 필요하다), 체크박스 처음 상태는 `agent`가 `codex`인지. 체크하면 옆에 `→ <치환 값>`. 기준값과 다른 카드는 노란 바탕이 되고 그림 위 "기준값과 다른 Task" 목록에 든다. `fixed: true` 노드는 값과 `(고정)`만 보인다. 고를 수 있는 노드에 `recommended`·`why`가 없으면 exit 1. 열·행 간격이 선택 칸만큼 늘고 연결선 검사도 선택 칸을 피한다.
 - 선택 저장: 페이지가 Artifact `db` 기능(`await claude.use("db")`)으로 바뀔 때만 `choices/<노드 id>` 문서에 `{model, effort, codex, at}`(Claude 값, `at`은 ms 시각)를 한 번 쓴다. 로드할 때는 쓰지 않고, 저장된 값이 있으면 그 값으로 그린다. db가 없으면 저장되지 않는다고 안내하고 화면에서만 선택을 바꿀 수 있다. 렌더러는 HTML만 만들고, 게시하는 쪽이 `capabilities: {db: {}}`로 게시한다. 저장된 선택은 `ArtifactData`의 `list`(`collection: "choices"`)로 읽는다.
 
+### v2 실행 승인
+
+- 최상위에 `routingVersion: 2`와 프로젝트 모델 표에서 얻은 `choices`를 둔다. 각 실행 노드와 팀원의 `routing`에 `model-routing.mjs`의 평가 결과를 그대로 넣는다. `fixed: true`인 고정 역할은 배정만 표시한다. 사람 승인과 이정표는 배정이 없다.
+- 카드는 최종 C/U/R/V/F, E, Haiku 분류 상태, Claude 기준 추천, 현재 런타임 조합을 보여 준다. 카드 상세에서 각 축의 계획 점수와 근거, 대안과 판정 후 점수, Haiku 사유, 모델 판정 조건, E 계산식을 확인한다. 팀원별 선택과 근거는 그림 아래 **팀 내부 배정**에 있다.
+- **추천 사용 · 기동 직전 재평가**를 고르면 `routing.mode: "auto"`다. **직접 지정** 아래에서 조합을 고르면 추천과 같은 조합도 `"manual"`로 고정한다. Codex를 체크하면 해당 프로젝트 치환표의 실제 모델·effort를 즉시 표시한다. 예를 들어 기본표의 Fable/max는 Codex에서 Astra/ultra다. 런타임은 승인한 값으로 고정한다.
+- 선택 변경 시 DB 문서에 `{model, effort, codex, mode, at, drawing}`을 쓴다. `model/effort`는 Claude 기준값이다. `drawing`은 입력 DAG를 `JSON.stringify`한 UTF-8 문자열의 SHA-256 해시다. 같은 DAG를 다시 열면 해당 그림의 선택만 복원하고, 그림이 바뀌면 새 DAG의 모드와 배정에서 시작한다. 팀원 키는 부모 Task ID·역할·작업 단위를 각각 URL 인코딩하고 각 요소 안의 `~`도 `%7E`로 바꾼 뒤 `~`로 연결한다. 팀원 문서에는 `parentId, role, unit`도 저장한다.
+- **선택 파일 저장**은 현재 그림에서 설정한 항목을 `routing-choices.json`에 `[{id,data}]`로 내보낸다. 추천값 직접 고정과 자동 재평가로 되돌린 선택도 들어간다. 로컬 HTML에서는 창을 닫기 전에 이 파일을 저장한다. DB를 사용하는 Artifact에서는 `ArtifactData list choices`로 같은 선택을 읽을 수 있다.
+- 창구는 선택 파일 또는 DB 결과를 `dag-routing-choices.mjs`로 반영해 노드·팀원 각각의 `routing.mode`, `base`(선택한 Claude 조합), `agent/model/effort`를 검토할 DAG에 기록한다. `recommended`는 평가 결과의 `routing.claude`다. Codex 체크 변경 시 같은 점수를 승인할 런타임으로 치환해 평가 결과에도 반영한다. 사용자가 이 최종 배정과 위임 범위를 승인한 뒤 실행한다.
+
 ## 규칙 (기준 파일에서 추출)
 
 - **캔버스:** 고정 px SVG + `.scroll` 가로 스크롤. 축소해서 화면에 맞추지 않는다. mermaid 같은 자동 맞춤 렌더는 쓰지 않는다.

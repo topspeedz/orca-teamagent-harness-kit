@@ -28,11 +28,11 @@ description: "팀장의 절차. Orca Task spec 첫 줄이 `[역할: <에이전�
    - 병렬 효율 규칙: `.claude/skills/phase-planning/references/parallel-rules.md`
    - 나누는 일이 깊은 설계를 요구할 때만 `planner` 워커에게 계획 문서를 맡긴다(`--agent planner --unit 계획`). 팀장이 직접 기동한 Planner는 같은 팀장에게 분해안을 돌려준다. Planner의 소속은 운영팀이다. 승인된 팀 내부라면 팀장이 배정하고, 범위 변경 또는 다른 팀 배정이면 배정 전에 코디네이터에게 올린다.
 4. **배정.** 부모 spec이 가리키는 승인 버전에서 팀원·Planner의 역할·단위·런타임·모델·effort를 읽고 spec에 배정 줄을 옮긴다. 배정할 엔진의 역할 정의가 OFF이거나 팀장이 꺼졌으면 배정을 보류하고 코디네이터에게 알린다. 승인 범위에 없는 배정은 코디네이터에게 올린다. 현재 프로젝트 모델 표에서 재선택하지 않는다.
-5. **spec 쓰기.** 양식 `docs/harness/templates/spec.md`로 팀 스킬이 정한 지시서 폴더(`_workspace/<팀>/<phase>/spec/`)에 쓴다. `완료 기준`과 `보고` 줄을 반드시 넣는다. 직접 소통 짝이 있는 Task에는 짝과 한도를 적는다(아래 직접 소통).
+5. **spec 쓰기.** 양식 `docs/harness/templates/spec.md`로 팀 스킬이 정한 지시서 폴더(`_workspace/<팀>/<phase>/spec/`)에 쓴다. `완료 기준`과 `보고` 줄을 반드시 넣는다. 직접 소통 짝이 있는 Task에는 짝과 한도를 적는다(아래 직접 소통). 생성 직전에는 해당 팀원 자신의 위임 여부를 확인한다. 자동이면 최종 역할·spec과 승인 근거를 대조해 `coordinator`의 **워커 생성 직전 평가**와 같은 형식으로 평가 파일을 작성한다. 파일의 `id`는 실제로 기동할 자식 Task ID다.
 6. **띄우기.** 팀원 기동은 이 명령만 쓴다. `orca orchestration worker-start`를 직접 부르지 않는다.
 
    ```text
-   node .claude/scripts/orca-launch.mjs worker --agent <에이전트> --unit <작업 단위> --spec-file <spec> --bracket <백로그 ID 또는 phase 이름> --does <하는 일> --approval <부모 spec의 승인 파일> --id <Task ID>
+   node .claude/scripts/orca-launch.mjs worker --agent <에이전트> --unit <작업 단위> --spec-file <spec> --bracket <백로그 ID 또는 phase 이름> --does <하는 일> --approval <부모 spec의 승인 파일> --id <Task ID> [--assessment <이번 시도의 평가.json>]
    ```
 
    승인된 부모 안에서 새로 나눈 Task는 `--parent <승인 부모 ID>`도 넘긴다. 스크립트가 spec의 배정을 승인된 Task 또는 부모의 `members`와 대조한다. 팀장은 `register`를 쓰지 않는다. Orca에 Task를 등록하고 조회하는 일은 Run을 가진 코디네이터만 할 수 있어서, 팀 안의 순서는 팀장이 지킨다. 의존이 없는 Task는 한 번에 띄운다. **동시 워커는 4명 이하다.** `worker_done`을 정산할 때마다 의존이 모두 끝난 Task를 빈 자리만큼 바로 띄운다.
