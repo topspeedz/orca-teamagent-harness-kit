@@ -17,7 +17,7 @@ UTF-8 JSON. 시각은 모두 오프셋 포함 ISO(`2026-10-31T11:20+09:00`). 화
 
 ## from-orca
 
-이 변환기는 Orca Task의 생성 시각(`created_at`)을 막대 시작으로 쓴다. 하네스에서 Task를 미리 등록하면 워커 기동 전 대기 시간도 막대에 포함된다. 종료된 작업의 실제 워커 기동 시각은 하네스의 `orca-launch.mjs actual` 결과에서 확인할 수 있다.
+막대 시작은 이 순서로 정한다. ① `--map` 항목에 `orca-launch.mjs`가 적은 실제 기동 시각(`okStarted`, 없으면 `started`). ② 없으면 Task가 준비된 시각 — 선행 Task의 가장 늦은 완료 시각(생성 시각보다 이르지 않게). 첫 팀원이 그보다 먼저 생성됐으면 그 시각. ③ 팀원 Task(`parent_id` 있음)는 생성 시각(`created_at`). 하네스가 Run 시작 때 계획 Task를 한꺼번에 등록해도 막대가 등록 시각부터 늘어지지 않는다. 팀원 행 이름은 spec 첫 줄이 `[역할: …]`뿐이면 `display_name`의 작업 번호와 할 일로 짓는다(`(BL-…)`은 계획 Task와 다시 맞물리지 않게 뺀다).
 
 `scripts/from-orca.mjs`가 위 JSON을 만든다. `--plan`은 선택 — 없으면(다른 창구의 Run 등) Orca 실측 막대만 만들고 예상 막대는 `--patch`의 `tasks`로 받는다. 역할(`[역할: …]`)이 없는 Orca Task는 빼고, 목록은 `task-list --full`로 읽는다(요약 보기에는 spec·완료 시각이 없다). 입력: `--run`(쉼표로 리더 child Run을 함께 — 부모 task-list엔 child Run Task가 없다, 또는 저장한 task-list JSON `--tasks`), `--plan`(예측 입력 형식 또는 PM `lane` 형식 — `id`·`deps`·`kind`·`estimate.likely`·`bl`), 선택 `--map <orca-tasks.json>`·`--ledger`·`--now`·`--slots`(기본 계획 `maxWorkers`, 없으면 3)·`--title`·`--dag`·`--patch`.
 

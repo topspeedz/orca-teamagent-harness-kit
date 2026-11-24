@@ -233,6 +233,23 @@ export function render(input, actual = []) {
   });
   if (!lanes.some(l => l.tone === 'harness')) fail('a harness lane (tone "harness") is required');
   if (notes.length < 3 || notes.length > 4) fail(`notes: 3-4 cards required, got ${notes.length}`);
+  // Verification → fix rounds: label their edges, badge the fix/recheck cards, and list below who ran each round.
+  const rounds = spec.rounds ?? [];
+  const listOf = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const roundOf = new Map();
+  for (const r of rounds) {
+    if (!Number.isInteger(r.n) || r.n < 1) fail('rounds: n must be a positive integer');
+    if (!listOf(r.verify).length || !listOf(r.fix).length) fail(`rounds ${r.n}: verify and fix are required`);
+    for (const id of [...listOf(r.verify), ...listOf(r.fix), ...listOf(r.recheck)]) if (!nodeIds.has(id)) fail(`rounds ${r.n}: unknown node ${id}`);
+    for (const id of listOf(r.fix)) roundOf.set(id, `${r.n}회차`);
+    for (const id of listOf(r.recheck)) roundOf.set(id, `${r.n}회차 재검`);
+    for (const e of edges) {
+      if (e.label) continue;
+      if (listOf(r.verify).includes(e.from) && listOf(r.fix).includes(e.to)) e.label = `수정 ${r.n}회차`;
+      else if (listOf(r.fix).includes(e.from) && listOf(r.recheck).includes(e.to)) e.label = `재검 ${r.n}회차`;
+    }
+  }
 
   const laneById = new Map(lanes.map(l => [l.id, l]));
   const ents = new Map();
@@ -419,12 +436,37 @@ export function render(input, actual = []) {
       // Backlog number: diagonal tag centred on the top-left corner.
       + (n.bl ? `<g class="tag" transform="translate(${n.x} ${n.y}) rotate(-35)"><rect x="-30" y="-8" width="60" height="16" rx="3" style="fill:var(--${tone}-s)"/><text x="0" y="4" text-anchor="middle">${esc(n.bl)}</text></g>` : '')
       + (AGENT[n.agent] ? agentTag(n) : '')
+      + (roundOf.has(n.id) ? `<g class="tag" transform="translate(${n.x + 8} ${n.y + n.h})"><rect x="0" y="-8" width="64" height="16" rx="3" style="fill:var(--verify-s)"/><text x="32" y="4" text-anchor="middle">${esc(roundOf.get(n.id))}</text></g>` : '')
       + '</g>'
       // outside the card group, so a waiting card's dimming does not dim the pick
       + (n.pick ? `<foreignObject x="${n.x}" y="${n.y + n.h + 12}" width="${n.w}" height="${ph - 12}">${pickForm(n, choices, n.id)}</foreignObject>` : ''));
   }
   out.push('</g></svg></div>');
-  const leads = nodes.filter(n => n.members?.length);
+  // Team members and rounds go into each card's hover preview (node-data `hover`), not below the figure.
+  // The member section below stays only when `choices` draws member picks that need a form.
+  const pairText = x => [x.agent, [x.model, x.effort].filter(Boolean).join('/')].filter(Boolean).join(' ') || '배정 없음';
+  const stText = { done: '완료', run: '진행', wait: '대기', failed: '실패' };
+  const memberLine = m => `· ${[m.id, [m.role, m.unit].filter(Boolean).join(' / ')].filter(Boolean).join(' ')} — ${pairText(m)}`
+    + (m.status && m.status !== 'done' ? ` (${stText[m.status] ?? m.status})` : '') + (m.fixed ? ' (고정)' : '') + (m.overrideReason ? ` · 사용자 예외 ${m.overrideReason}` : '');
+  const byNode = new Map(nodes.map(n => [n.id, n]));
+  const fixCompare = rounds.length > 1 ? (() => {
+    const pairs = rounds.map(r => `${r.n}회차 ${listOf(r.fix).map(id => pairText(byNode.get(id))).join(', ')}`);
+    const same = new Set(rounds.flatMap(r => listOf(r.fix).map(id => pairText(byNode.get(id))))).size === 1;
+    return `수정 배정 비교: ${pairs.join(' · ')} — ${same ? '모든 회차가 같다' : '회차마다 다르다'}`;
+  })() : null;
+  const hover = nodes.map(n => {
+    const lines = [];
+    for (const r of rounds) {
+      const as = [['검증', r.verify], ['수정', r.fix], ['재검', r.recheck]].filter(([, v]) => listOf(v).includes(n.id)).map(([k]) => k);
+      if (!as.length) continue;
+      lines.push(`${r.n}회차 ${as.join('·')}${r.title ? ' · ' + r.title : ''} — ${pairText(n)}`);
+      if (r.note && as.includes('수정')) lines.push(r.note);
+      if (fixCompare && as.includes('수정')) lines.push(fixCompare);
+    }
+    if (n.members?.length) lines.push('팀원', ...n.members.map(memberLine));
+    return lines;
+  });
+  const leads = choices ? nodes.filter(n => n.members?.length) : [];
   if (leads.length) {
     out.push('<section class="notes" aria-label="팀 내부 배정">');
     for (const n of leads) {
@@ -447,7 +489,7 @@ export function render(input, actual = []) {
   for (const [i, n] of nodes.entries()) if (n.routing && !n.fixed) out.push(`<template id="routing-${i}">${routingRows(n.routing)}</template>`);
   out.push('<button id="node-preview" type="button" tabindex="-1" hidden><strong></strong><span></span></button>',
     '<dialog id="node-dialog" aria-labelledby="node-heading"><header><h2 id="node-heading"></h2><button type="button" autofocus>닫기</button></header><dl></dl></dialog>',
-    `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, executionTimes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns }).replaceAll('<', '\\u003c')}</script>`,
+    `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, executionTimes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns, ...(hover.some(l => l.length) ? { hover } : {}) }).replaceAll('<', '\\u003c')}</script>`,
     `<script>${readFileSync(join(HERE, 'node-details.js'), 'utf8').replace(/\r\n/g, '\n')}</script>`);
   // '<' escaped so no value can close the script
   if (choices) out.push(`<script>${PICK_JS.replace('__DRAWING__', () => JSON.stringify(drawing)).replace('__CX__', () => JSON.stringify(choices.codex).replaceAll('<', '\\u003c'))}</script>`);
@@ -476,8 +518,10 @@ function selfTest() {
     { role: 'code-reviewer', unit: '코드 <리뷰>', agent: 'codex', model: 'review-model', effort: null },
   ] });
   const page = render(review).html; // existing edges enter and leave t1; pm → t1 is the approval gate
-  for (const v of ['실행 승인', 't1 · 팀 내부 배정', 'planner / 내부 분해 · claude opus · effort high',
-    'code-reviewer / 코드 &lt;리뷰&gt; · codex review-model · effort 없음']) {
+  // members go to the hover preview data, not a section below (no choices here)
+  if (page.includes('팀 내부 배정</b>')) fail('팀장 DAG: 팀 내부 배정 칸이 아래에 남음');
+  for (const v of ['실행 승인', '"팀원"', '· planner / 내부 분해 — claude opus/high',
+    '· code-reviewer / 코드 \\u003c리뷰> — codex review-model']) {
     if (!page.includes(v)) fail('팀장 DAG에 누락: ' + v);
   }
   if (render(load('reference.json')).html !== readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').replace(/\r\n/g, '\n')) fail('reference output changed');
@@ -531,7 +575,16 @@ function selfTest() {
   try { render(v2); fail('self-test: unassessed v2 team member accepted'); } catch (err) {
     if (!err.message.includes('requires routing')) throw err;
   }
-  console.log('self-test ok: reference counts match, crossing edge rejected, output without choices unchanged, choices picks and marks drawn');
+  // rounds: edge labels, card badges and the per-round assignment section.
+  const rs = load('reference.json');
+  rs.nodes.find(n => n.id === 't3').members = [{ id: 't3-1', role: 'engineer', agent: 'claude', model: 'opus', effort: 'high', status: 'failed' }];
+  rs.rounds = [{ n: 1, verify: 'pm', fix: 't1', recheck: 't3' }, { n: 2, verify: ['t2'], fix: 't5' }];
+  const rh = render(rs).html;
+  for (const v of ['>수정 1회차<', '>재검 1회차<', '>수정 2회차<', '>1회차<', '>1회차 재검<', '"1회차 검증 — claude opus/medium"',
+    '"· t3-1 engineer — claude opus/high (실패)"', '수정 배정 비교: ', '회차마다 다르다']) if (!rh.includes(v)) fail(`self-test: rounds missing ${v}`);
+  let rmsg = ''; try { render({ ...rs, rounds: [{ n: 1, verify: 'nope', fix: 't1' }] }); } catch (err) { rmsg = err.message; }
+  if (!/unknown node nope/.test(rmsg)) fail('self-test: rounds should reject unknown node');
+  console.log('self-test ok: reference counts match, crossing edge rejected, output without choices unchanged, choices picks and marks drawn, rounds labelled and listed');
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

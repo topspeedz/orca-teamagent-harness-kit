@@ -67,4 +67,13 @@ console.log('PASS: merge stage prefix, waits kept');
 // No plan: measured rows only + patch.tasks (✋ gates, remaining estimates).
 {const np=fromOrca({orcaTasks:[{id:'task_x',status:'completed',created_at:'2026-11-08 00:00:00',completed_at:'2026-11-08T00:10:00Z',spec:'[역할: docs-curator] 수집 A'}],now:Date.parse('2026-11-08T00:20:00Z'),title:'np',patch:{tasks:[{title:'✋ 승인',lane:'coord',status:'done',start:'2026-11-07T23:50+00:00',end:'2026-11-07T23:55+00:00'}]}});
 assert(np.tasks.length===2 && np.tasks[0].title==='✋ 승인' && np.tasks[1].status==='done'); renderProgress(np);}
+// Tasks registered all at once: start = latest dep completion (not created_at); member rows named from display_name.
+{const t0='2026-11-08 00:00:00';const rs=fromOrca({orcaTasks:[
+ {id:'task_a',status:'completed',created_at:t0,completed_at:'2026-11-08T00:10:00Z',deps:'[]',spec:'[역할: qa-inspector] A'},
+ {id:'task_b',status:'completed',created_at:t0,completed_at:'2026-11-08T00:30:00Z',deps:'["task_a"]',spec:'[역할: qa-inspector] B'},
+ {id:'task_c',parent_id:'task_b',status:'completed',created_at:'2026-11-08 00:12:00',completed_at:'2026-11-08T00:20:00Z',spec:'[역할: unity-gameplay-engineer]\nTask: B-1',display_name:'[unity-gameplay-engineer - B-1] 칩 고침 (BL-0001,BL-...'}],
+ now:Date.parse('2026-11-08T00:40:00Z'),title:'rs'});
+const row=(re)=>rs.tasks.find((t)=>re.test(t.title));
+assert.equal(row(/^B \(/).start,'2026-11-08T09:10+09:00'); assert.equal(row(/^A \(/).start,'2026-11-08T09:00+09:00');
+assert.equal(row(/B-1/).title,'B-1 칩 고침 (unity-gameplay-engineer)'); assert.equal(row(/B-1/).start,'2026-11-08T09:12+09:00'); renderProgress(rs);}
 console.log('PASS: from-orca measured/ledger/rework/leader/approval/scheduling');

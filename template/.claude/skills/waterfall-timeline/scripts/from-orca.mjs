@@ -27,7 +27,7 @@ const bls = (text) => [...String(text).matchAll(/BL-(\d{4})(?:~(\d{4}))?/g)].fla
 export const ledgerMap = (md) => Object.fromEntries([...String(md).matchAll(/^\|\s*([\w-]+)\s*\|.*?\b(task_[0-9a-f]+)/gm)].map(([, id, task]) => [task, id]));
 
 export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), slots: slotCount, title, dag, patch = {}, ledger = {}, map, off = 540 }) {
-  const mapped = new Map(), retired = new Set();
+  const mapped = new Map(), retired = new Set(), launched = new Map();
   if (map) {
     assert(map.run && map.tasks && (!plan.run || plan.run === map.run), '계획과 대응표의 Run 확인 필요');
     for (const [id, entry] of [...Object.entries(map.tasks), ...Object.entries(map.direct ?? {})]) {
@@ -35,6 +35,9 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
       if (actual) {
         assert(!mapped.has(actual), '중복 Orca Task ID: ' + actual);
         mapped.set(actual, id);
+        // orca-launch.mjs records the real worker launch (a retried Task: its first successful one).
+        const st = entry.okStarted ?? entry.started;
+        if (st) launched.set(actual, utc(st));
       }
       for (const old of entry.previous ?? []) retired.add(old.orca);
     }
@@ -50,11 +53,27 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
   const rows = [], end = {}, start = {};
   // Match each non-leader Orca task to one plan task by its BL or plan ID in the spec head.
   const leaders = [];
+  // Plan Tasks are often registered all at once when the Run starts, so created_at is not when work began.
+  // Start = recorded launch; else when it became ready (latest dep completion, not before created_at),
+  // pulled back to its first child's creation if a member was launched earlier. Member Tasks keep created_at.
+  const byOid = new Map(orcaTasks.map((o) => [o.id, o]));
+  const firstChild = new Map();
+  for (const o of orcaTasks) if (o.parent_id) firstChild.set(o.parent_id, Math.min(firstChild.get(o.parent_id) ?? Infinity, utc(o.created_at)));
+  const startOfTask = (o) => {
+    if (launched.has(o.id)) return launched.get(o.id);
+    let s = utc(o.created_at);
+    if (o.parent_id) return s;
+    let deps = []; try { deps = Array.isArray(o.deps) ? o.deps : JSON.parse(o.deps || '[]'); } catch { deps = []; }
+    for (const d of deps) { const e = utc(byOid.get(d)?.completed_at); if (e && e > s) s = e; }
+    return Math.min(s, firstChild.get(o.id) ?? Infinity);
+  };
+  // Member spec heads are often just "[역할: X]"; name the row from display_name "[X - U02-M1] 할 일 (BL-…)".
+  const memberName = (dn) => { const id = /- ([^\]]+)\]/.exec(dn ?? '')?.[1]; const rest = String(dn ?? '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s*\(BL-.*$/, '').trim(); return [id, rest].filter(Boolean).join(' '); };
   for (const o of orcaTasks) {
     if (retired.has(o.id)) continue;
     // A failed dispatch puts its Task back to `ready` with no completed_at — not running work (VA1·VA2 2026-10-31 drew as run).
     if (!o.completed_at && o.status && o.status !== 'dispatched') continue;
-    const s = utc(o.created_at), e = utc(o.completed_at), h = head(o.spec);
+    const s = startOfTask(o), e = utc(o.completed_at), h = head(o.spec);
     const exact = mapped.get(o.id);
     if (isLead(o.spec)) { leaders.push({ o, s, e, planTask: byId[exact], members: new Set(bls(h)) }); continue; }
     const hit = exact ? (byId[exact] ? [byId[exact]] : []) : ledger[o.id] && byId[ledger[o.id]] ? [byId[ledger[o.id]]]
@@ -69,7 +88,7 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     } else {
       const r = role(o.spec);
       if (!r) continue; // not a role Task (e.g. a stray "You have new orchestration messages" entry)
-      rows.push({ id: o.id, title: strip(h) + (r ? ` (${r})` : ''), lane: ROLE_LANE.find(([re]) => re.test(r))?.[1] ?? 'coord', status: e ? 'done' : 'run', s, e: e ?? now, deps: [] });
+      rows.push({ id: o.id, title: (strip(h) || memberName(o.display_name)) + (r ? ` (${r})` : ''), lane: ROLE_LANE.find(([re]) => re.test(r))?.[1] ?? 'coord', status: e ? 'done' : 'run', s, e: e ?? now, deps: [] });
     }
   }
   // Leaders: coord rows; still running → end = max(now + 10 min, members' ends). Tasks fed by a running bundle also wait for its report.
