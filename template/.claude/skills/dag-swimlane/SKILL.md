@@ -41,7 +41,8 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
               "agent": "claude|codex", "model": "opus", "effort": "low|medium|high|xhigh|max" }],
   "groups": [{ "id": "verify-all", "nodes": ["dr", "cr", "qa"] }],   // 병렬 검증 묶음 → 점선 상자, 연결의 끝점이 될 수 있다
   "edges": [{ "from": "t1", "to": "t2", "label": "High 이상", "loop": true, "merge": true }],
-  "notes": [{ "title": "신뢰 HTML", "body": "신뢰 HTML" }]          // 3~4개
+  "notes": [{ "title": "신뢰 HTML", "body": "신뢰 HTML" }]          // 3~4개,
+  "rounds": [{ "n": 1, "title": "중간", "verify": ["q3", "r1"], "fix": "f1", "recheck": "q8", "note": "글" }]  // 선택: 검증→수정 회차
 }
 ```
 
@@ -52,6 +53,8 @@ description: "다중 워커 작업 DAG(Orca 등)를 팀 스윔레인 SVG Artifac
 - 노드 상세의 실행 시간은 입력 DAG와 같은 폴더의 `actual.json`에서 Task ID가 일치하는 `start`·`end`의 차이를 표시한다. 진행 중이면 기록된 시작부터 그림 생성 시점까지의 경과를 표시한다. 시작 전이나 실측 기록이 없는 경우에는 그 상태를 표시한다.
 - 실행 승인용 DAG는 각 워커 노드에 `role`(역할명)·`unit`(작업 단위)·`bl`을 적는다. `agent`는 런타임이다. effort가 없는 배정은 null을 쓴다. 팀장에게 허용한 내부 분해의 역할·단위·런타임·모델·effort는 부모 노드의 `members`에 같은 필드명으로 명시하고 승인 화면에도 싣는다. 사람 승인 노드는 `kind: "approval"`로, 워커 없는 이정표는 `kind: "milestone"`으로 표시하고 배정 필드를 생략한다. 각 실행 BL은 `BL-####` 형식이며 복수이면 배열 또는 쉼표로 나열한다. `edges`는 선행 입력, `loop`는 재검 경로다.
 - `agent`·`model`·`effort`: 카드 아래 테두리 오른쪽에 걸친 아이콘 태그(✳ Claude / ◎ Codex + effort 작은 글씨 L/M/H/XH/MAX). 모델명은 툴팁. gate처럼 워커가 없으면 생략.
+- `members`(팀원)는 그림 아래 칸이 아니라 카드 미리보기의 `팀원` 목록(`id`·역할/단위 — `agent model/effort`, 완료가 아니면 상태)으로 보인다. 아래 **팀 내부 배정** 칸은 `choices`로 팀원 선택 칸을 그릴 때만 나온다.
+- `rounds`(선택): 검증 → 수정(→ 재검) 회차. `verify`·`fix`·`recheck`는 노드 id 하나 또는 배열, `n`은 1부터. 렌더러가 라벨 없는 해당 연결에 `수정 N회차`·`재검 N회차`를 붙이고, 수정·재검 카드 왼쪽 아래에 `N회차` 태그를 그리고, 카드에 마우스를 올리면 펼쳐지는 미리보기에 그 카드의 회차 역할(`N회차 검증·수정·재검`)과 `agent model/effort`를 적는다. 수정 카드에는 `note`와, 회차가 둘 이상이면 수정 배정이 회차마다 같았는지 비교한 줄을 더한다. 팀원 배정은 승인 값이 아니라 실제 기동 값(spec의 `배정:` 줄이나 기동 영수증)을 넣는다. 없는 노드 id면 exit 1. 하네스 실행 중이면 수정 루프가 돌 때마다 회차를 더해 재게시한다.
 - `write: true`: 외부 데이터(운영 DB·커머스 API 등)를 쓰는 Task. 경고색 굵은 테두리 + 보조 줄 경고색. 메모 카드 하나를 범례로 쓴다(`<span class="key"></span>`).
 - `loop: true`: 앞 열로 되돌아가는 연결(재검 등) — 점선, 출발 노드 아래(또는 위) 가운데에서 내려가 대상 오른쪽으로 들어간다.
 - `merge: true`: 멀리서 합류하는 연결 — 출발 행을 따라 대상 열 가운데까지 간 뒤 대상 위(또는 아래)로 들어간다.
