@@ -2,7 +2,7 @@
 // DAG swimlane spec (JSON) -> fixed-px SVG artifact page in the format of assets/reference.html. Node built-ins only.
 // Usage: node render.mjs <spec.json> <out.html>   |   node render.mjs --self-test
 // Exit 1 on invalid spec or when any edge passes through a node rectangle.
-import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -201,7 +201,22 @@ const PICK_JS = `(async () => {
   }
 })();`;
 
-export function render(input) {
+function executionTime(node, record, now) {
+  if (!record) return node.status === 'wait' ? '시작 전' : '기록 없음';
+  const start = Date.parse(record.start);
+  const running = !record.end && node.status === 'run' && (!record.status || ['run', 'running'].includes(record.status));
+  const end = running ? now : Date.parse(record.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '기록 없음';
+  const seconds = Math.floor((end - start) / 1000);
+  const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
+  const duration = [hours && hours + '시간', minutes && minutes + '분', (seconds % 60) + '초'].filter(Boolean).join(' ');
+  return running ? duration + ' (진행 중 · 그림 생성 시점)' : duration;
+}
+
+export function render(input, actual = []) {
+  const timings = new Map(actual.map(row => [row.id, row]));
+  const now = Date.now();
+  const executionTimes = input.nodes?.map(n => executionTime(n, timings.get(n.id), now));
   const spec = structuredClone(input);
   const { columns, lanes, nodes, edges = [], groups = [], notes = [] } = spec;
   const choices = spec.choices;
@@ -432,7 +447,7 @@ export function render(input) {
   for (const [i, n] of nodes.entries()) if (n.routing && !n.fixed) out.push(`<template id="routing-${i}">${routingRows(n.routing)}</template>`);
   out.push('<button id="node-preview" type="button" tabindex="-1" hidden><strong></strong><span></span></button>',
     '<dialog id="node-dialog" aria-labelledby="node-heading"><header><h2 id="node-heading"></h2><button type="button" autofocus>닫기</button></header><dl></dl></dialog>',
-    `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns }).replaceAll('<', '\\u003c')}</script>`,
+    `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, executionTimes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns }).replaceAll('<', '\\u003c')}</script>`,
     `<script>${readFileSync(join(HERE, 'node-details.js'), 'utf8').replace(/\r\n/g, '\n')}</script>`);
   // '<' escaped so no value can close the script
   if (choices) out.push(`<script>${PICK_JS.replace('__DRAWING__', () => JSON.stringify(drawing)).replace('__CX__', () => JSON.stringify(choices.codex).replaceAll('<', '\\u003c'))}</script>`);
@@ -440,6 +455,11 @@ export function render(input) {
 }
 
 function selfTest() {
+  const started = { start: '2026-11-22T09:41:03Z' };
+  const end = '2026-11-22T09:43:18Z';
+  if (executionTime({ status: 'done' }, { ...started, end }) !== '2분 15초' ||
+      executionTime({ status: 'run' }, started, Date.parse(end)) !== '2분 15초 (진행 중 · 그림 생성 시점)' ||
+      executionTime({ status: 'done' }, started) !== '기록 없음' || executionTime({ status: 'wait' }) !== '시작 전') fail('execution time mismatch');
   const load = f => JSON.parse(readFileSync(join(HERE, '..', 'examples', f), 'utf8'));
   const { counts } = render(load('reference.json'));
   const want = { lanes: 5, columns: 9, nodes: 16, edges: 20, groups: 1 }; // counted in assets/reference.html
@@ -520,7 +540,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.a
     if (a === '--self-test') selfTest();
     else {
       if (!a || !b) fail('usage: node render.mjs <spec.json> <out.html> | --self-test');
-      const { html, counts } = render(JSON.parse(readFileSync(a, 'utf8')));
+      const timesPath = join(dirname(a), 'actual.json');
+      const actual = existsSync(timesPath) ? JSON.parse(readFileSync(timesPath, 'utf8').replace(/^\uFEFF/, '')) : [];
+      const { html, counts } = render(JSON.parse(readFileSync(a, 'utf8')), actual);
       writeFileSync(b, html);
       console.log(`wrote ${b}: ${Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
     }

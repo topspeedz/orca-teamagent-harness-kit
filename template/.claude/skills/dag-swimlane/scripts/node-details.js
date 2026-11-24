@@ -1,6 +1,6 @@
 // Runs inside the standalone DAG page.
 (() => {
-  const { nodes, edges = [], groups = [], lanes, columns } = JSON.parse(document.getElementById('node-data').textContent);
+  const { nodes, executionTimes, edges = [], groups = [], lanes, columns } = JSON.parse(document.getElementById('node-data').textContent);
   const cards = document.querySelectorAll('.n[data-index]');
   const preview = document.getElementById('node-preview');
   const dialog = document.getElementById('node-dialog');
@@ -30,6 +30,7 @@
     const node = nodes[card.dataset.index];
     dialog.querySelector('h2').textContent = node.title;
     fields.replaceChildren();
+    add('실행 시간', executionTimes[card.dataset.index]);
     for (const [key, value] of Object.entries(node)) {
       if (key === 'title') continue;
       if (key === 'routing') {
