@@ -32,6 +32,11 @@
     fields.replaceChildren();
     for (const [key, value] of Object.entries(node)) {
       if (key === 'title') continue;
+      if (key === 'routing') {
+        const template = document.getElementById('routing-' + card.dataset.index);
+        if (template) fields.append(template.content.cloneNode(true));
+        continue;
+      }
       let display = value;
       if (key === 'lane') display = lanes.find(l => l.id === value)?.name + ' (' + value + ')';
       if (key === 'col') display = columns[value] + ' (' + value + ')';
@@ -41,7 +46,12 @@
     const pick = card.nextElementSibling?.querySelector('.pick[data-node]');
     if (pick) {
       const selected = pick.querySelector('select').value;
-      add('현재 선택', pick.querySelector('input').checked ? 'Codex · ' + selected + ' ' + pick.querySelector('.cx').textContent : 'Claude · ' + selected);
+      if (pick.dataset.recommended) {
+        add('배정 방식', selected ? '직접 지정 · 기동 시 고정' : '추천 사용 · 기동 직전 재평가 허용');
+        add('현재 선택', pick.querySelector('.cx').textContent);
+      } else {
+        add('현재 선택', pick.querySelector('input').checked ? 'Codex · ' + selected + ' ' + pick.querySelector('.cx').textContent : 'Claude · ' + selected);
+      }
     }
     const groupIds = groups.filter(g => g.nodes.includes(node.id)).map(g => g.id);
     if (groupIds.length) add('소속 그룹', groupIds.join(', '));

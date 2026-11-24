@@ -3,6 +3,7 @@
 // Usage: node render.mjs <spec.json> <out.html>   |   node render.mjs --self-test
 // Exit 1 on invalid spec or when any edge passes through a node rectangle.
 import { readFileSync, writeFileSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -22,7 +23,7 @@ const TONE_MEANING = {
 };
 
 const AGENT = { claude: { glyph: '✳', name: 'Claude' }, codex: { glyph: '◎', name: 'Codex' } };
-const EFFORT = { low: 'L', medium: 'M', high: 'H', xhigh: 'XH', max: 'MAX' };
+const EFFORT = { low: 'L', medium: 'M', high: 'H', xhigh: 'XH', max: 'MAX', ultra: 'UL' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fail = msg => { throw new Error(msg); };
 const num = v => +v.toFixed(1);
@@ -56,75 +57,147 @@ function labelAt(r) {
 // Bottom-right tag: platform glyph + small effort abbreviation (L/M/H/XH/MAX); model in the tooltip.
 function agentTag(n) {
   const a = AGENT[n.agent], ef = EFFORT[n.effort] ?? '', x = n.x + n.w - 56, y = n.y + n.h - 8;
-  return `<g class="ag ${n.agent}"><title>${esc(`${a.name} · ${n.model ?? '?'} · effort ${n.effort ?? '?'}`)}</title><rect class="bg" x="${x}" y="${y}" width="${ef ? 50 : 22}" height="16" rx="3"/><text x="${x + 11}" y="${y + 12}" text-anchor="middle">${a.glyph}</text>${ef ? `<text class="ef" x="${x + 34}" y="${y + 12}" text-anchor="middle">${ef}</text>` : ''}</g>`;
+  return `<g class="ag ${n.agent}"><title>${esc(`${a.name} · ${n.model ?? '?'} · effort ${n.effort ?? '?'}`)}</title><rect class="bg" x="${x}" y="${y}" width="${ef ? 50 : 22}" height="16" rx="3"/><text x="${x + 11}" y="${y + 12}" text-anchor="middle">${a.glyph}</text>${ef || n.routing ? `<text class="ef" x="${x + 34}" y="${y + 12}" text-anchor="middle">${ef}</text>` : ''}</g>`;
 }
 
 // Approval pick under a worker card (only when the spec has `choices`): complexity line, one Claude model/effort <select>,
 // a codex checkbox with its substitution, and the recommendation's reason. A `fixed` node shows its value instead.
 const pairOf = (model, effort) => (effort ? `${model}/${effort}` : model);
-function pickBox(n, choices) {
-  const open = `<foreignObject x="${n.x}" y="${n.y + n.h + 12}" width="${n.w}" height="${PICK_H - 12}"><div xmlns="http://www.w3.org/1999/xhtml" class="pick${n.fixed ? ' fixed' : ''}"`;
-  if (n.fixed) return `${open}><div class="fx">${esc(pairOf(n.model, n.effort))} (고정)</div></div></foreignObject>`;
+const axes = { C: '구조 복잡도', U: '불확실성', R: '실패 영향', V: '검증 난도', F: '누적 실패' };
+const haikuLabels = { clear: '모호한 축 없음', 'same-route': '후보 배정이 같아 생략', classified: '경계 점수 판정', fallback: '호출 실패 · 기본 점수 사용' };
+const scoreLine = r => Object.keys(axes).map(k => k + r.scores[k]).join(' ') + ' · E' + r.E;
+function routingRows(r) {
+  const { C, U, V, F } = r.scores;
+  const rows = Object.entries(axes).map(([k, name]) => {
+    const initial = r.input.scores[k], final = r.scores[k];
+    const alternatives = (r.input.ambiguities ?? []).filter(a => a.axis === k).map(a => `대안 ${a.value} · ${a.evidence}`);
+    return [`${k} ${name}`, [`${initial}점 · ${r.input.evidence[k]}`, ...alternatives, ...(alternatives.length ? [`최종 ${final}점`] : [])].join('\n')];
+  });
+  const rule = { haiku: 'C=0, R≤1, V=0, U≤1, F=0', fable: 'C=3, R=3', opus: 'C=3 또는 R=3 또는 C≥2이면서 R≥2', sonnet: 'Haiku·Fable·Opus 조건 밖' };
+  rows.push(['Haiku 분류', [haikuLabels[r.haiku.status], r.haiku.reason].filter(Boolean).join(' · ')],
+    ['모델 판정', r.claude.split('/')[0] + ' · ' + rule[r.claude.split('/')[0]]],
+    ['effort 점수', `2×U(${U}) + V(${V}) + F(${F}) + ${C === 3 ? '2 (C=3)' : '0 (C<3)'} = ${r.E}`],
+    ['라우터 추천', r.claude + ' → ' + AGENT[r.runtime].name + ' · ' + pairOf(r.model, r.effort)]);
+  return rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+}
+// Member choices survive reordering within a team. The launch record identifies them by parent, role and unit.
+const memberKey = (id, m) => [id, m.role, m.unit].map(k => encodeURIComponent(k).replaceAll('~', '%7E')).join('~');
+function pickForm(n, choices, id, parent) {
+  const open = `<div xmlns="http://www.w3.org/1999/xhtml" class="pick${n.fixed ? ' fixed' : ''}"`;
+  if (n.fixed) return `${open}><div class="fx">${esc(pairOf(n.model, n.effort))} (고정)</div></div>`;
+  const r = n.routing, defaultPair = r ? (r.mode === 'manual' ? n.base : '') : n.base;
   const mark = p => [p === n.base && '기준값', p === n.recommended && '추천'].filter(Boolean).join('·');
-  const groups = Object.entries(choices.claude).map(([m, efforts]) => `<optgroup label="${esc(m)}">${(efforts.length ? efforts : [null]).map(e => {
-    const p = pairOf(m, e), k = mark(p);
-    return `<option value="${esc(p)}"${p === n.base ? ' selected' : ''}>${esc(p)}${k ? ` (${k})` : ''}</option>`;
+  const groups = Object.entries(choices.claude).map(([m, efforts]) => `<optgroup label="${r ? '직접 지정 · ' : ''}${esc(m)}">${(efforts.length ? efforts : [null]).map(e => {
+    const p = pairOf(m, e), k = r ? (p === n.recommended ? '추천값 고정' : '') : mark(p);
+    return `<option value="${esc(p)}"${p === defaultPair ? ' selected' : ''}>${esc(p)}${k ? ` (${k})` : ''}</option>`;
   }).join('')}</optgroup>`).join('');
   const codex = n.agent === 'codex';
+  const attrs = `data-node="${esc(id)}" data-base="${esc(n.base)}" data-codex="${codex}"`;
+  if (r) {
+    const member = parent ? ` data-parent="${esc(parent)}" data-role="${esc(n.role)}" data-unit="${esc(n.unit)}"` : '';
+    const title = parent ? parent + ' · ' + n.role + ' · ' + n.unit : n.title;
+    return `${open} ${attrs} data-recommended="${esc(n.recommended)}"${member}><div class="cplx">${esc(scoreLine(r))}</div>`
+      + `<div>Haiku · ${esc(haikuLabels[r.haiku.status])}</div><div>추천 <b>${esc(n.recommended)}</b></div>`
+      + `<select aria-label="${esc(title)} 배정" disabled=""><option value=""${defaultPair === '' ? ' selected' : ''}>추천 사용 · 기동 직전 재평가</option>${groups}</select>`
+      + `<label><input type="checkbox"${codex ? ' checked=""' : ''} disabled=""/> ${Object.keys(choices.codex).length ? 'Codex로 실행' : 'Codex 치환표 없음'}</label><div class="cx"></div></div>`;
+  }
   const cx = n.complexity != null ? `복잡도 ${n.complexity}${n.dims ? ` (${n.dims})` : ''}` : 'BL 없음 · 모델 표 값';
   const why = `추천 ${n.recommended}: ${n.why}`;
-  return `${open} data-node="${esc(n.id)}" data-base="${esc(n.base)}" data-codex="${codex}"><div class="cplx">${esc(cx)}</div>`
+  return `${open} ${attrs}><div class="cplx">${esc(cx)}</div>`
     + `<select aria-label="${esc(`${n.title} 배정`)}" disabled="">${groups}</select>`
     + `<label><input type="checkbox"${codex ? ' checked=""' : ''} disabled=""/> codex <span class="cx">${codex ? esc(`→ ${choices.codex[n.base] ?? '?'}`) : ''}</span></label>`
-    + `<div class="why" title="${esc(why)}">${esc(why)}</div></div></foreignObject>`;
+    + `<div class="why" title="${esc(why)}">${esc(why)}</div></div>`;
 }
 const PICK_H = 160; // complexity (≤2 lines) + select + codex row (≤2 lines) + two lines of reason
 // Page script: stored picks from db `choices/<nodeId>` are drawn, each change writes {model, effort, codex, at} once,
 // changed cards turn yellow and the list of Tasks that differ from the base value updates. Without db the choices stay local.
 const PICK_JS = `(async () => {
-  const CX = __CX__, note = document.getElementById('pick-note'), list = document.getElementById('pick-diff');
-  const picks = [...document.querySelectorAll('.pick[data-node]')];
+  const CX = __CX__, drawing = __DRAWING__, note = document.getElementById('pick-note'), list = document.getElementById('pick-diff');
+  const picks = [...document.querySelectorAll('.pick[data-node]')], hasCodex = Object.keys(CX).length > 0;
+  const download = document.getElementById('pick-download'), edits = new Map();
+  const remember = (id, data) => {
+    if (!download) return;
+    edits.set(id, { id, data });
+    download.disabled = false;
+  };
+  download?.addEventListener('click', () => {
+    const href = URL.createObjectURL(new Blob([JSON.stringify([...edits.values()], null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = 'routing-choices.json';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+  });
   const shown = (v, codex) => (codex ? CX[v] ?? '?' : v);
+  const pair = (p, s) => s.value || p.dataset.recommended;
   const sync = () => {
     const diff = [];
     for (const p of picks) {
       const s = p.querySelector('select'), c = p.querySelector('input'), was = p.dataset.codex === 'true';
-      p.querySelector('.cx').textContent = c.checked ? '→ ' + (CX[s.value] ?? '?') : '';
-      const changed = s.value !== p.dataset.base || c.checked !== was;
+      const adaptive = !!p.dataset.recommended, manual = adaptive && s.value !== '';
+      const chosen = shown(pair(p, s), c.checked);
+      p.querySelector('.cx').textContent = adaptive ? (c.checked ? 'Codex · ' : 'Claude · ') + chosen : c.checked ? '→ ' + chosen : '';
+      const changed = (adaptive ? manual : s.value !== p.dataset.base) || c.checked !== was;
       p.classList.toggle('changed', changed);
-      document.getElementById('n-' + p.dataset.node)?.classList.toggle('changed', changed);
-      if (changed) diff.push(p.dataset.node + ': ' + shown(p.dataset.base, was) + ' → ' + shown(s.value, c.checked));
+      const card = document.getElementById('n-' + p.dataset.node);
+      card?.classList.toggle('changed', changed);
+      if (adaptive && card) {
+        const tag = card.querySelector('.ag'), effort = chosen.split('/')[1];
+        tag.setAttribute('class', 'ag ' + (c.checked ? 'codex' : 'claude'));
+        tag.querySelector('title').textContent = p.querySelector('.cx').textContent;
+        tag.querySelector('text').textContent = c.checked ? '◎' : '✳';
+        tag.querySelector('.ef').textContent = ${JSON.stringify(EFFORT)}[effort] || '';
+        tag.querySelector('rect').setAttribute('width', effort ? 50 : 22);
+      }
+      const label = p.dataset.parent ? [p.dataset.parent, p.dataset.role, p.dataset.unit].join(' · ') : p.dataset.node;
+      if (changed) diff.push(adaptive ? label + ' · ' + (manual ? '직접 지정' : '기동 재평가') + ' · ' + p.querySelector('.cx').textContent
+        : label + ': ' + shown(p.dataset.base, was) + ' → ' + chosen);
     }
     list.replaceChildren(...(diff.length ? diff : ['없음']).map(t => Object.assign(document.createElement('li'), { textContent: t })));
   };
   const readOnly = msg => { note.textContent = msg; note.hidden = false; };
   sync();
   const timeout = new Promise(resolve => setTimeout(() => resolve(null), 10000));
-  const db = await Promise.race([window.claude?.use ? window.claude.use('db').catch(() => null) : null, timeout]);
-  if (!db) readOnly('선택은 이 화면에만 표시되고 저장되지 않습니다.');
+  let db = await Promise.race([window.claude?.use ? window.claude.use('db').catch(() => null) : null, timeout]);
+  if (!db) readOnly(download ? '자동 저장을 사용할 수 없습니다. 변경한 배정은 선택 파일로 저장하세요.' : '선택은 이 화면에만 표시되고 저장되지 않습니다.');
   try {
     const snap = db && await Promise.race([db.collection('choices').get(), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 10000))]);
     for (const d of snap?.docs ?? []) {
       const p = picks.find(x => x.dataset.node === d.id), v = d.data();
       if (!p || !v?.model) continue;
+      if (p.dataset.recommended && (v.drawing !== drawing || !['auto', 'manual'].includes(v.mode))) continue;
+      if (p.dataset.recommended && v.codex && !hasCodex) continue;
       const s = p.querySelector('select'), want = v.effort ? v.model + '/' + v.effort : v.model;
-      if ([...s.options].some(o => o.value === want)) s.value = want;
+      if (p.dataset.recommended && v.mode === 'auto') s.value = '';
+      else if ([...s.options].some(o => o.value === want)) s.value = want;
+      else continue;
       p.querySelector('input').checked = v.codex === true;
+      if (p.dataset.recommended) remember(d.id, v);
     }
-  } catch { return readOnly('읽기 전용: 저장된 선택을 읽지 못했습니다. 새로 고침해 주세요.'); }
+  } catch {
+    if (!download) return readOnly('읽기 전용: 저장된 선택을 읽지 못했습니다. 새로 고침해 주세요.');
+    db = null;
+    readOnly('저장된 선택을 읽지 못했습니다. 이 화면에서 변경한 배정은 선택 파일로 저장하세요.');
+  }
   sync();
   for (const p of picks) {
     const s = p.querySelector('select'), c = p.querySelector('input');
     let queue = Promise.resolve();
     const save = () => {
       sync();
-      const [model, effort = null] = s.value.split('/'), body = { model, effort, codex: c.checked, at: Date.now() };
+      const [model, effort = null] = pair(p, s).split('/'), body = { model, effort, codex: c.checked, at: Date.now() };
+      if (p.dataset.recommended) Object.assign(body, { mode: s.value ? 'manual' : 'auto', drawing });
+      if (p.dataset.parent) Object.assign(body, { parentId: p.dataset.parent, role: p.dataset.role, unit: p.dataset.unit });
+      if (p.dataset.recommended) remember(p.dataset.node, body);
       if (!db) return;
-      queue = queue.then(() => db.doc('choices/' + p.dataset.node).set(body)).catch(() => readOnly('저장 실패: 이 화면에 쓰기 권한이 없거나 연결이 끊겼습니다.'));
+      queue = queue.then(() => db.doc('choices/' + p.dataset.node).set(body)).catch(() => readOnly(download ? '자동 저장에 실패했습니다. 변경한 배정은 선택 파일로 저장하세요.' : '저장 실패: 이 화면에 쓰기 권한이 없거나 연결이 끊겼습니다.'));
     };
     s.addEventListener('change', save);
     c.addEventListener('change', save);
-    s.disabled = c.disabled = false;
+    s.disabled = false;
+    c.disabled = !!p.dataset.recommended && !hasCodex;
   }
 })();`;
 
@@ -135,7 +208,9 @@ export function render(input) {
   if (choices && (typeof choices.claude !== 'object' || typeof choices.codex !== 'object')) fail('choices: { claude: {model: [efforts]}, codex: {"model/effort": "codex pair"} } required');
   const claudePairs = choices ? Object.entries(choices.claude).flatMap(([m, es]) => (es.length ? es.map(e => pairOf(m, e)) : [m])) : [];
   // Pick height joins the row pitch and lane bottom only when picks are drawn, so specs without `choices` render as before.
-  const ph = choices ? PICK_H : 0;
+  const adaptive = spec.routingVersion === 2;
+  const drawing = adaptive && createHash('sha256').update(JSON.stringify(input)).digest('hex');
+  const ph = choices ? (adaptive ? 180 : PICK_H) : 0;
   if (!spec.title || !columns?.length || !lanes?.length || !nodes?.length) fail('title, columns, lanes, nodes are required');
   lanes.forEach((l, i) => {
     l.tone ??= TONES[i % TONES.length];
@@ -147,6 +222,26 @@ export function render(input) {
   const laneById = new Map(lanes.map(l => [l.id, l]));
   const ents = new Map();
   const autoRow = new Map();
+  function preparePick(n, id) {
+    if (n.fixed) return;
+    const r = n.routing;
+    if (adaptive && !r) fail(`node ${id}: routingVersion 2 requires routing on every nonfixed worker`);
+    if (r) {
+      if (!adaptive) fail(`node ${id}: routing requires routingVersion 2`);
+      if (!r.scores || !r.input?.evidence || !r.input.scores || !AGENT[r.runtime] || !Object.hasOwn(haikuLabels, r.haiku?.status)) fail(`node ${id}: incomplete routing assessment`);
+      if (r.mode !== undefined && !['auto', 'manual'].includes(r.mode)) fail(`node ${id}: routing.mode must be auto or manual`);
+      if (choices && n.agent === 'codex' && !choices.codex?.[r.claude]) fail(`node ${id}: Codex approval requires a project substitution`);
+      n.recommended ??= r.claude;
+      if (n.recommended !== r.claude) fail(`node ${id}: recommended must match routing.claude`);
+      n.base ??= r.claude;
+    }
+    if (!choices) return;
+    n.base ??= pairOf(n.model, n.effort);
+    if (!n.recommended || (!r && !n.why)) fail(`node ${id}: recommended and why are required on every pickable node (mark fixed ones "fixed": true)`);
+    for (const k of ['base', 'recommended']) {
+      if (!claudePairs.includes(n[k])) fail(`node ${id}: ${k} "${n[k]}" is not a Claude model/effort in choices.claude (codex nodes give it in Claude values)`);
+    }
+  }
   for (const n of nodes) {
     if (ents.has(n.id)) fail(`duplicate id ${n.id}`);
     if (!laneById.has(n.lane)) fail(`node ${n.id}: unknown lane ${n.lane}`);
@@ -158,13 +253,8 @@ export function render(input) {
     autoRow.set(k, i + 1);
     n.row ??= i;
     n.pick = !!(choices && AGENT[n.agent]);
-    if (n.pick && !n.fixed) {
-      n.base ??= pairOf(n.model, n.effort);
-      if (!n.recommended || !n.why) fail(`node ${n.id}: recommended and why are required on every pickable node (mark fixed ones "fixed": true)`);
-      for (const k of ['base', 'recommended']) {
-        if (n[k] !== undefined && !claudePairs.includes(n[k])) fail(`node ${n.id}: ${k} "${n[k]}" is not a Claude model/effort in choices.claude (codex nodes give it in Claude values)`);
-      }
-    }
+    if (AGENT[n.agent] && (choices || adaptive || n.routing)) preparePick(n, n.id);
+    for (const m of n.members ?? []) if (m.routing || adaptive) preparePick(m, memberKey(n.id, m));
     ents.set(n.id, n);
   }
 
@@ -250,7 +340,7 @@ export function render(input) {
   const css = readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').match(/<style>[\s\S]*?<\/style>/)[0].replace(/\r\n/g, '\n');
   const colX = i => G.left + i * G.colW;
   const out = [];
-  out.push(`<title>${esc(spec.title)}</title>`, '<meta name="claude:viewport-fit-sides" content="cover">', css,
+  out.push('<meta charset="utf-8">', `<title>${esc(spec.title)}</title>`, '<meta name="claude:viewport-fit-sides" content="cover">', css,
     '<style>.n .tag rect{stroke:none}.n .tag text{font:600 11px var(--sans);fill:var(--node)}.n .ag rect{stroke:none}.n .ag .bg{fill:var(--node);stroke:var(--line);stroke-width:1}.n .ag text{font:700 12px var(--sans)}.n .ag.claude text{fill:#d97757}.n .ag.codex text{fill:var(--fg)}.n .ag .ef{font:600 10px var(--sans);fill:var(--muted)}</style>');
   out.push(`<style>
 .n{cursor:pointer}.n:focus-visible>rect{stroke:var(--fg);stroke-width:3}
@@ -270,17 +360,19 @@ export function render(input) {
     + '.pick .cplx,.pick .cx,.pick .fx{font:12px var(--mono)}.pick .fx{font-size:13px;color:var(--fg);padding:4px 6px;border:1px dashed var(--line);border-radius:4px}'
     + '.pick select{width:100%;height:26px;font:13px var(--mono);color:var(--fg);background:var(--node);border:1px solid var(--line);border-radius:4px}.pick select:focus-visible,.pick input:focus-visible{outline:2px solid var(--pick-line);outline-offset:1px}'
     + '.pick label{display:flex;flex-wrap:wrap;align-items:center;gap:4px;color:var(--fg)}.pick .why{font-size:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}'
+    + '.pick[data-recommended] .cx{overflow-wrap:anywhere;color:var(--fg)}.member-evidence{margin:4px 0 12px}.member-evidence dt{font-weight:600}.member-evidence dd{margin:0 0 6px;white-space:pre-wrap}.notes .pick b{display:inline}'
     + '.pick-diff{margin:0 0 12px;font-size:14px}.pick-diff ul{margin:4px 0 0;padding-left:18px;font:13px var(--mono)}</style>');
   out.push(`<h1>${esc(spec.heading ?? spec.title)}</h1>`);
   if (spec.sub) out.push(`<p class="sub">${spec.sub}</p>`);
   const sw = (border, bg, dash = '') => `<i class="sw" style="border-color:${border};background:${bg}${dash}"></i>`;
   out.push('<div class="legend">'
     + TONES.filter(t => lanes.some(l => l.tone === t)).map(t => `<span>${sw(`var(--${t}-s)`, `var(--${t})`)}${esc(TONE_MEANING[t])} (${esc(lanes.filter(l => l.tone === t).map(l => l.name).join(' · '))})</span>`).join('')
-    + (nodes.some(n => AGENT[n.agent]) ? '<span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX), 모델은 마우스 오버</span>' : '')
-    + (choices ? '<span>카드 아래 선택 = Claude model/effort(기준값 = 복잡도 규칙, 추천 = 계획자 추천) · codex 체크 = Codex로 실행(→ 치환표 값)</span>' : '')
+    + (nodes.some(n => AGENT[n.agent]) ? '<span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX·UL), 모델은 마우스 오버</span>' : '')
+    + (choices ? (adaptive ? '<span>추천 사용은 기동 직전 재평가를 허용합니다. 조합을 직접 고르면 추천과 같은 값도 고정됩니다. 카드를 열어 점수 근거를 확인하세요.</span>' : '<span>카드 아래 선택 = Claude model/effort(기준값 = 복잡도 규칙, 추천 = 계획자 추천) · codex 체크 = Codex로 실행(→ 치환표 값)</span>') : '')
     + `<span>${sw('var(--done)', 'var(--node)')}완료 = 녹색 테두리</span><span>${sw('var(--muted)', 'var(--node)')}진행 = 레인 색 굵은 테두리</span><span>${sw('var(--muted)', 'var(--node)', ';border-style:dashed;opacity:.6')}대기 = 점선·흐림</span>`
     + '</div>');
-  if (choices) out.push('<p class="sub" id="pick-note" hidden></p><div class="pick-diff" aria-live="polite"><b>기준값과 다른 Task (사용자 예외가 됨)</b><ul id="pick-diff"><li>없음</li></ul></div>');
+  if (choices) out.push(`<p class="sub" id="pick-note" hidden></p><div class="pick-diff" aria-live="polite"><b>${adaptive ? '직접 지정 또는 런타임을 변경한 배정' : '기준값과 다른 Task (사용자 예외가 됨)'}</b><ul id="pick-diff"><li>없음</li></ul></div>`);
+  if (choices && adaptive) out.push('<button type="button" id="pick-download" disabled>선택 파일 저장</button>');
   const aria = spec.aria ?? `열 순서: ${columns.join(' → ')}. 같은 열은 병렬.`;
   out.push(`<div class="scroll"><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px" role="group" aria-label="${esc(aria)}">`);
   out.push('<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>');
@@ -314,7 +406,7 @@ export function render(input) {
       + (AGENT[n.agent] ? agentTag(n) : '')
       + '</g>'
       // outside the card group, so a waiting card's dimming does not dim the pick
-      + (n.pick ? pickBox(n, choices) : ''));
+      + (n.pick ? `<foreignObject x="${n.x}" y="${n.y + n.h + 12}" width="${n.w}" height="${ph - 12}">${pickForm(n, choices, n.id)}</foreignObject>` : ''));
   }
   out.push('</g></svg></div>');
   const leads = nodes.filter(n => n.members?.length);
@@ -324,7 +416,12 @@ export function render(input) {
       out.push(`<div><b>${esc(n.id)} · 팀 내부 배정</b><ul>`);
       for (const m of n.members) {
         const row = `${m.role} / ${m.unit} · ${m.agent} ${m.model} · effort ${m.effort ?? '없음'}`;
-        out.push(`<li>${esc(row)}${m.overrideReason ? ' · 사용자 예외 ' + esc(m.overrideReason) : ''}</li>`);
+        out.push(`<li>${esc(row)}${m.fixed ? ' (고정)' : ''}${m.overrideReason ? ' · 사용자 예외 ' + esc(m.overrideReason) : ''}`);
+        if (m.routing && !m.fixed) {
+          if (choices) out.push(pickForm(m, choices, memberKey(n.id, m), n.id));
+          out.push(`<details class="member-evidence"><summary>점수 근거</summary><dl>${routingRows(m.routing)}</dl></details>`);
+        }
+        out.push('</li>');
       }
       out.push('</ul></div>');
     }
@@ -332,12 +429,13 @@ export function render(input) {
   }
   out.push('<div class="notes">');
   out.push(...notes.map(n => `<div><b>${n.title}</b>${n.body}</div>`), '</div>');
+  for (const [i, n] of nodes.entries()) if (n.routing && !n.fixed) out.push(`<template id="routing-${i}">${routingRows(n.routing)}</template>`);
   out.push('<button id="node-preview" type="button" tabindex="-1" hidden><strong></strong><span></span></button>',
     '<dialog id="node-dialog" aria-labelledby="node-heading"><header><h2 id="node-heading"></h2><button type="button" autofocus>닫기</button></header><dl></dl></dialog>',
     `<script type="application/json" id="node-data">${JSON.stringify({ nodes: input.nodes, edges: input.edges, groups: input.groups, lanes: input.lanes, columns }).replaceAll('<', '\\u003c')}</script>`,
     `<script>${readFileSync(join(HERE, 'node-details.js'), 'utf8').replace(/\r\n/g, '\n')}</script>`);
   // '<' escaped so no value can close the script
-  if (choices) out.push(`<script>${PICK_JS.replace('__CX__', () => JSON.stringify(choices.codex).replaceAll('<', '\\u003c'))}</script>`);
+  if (choices) out.push(`<script>${PICK_JS.replace('__DRAWING__', () => JSON.stringify(drawing)).replace('__CX__', () => JSON.stringify(choices.codex).replaceAll('<', '\\u003c'))}</script>`);
   return { html: out.join('\n') + '\n', counts: { lanes: lanes.length, columns: columns.length, nodes: nodes.length, edges: edges.length, groups: groups.length } };
 }
 
@@ -385,6 +483,34 @@ function selfTest() {
   bad = '';
   try { render({ ...pick, nodes: pick.nodes.map(n => (n.id === 'qa' ? { ...n, recommended: undefined } : n)) }); } catch (err) { bad = err.message; }
   if (!/qa: recommended and why are required/.test(bad)) fail(`self-test: a pickable node without a recommendation should fail, got "${bad}"`);
+  const v2 = structuredClone(pick);
+  v2.routingVersion = 2;
+  const scores = { C: 2, U: 2, R: 2, V: 2, F: 0 };
+  const evidence = { C: '공통 계약', U: '두 가설', R: '공유 데이터', V: '통합 확인', F: '최초 시도' };
+  for (const n of v2.nodes.filter(n => n.agent && !n.fixed)) {
+    const [model, effort] = (n.agent === 'codex' ? v2.choices.codex['opus/high'] : 'opus/high').split('/');
+    Object.assign(n, { model, effort, base: 'opus/high', recommended: 'opus/high', routing: {
+      input: { scores: { ...scores, U: 1 }, evidence, ambiguities: [{ axis: 'U', value: 2, evidence: '<대안 비교>' }] },
+      scores, E: 6, claude: 'opus/high', runtime: n.agent, model, effort, haiku: { status: 'classified', scores: { U: 2 }, reason: '대안 둘을 검증한다.' },
+    } });
+  }
+  const task = v2.nodes.find(n => n.id === 't1');
+  task.members = [{ role: 'reviewer', unit: 'a/b~c', agent: 'claude', model: 'opus', effort: 'high', routing: { ...task.routing, mode: 'manual' } }];
+  const adaptivePage = render(v2).html;
+  for (const expected of ['C2 U2 R2 V2 F0 · E6', 'Haiku · 경계 점수 판정', '&lt;대안 비교&gt;', '대안 둘을 검증한다.', '2×U(2) + V(2) + F(0) + 0 (C&lt;3) = 6',
+    'data-node="t1~reviewer~a%2Fb%7Ec"', 'data-parent="t1"', 'data-role="reviewer"', 'value="opus/high" selected>opus/high (추천값 고정)', 'value="" selected>추천 사용']) {
+    if (!adaptivePage.includes(expected)) fail('self-test: v2 approval missing ' + expected);
+  }
+  const claudeOnly = structuredClone(v2);
+  claudeOnly.choices.codex = {};
+  const codexNode = claudeOnly.nodes.find(n => n.agent === 'codex');
+  Object.assign(codexNode, { agent: 'claude', model: 'opus', effort: 'high' });
+  Object.assign(codexNode.routing, { runtime: 'claude', model: 'opus', effort: 'high' });
+  if (!render(claudeOnly).html.includes('Codex 치환표 없음')) fail('self-test: Claude approvals without a Codex table');
+  delete task.members[0].routing;
+  try { render(v2); fail('self-test: unassessed v2 team member accepted'); } catch (err) {
+    if (!err.message.includes('requires routing')) throw err;
+  }
   console.log('self-test ok: reference counts match, crossing edge rejected, output without choices unchanged, choices picks and marks drawn');
 }
 

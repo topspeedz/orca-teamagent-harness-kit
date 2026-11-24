@@ -125,7 +125,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 
 **모델과 effort를 표 하나로 관리한다**
 
-- Planner는 `docs/harness/model-selection.md`의 역할·작업 단위별 런타임·모델·effort를 계획에 기록한다. 실행 승인 시 확정한 값은 아직 등록하지 않은 Task에도 적용한다.
+- PM은 BL에 구조 복잡도·불확실성·실패 영향·검증 근거를 남긴다. Planner는 Task와 팀원별 모델·effort를 계산하고, 해석에 따라 배정이 달라질 때만 Haiku로 점수를 확인한다. 사용자는 DAG에서 추천을 검토하고 직접 고정하거나 기동 직전 재평가를 위임한다. 코디네이터와 팀장은 승인된 런타임과 치환표에서 최종 배정을 적용한다. [배정 기준과 Astra ultra 치환](template/docs/harness/model-selection.md)
 - 표를 수정하면 다음 계획부터 적용된다. 현재 Run의 Task 배정을 바꾸려면 해당 배정과 DAG를 갱신하고 다시 승인받는다.
 
 **검증이 수렴한다**

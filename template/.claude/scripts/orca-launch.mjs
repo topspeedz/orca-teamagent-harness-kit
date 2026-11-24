@@ -2,6 +2,7 @@
 //   node .claude/scripts/orca-launch.mjs review --version v1 --plan <plan.md> --dag <dag.json>
 //   node .claude/scripts/orca-launch.mjs approve --version v1 --plan <plan.md> --dag <dag.json> --review <reviewed hash> --response <user's reply>
 //   node .claude/scripts/orca-launch.mjs reapprove --map <map> --approval <approved-plan.v2.json> --id <T01>
+//   node .claude/scripts/orca-launch.mjs assessment-context --approval <file> --id <Task> --spec-file <authored spec>
 // Direct team launches add --approval <file> --id <Task> and, for internal work, --parent <Task>.
 //   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--lead] [--override-reason <원문>]
 //   node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <p> --does <요청> [--backlog BL-0001,BL-0002] --approval <file> --version v1 --plan <plan.md> --dag <dag.json>
@@ -10,7 +11,7 @@
 // Tasks registered in Orca (the coordinator's execution Run; <map> is _workspace/_run/<phase>/orca-tasks.json):
 //   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <approved-plan.v1.json>
 //   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]
-//   node .claude/scripts/orca-launch.mjs worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]
+//   node .claude/scripts/orca-launch.mjs worker --map <map> --id <T01> --bracket <b> --does <d> [--assessment <json>] [--retry]
 //   node .claude/scripts/orca-launch.mjs ready --map <map>
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
@@ -21,12 +22,13 @@
 // stdout: one JSON receipt. Never stops or relaunches a worker whose turn start was not observed.
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync, renameSync, linkSync, unlinkSync, rmdirSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs } from 'node:util';
-import { TABLE_PATH, parseTable, lookup } from './model-selection.mjs';
+import { isDeepStrictEqual, parseArgs } from 'node:util';
+import { TABLE_PATH, parseTable, matchRow, lookup, choices } from './model-selection.mjs';
+import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH, unclassified, readInventory } from './coordinator-settings.mjs';
 import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mjs';
 
@@ -34,6 +36,15 @@ import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mj
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
 const fmt = (model, effort) => (effort ? `${model}/${effort}` : model);
 const fmtRow = (runtime, model, effort) => `${runtime} ${fmt(model, effort)}`;
+const hash = text => createHash('sha256').update(text).digest('hex');
+const specHash = text => hash(text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd());
+function authoredSpec(text, review, id) {
+  const body = text?.replace(/\r\n/g, '\n') ?? '';
+  const marker = '\n\n실행 승인: ' + review + ' ' + id;
+  const end = body.lastIndexOf(marker);
+  if (end < 0 || (body[end + marker.length] && body[end + marker.length] !== '\n')) throw new Error('Orca에 등록된 원본 spec의 승인 표식을 확인할 수 없음');
+  return body.slice(0, end);
+}
 
 export function tabTitle({ bracket, agent, model, effort, does }) {
   return `[${bracket} - ${agent}] ${does} ${fmt(model, effort)}`;
@@ -103,7 +114,7 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
     'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason',
-    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity'].map((k) => [k, { type: 'string' }]),
+    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity', 'assessment'].map((k) => [k, { type: 'string' }]),
   ['lead', { type: 'boolean' }],
   ['retry', { type: 'boolean' }],
 ]);
@@ -156,6 +167,14 @@ async function execute(cmd, o, deps, locks) {
     try { return { code: 0, out: rules() }; } catch (e) { return fail(e.message); }
   }
 
+  if (cmd === 'assessment-context') {
+    if (!o['spec-file'] || !o.id) return fail('assessment-context --approval <승인> --id <Task> --spec-file <원본 spec>');
+    const approval = loadApproval(o.approval, io);
+    const source = deps.read(o['spec-file']);
+    if (/^Task:\s*(\S+)/m.exec(source)?.[1] !== o.id) return fail('Task ID와 spec 불일치');
+    return { code: 0, out: { id: o.id, review: approval.review, specHash: specHash(source) } };
+  }
+
   if (cmd === 'snapshot') {
     if (!o.run) return fail('사용법: snapshot --run <id>');
     // --peek reads the inbox without consuming it
@@ -173,14 +192,29 @@ async function execute(cmd, o, deps, locks) {
 
   if (cmd === 'review' || cmd === 'approve') {
     const record = reviewPlan(o, io);
+    const routingRules = record.routingVersion === 2 && parseTable(deps.read(TABLE_PATH));
     const prevPath = join(dirname(o.dag), `approved-plan.v${Number(o.version.slice(1)) - 1}.json`);
     const previous = io.optional(prevPath) === null ? {} : loadApproval(prevPath, io).tasks;
     for (const [id, t] of Object.entries(record.tasks)) {
       for (const a of [t, ...t.members]) {
-        const same = b => b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]);
+        const project = routingRules && matchRow(routingRules.rows, a.agent, a.unit)?.row;
+        if (routingRules && !project) throw new Error(id + ' 모델 표에 역할·작업 단위가 없음');
+        if (routingRules && !a.routing) throw new Error(id + ' Task·팀원에 v2 라우팅 평가 또는 표의 고정 표시 필요');
+        const same = b => b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]) &&
+          JSON.stringify(a.routing) === JSON.stringify(b.routing);
         if (record.legacyRun || (JSON.stringify(t.bl) === JSON.stringify(previous[id]?.bl) &&
           t.complexity === previous[id]?.complexity && [previous[id], ...(previous[id]?.members ?? [])].some(b => same(b) && a.complexity === b.complexity))) continue;
-        const row = table(a.agent, a.unit, a.complexity ?? t.complexity);
+        const row = project || table(a.agent, a.unit, a.complexity ?? t.complexity);
+        if (a.routing) {
+          const fixed = row.note.startsWith('고정');
+          if (fixed !== a.routing.fixed) throw new Error(id + ' 프로젝트 표의 고정 여부와 다름');
+          if (a.routing.codexMap) {
+            const current = choices(routingRules.codex).codex;
+            if (Object.keys(current).length !== Object.keys(a.routing.codexMap).length ||
+              Object.keys(current).some(k => current[k] !== a.routing.codexMap[k])) throw new Error(id + ' DAG의 Codex 치환표가 프로젝트와 다름');
+          }
+          if (!fixed) continue;
+        }
         if ((!a.overrideReason || row.note.startsWith('고정')) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
       }
     }
@@ -189,9 +223,9 @@ async function execute(cmd, o, deps, locks) {
   }
 
   // Codex gets the hook's six lines inside the spec (P8). Returns the path of the copy to hand to Orca.
-  const withRules = (specFile, spec) => {
+  const specCopy = (specFile, content) => {
     const p = join(mkdtempSync(join(tmpdir(), 'orca-spec-')), basename(specFile));
-    writeFileSync(p, `${spec.trimEnd()}\n\n${rules().trimEnd()}\n`);
+    writeFileSync(p, content);
     return p;
   };
   // One worker-start and its receipt, for a spec file and for a registered Task alike.
@@ -234,6 +268,52 @@ async function execute(cmd, o, deps, locks) {
     if (errors.length) throw new Error('승인 배정 불일치: ' + errors.join(', '));
   };
   const taskId = (m, id) => m.tasks[id]?.orca ?? m.direct?.[id]?.task;
+  // The approved spec and runtime stay fixed. Only an explicitly delegated model/effort can change.
+  const prepareAttempt = (row, approval, state, spec, source) => {
+    const policy = row.routing;
+    if (!policy) return null;
+    const attempts = state.attempts ??= [];
+    const failureDispatches = new Set(attempts.at(-1)?.failureDispatches ?? []);
+    const fingerprint = specHash(source);
+    let decision = policy.fixed ? 'fixed' : policy.mode;
+    let assessment = policy.assessment, reason = '승인 배정 사용';
+    if (decision === 'auto') {
+      if (!o.assessment) throw new Error('위임된 Task의 최종 지침을 검토하고 --assessment <JSON>을 지정한다');
+      const check = JSON.parse(deps.read(o.assessment));
+      if (check.id !== o.id || typeof check.reason !== 'string' || !check.reason.trim()) throw new Error('기동 평가의 Task id·검토 근거 확인 필요');
+      if (check.review !== approval.review || check.specHash !== fingerprint) throw new Error('기동 평가와 현재 승인 또는 실제 spec의 해시 불일치');
+      reason = check.reason;
+      decision = 'reuse';
+      const ids = check.failureDispatches ?? [];
+      if (!Array.isArray(ids) || new Set(ids).size !== ids.length) throw new Error('판단·수행 실패 Dispatch ID 중복 또는 형식 오류');
+      for (const id of ids) {
+        if (!attempts.some(a => a.failed && a.turnStarted && a.dispatch === id)) throw new Error('동일 Task의 실제 기동 후 실패한 Dispatch 확인 필요');
+        if (!failureDispatches.has(id) && !check.input) throw new Error('새 실패 판정에 F 점수와 근거 필요');
+        failureDispatches.add(id);
+      }
+      if (check.input != null) {
+        if (check.input.scores?.F !== Math.min(2, failureDispatches.size)) throw new Error('F와 확인된 판단·수행 실패 Dispatch 수가 다름');
+        if (!isDeepStrictEqual({ ...check.input, ambiguities: check.input.ambiguities ?? [] }, assessment.input)) {
+          assessment = assessRouting(check.input, row.runtime, policy.codexMap, deps.classify);
+          decision = 'reassess';
+        }
+      }
+    }
+    const { runtime, model, effort } = decision === 'reassess' ? assessment : row;
+    const attempt = { number: attempts.length + 1, review: approval.review, id: o.id, parent: o.parent ?? null,
+      specHash: fingerprint, launchSpecHash: hash(spec), decision, reason, assessment,
+      failureDispatches: [...failureDispatches], requested: { runtime, model, effort }, status: 'starting', at: deps.now() };
+    attempts.push(attempt);
+    return attempt;
+  };
+  const refused = (out, res) => !out.task && !out.dispatch && !out.terminal &&
+    ['invalid_argument', 'invalid_arguments', 'validation_failed', 'task_not_startable', 'run_not_found'].includes(res.error?.code);
+  const finishAttempt = (attempt, out, res) => {
+    if (!attempt) return;
+    if (out.dispatch && !out.matched) out.error = '기동 영수증의 적용 모델·effort가 요청과 다름';
+    Object.assign(attempt, { status: out.dispatch ? 'dispatched' : refused(out, res) ? 'rejected' : 'unknown',
+      dispatch: out.dispatch, applied: out.applied, matched: out.matched, turnStarted: out.turnStarted, error: out.error });
+  };
   // Orca's row for every registered Task, keyed by plan id.
   const statuses = (m, reconcile = false) => {
     const list = call(['orchestration', 'task-list', '--run', m.run, '--full']);
@@ -256,6 +336,13 @@ async function execute(cmd, o, deps, locks) {
     return rows;
   };
   const setStatus = (m, orca, status, ...more) => call(['orchestration', 'task-update', '--id', orca, '--status', status, '--run', m.run, ...more]);
+  const retryArgs = (m, task) => {
+    const last = call(['orchestration', 'dispatch-show', '--task', task]);
+    if (!last.result?.dispatch?.id) throw new Error('재시도할 이전 Dispatch 확인 필요');
+    if (last.result.dispatch.status === 'failed') return ['--retry-of', last.result.dispatch.id];
+    if (!setStatus(m, task, 'ready').ok) throw new Error('재시도 상태 전환 실패');
+    return [];
+  };
 
   if (cmd === 'exec-run') {
     if (!o.phase || !o.map) return fail('사용법: exec-run --phase <phase> --map <map>');
@@ -342,7 +429,8 @@ async function execute(cmd, o, deps, locks) {
     const previousPath = m.approval ?? m.approvals?.[o.id];
     const previous = previousPath && loadApproval(previousPath, io, o.map);
     const row = next.tasks[o.id], old = m.tasks[o.id];
-    if (!row || m.direct?.[o.id]) return fail('미기동 승인 Task만 전환한다');
+    const direct = m.direct?.[o.id];
+    if (!row || (direct && (direct.dispatch || direct.attempts?.at(-1)?.status !== 'rejected'))) return fail('미기동 승인 Task만 전환한다');
     if (m.transition && (m.transition.id !== o.id || m.transition.approval !== o.approval)) return fail('먼저 진행 중인 재승인을 마친다');
     if (m.approval && m.review && previous.review !== m.review) return fail('Run에 기록한 이전 승인 해시와 다름');
     if (previous?.review === next.review) return { code: 0, out: { id: o.id, version: next.version, existing: true } };
@@ -352,7 +440,7 @@ async function execute(cmd, o, deps, locks) {
       for (const id of all) if (id !== o.id && JSON.stringify(previous.tasks[id]) !== JSON.stringify(next.tasks[id])) return fail('다른 Task 배정·의존 변경: ' + id);
     }
     if (old) {
-      if (old.dispatch || old.started) return fail('이미 기동한 Task');
+      if (old.dispatch || old.started || old.attempts?.some(a => a.status !== 'rejected')) return fail('이미 기동했거나 기동 확인 중인 Task');
       const st = statuses(m)[o.id];
       if (!['ready','pending','blocked'].includes(st.status) && !(m.transition && st.status === 'failed')) return fail('미기동 Task 상태 확인 필요');
       checkedSpec(deps.read(old.spec), o.id, row, row.unit === '리드', row.overrideReason);
@@ -370,8 +458,13 @@ async function execute(cmd, o, deps, locks) {
       m.tasks[o.id] = { ...replacement.entry, previous: [...(old.previous ?? []), {
         orca: old.orca, deps: old.deps, registeredDeps: old.registeredDeps, version: old.version, review: old.review,
         gates: old.gates ?? [], agent: old.agent, unit: old.unit, runtime: old.runtime, model: old.model, effort: old.effort,
+        ...(old.attempts ? { attempts: old.attempts } : {}),
       }] };
       delete m.transition;
+    }
+    if (direct) {
+      (m.previousDirect ??= []).push({ id: o.id, ...direct });
+      delete m.direct[o.id];
     }
     if (m.approval) { m.approval = o.approval; m.review = next.review; }
     else (m.approvals ??= {})[o.id] = o.approval;
@@ -385,31 +478,52 @@ async function execute(cmd, o, deps, locks) {
     try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
     const approval = activeApproval(m, o.id);
     if (m.transition?.id === o.id || e.gate) return fail('재승인 전환 또는 게이트 응답 대기');
+    const lastAttempt = e.attempts?.at(-1);
+    if (lastAttempt && ['starting','unknown'].includes(lastAttempt.status)) {
+      const last = call(['orchestration', 'dispatch-show', '--task', e.orca]).result?.dispatch;
+      if (last?.id && last.id !== e.dispatch) {
+        Object.assign(lastAttempt, { status: 'dispatched', dispatch: last.id });
+        e.dispatch = last.id;
+        saveMap(m);
+      }
+      return fail('이전 기동 영수증 확인 필요', { id: o.id, dispatch: last?.id ?? null });
+    }
     if (e.dispatch && !o.retry) return fail('기존 Dispatch 확인: ' + e.dispatch);
+    let approved, st;
     if (approval) {
-      const row = approval.tasks[o.id];
-      if (!row || ['agent','unit','runtime','model','effort'].some(k => row[k] !== e[k])) return fail('등록값과 승인 배정 불일치');
-      const st = statuses(m, true);
+      approved = approval.tasks[o.id];
+      if (!approved || ['agent','unit','runtime','model','effort'].some(k => approved[k] !== e[k]) ||
+        JSON.stringify(approved.routing) !== JSON.stringify(e.routing)) return fail('등록값과 승인 배정 불일치');
+      st = statuses(m, true);
       const unmet = e.deps.filter(d => st[d]?.status !== 'completed' || m.transition?.id === d);
       if (unmet.length) return fail('pending: 완료되지 않은 의존 Task', { unmet });
     }
-    if (o.retry && statuses(m)[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
-    const title = tabTitle({ bracket: o.bracket, agent: e.agent, model: e.model, effort: e.effort, does: o.does });
-    const args = workerStartArgs({ row: e, run: m.run, task: e.orca, displayName: title, worktree });
+    if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
+    if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
+    const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
+    if (o.retry && previous?.turnStarted) previous.failed = true;
+    const attempt = approved?.routing && prepareAttempt(approved, approval, e, st[o.id].spec, authoredSpec(st[o.id].spec, e.review, o.id));
+    const use = attempt?.requested ?? e;
+    const title = tabTitle({ bracket: o.bracket, agent: e.agent, model: use.model, effort: use.effort, does: o.does });
+    const args = workerStartArgs({ row: use, run: m.run, task: e.orca, displayName: title, worktree });
+    if (attempt) saveMap(m);
     if (o.retry) {
       // measured: --retry-of takes only a failed attempt; an attempt the worker reported as a success is reopened instead
-      const last = call(['orchestration', 'dispatch-show', '--task', e.orca]).result?.dispatch;
-      if (last?.status === 'failed') args.push('--retry-of', last.id);
-      else setStatus(m, e.orca, 'ready');
+      try { args.push(...retryArgs(m, e.orca)); } catch (err) {
+        if (attempt) { attempt.status = 'rejected'; saveMap(m); }
+        return fail(err.message);
+      }
     }
-    const { code, out, res } = start(e, title, args);
+    const { code, out, res } = start(use, title, args);
+    finishAttempt(attempt, out, res);
+    if (out.dispatch) { e.dispatch = out.dispatch; e.started = deps.now(); }
+    if (out.dispatch || attempt) saveMap(m);
     if (res.error) {
       // Orca starts only a ready Task (dependencies done, no pending gate). The status is never forced from here.
       const planId = Object.fromEntries(Object.entries(m.tasks).map(([id, t]) => [t.orca, id]));
       return fail(`기동 거부: ${res.error.message}`, { id: o.id, code: res.error.code, unmet: (res.error.data?.unmetDependencies ?? []).map((x) => planId[x] ?? x) });
     }
-    if (out.dispatch) { e.dispatch = out.dispatch; e.started = deps.now(); saveMap(m); }
-    return { code, out: { id: o.id, version: e.version, ...out } };
+    return { code: attempt && !out.matched ? 1 : code, out: { id: o.id, version: approval?.version ?? e.version, ...out, ...(attempt ? { routing: attempt } : {}) } };
   }
 
   if (cmd === 'ready') {
@@ -537,7 +651,7 @@ async function execute(cmd, o, deps, locks) {
     const unit = o.lead ? '리드' : o.unit;
     const spec = deps.read(o['spec-file']);
     const overrideReason = o['override-reason'] ?? null;
-    let row, map, mapPath, approval;
+    let row, map, mapPath, approval, state, retryTask, retrySpec;
     if (o.approval || o.id || o.parent) {
       if (!o.approval || !o.id || o.task || !/^[\w-]+$/.test(o.id) || o.id in {}) return fail('팀원은 승인 파일과 Task ID가 필요함');
       mapPath = join(dirname(o.approval), 'orca-tasks.json');
@@ -556,7 +670,29 @@ async function execute(cmd, o, deps, locks) {
         }
       }
       checkedSpec(spec, o.id, row, !!o.lead, overrideReason);
-      if (map.tasks[o.id] || map.direct?.[o.id]) return fail('이미 등록 또는 직접 기동한 Task');
+      state = map.direct?.[o.id];
+      if (state && ['starting','unknown'].includes(state.attempts?.at(-1)?.status)) {
+        const marker = '실행 승인: ' + (state.specReview ?? state.review) + ' ' + o.id;
+        const found = call(['orchestration','task-list','--run',map.run,'--full']).result?.tasks?.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
+        const dispatch = found?.length === 1 && call(['orchestration','dispatch-show','--task',found[0].id]).result?.dispatch?.id;
+        if (dispatch && dispatch !== state.dispatch) {
+          Object.assign(state, { task: found[0].id, dispatch });
+          Object.assign(state.attempts.at(-1), { status: 'dispatched', dispatch });
+          deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
+        }
+        return fail('이전 팀원 기동 영수증 확인 필요', { id: o.id, dispatch: dispatch || null });
+      }
+      if (map.tasks[o.id]) return fail('이미 등록한 Task');
+      if (o.retry) {
+        const st = statuses(map)[o.id];
+        if (!row.routing || !state?.task || !state.dispatch || st?.status !== 'failed') return fail('실패로 정산된 동일 팀원 Task만 재시도한다');
+        retryTask = state.task;
+        retrySpec = st.spec;
+        if (!retrySpec) return fail('재시도할 팀원의 등록 spec 확인 필요');
+        const previous = state.attempts.findLast(a => a.dispatch && a.dispatch === state.dispatch);
+        if (previous?.turnStarted) previous.failed = true;
+      } else if (state && (state.dispatch || state.attempts?.at(-1)?.status !== 'rejected')) return fail('이미 직접 기동한 Task');
+      if (state && (state.parent !== (o.parent ?? null) || state.agent !== o.agent || state.unit !== unit)) return fail('팀원의 이전 기동 범위와 다름');
     } else {
       if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');
       row = table(o.agent, unit, o.complexity);
@@ -564,28 +700,48 @@ async function execute(cmd, o, deps, locks) {
     const errors = verifyAssignment({ spec, agent: o.agent, unit, row, overrideReason, lead: !!o.lead });
     if (errors.length) return fail('배정 불일치 — 띄우지 않음', { errors });
     const a = parseAssignLine(spec);
-    const use = overrideReason ? { ...row, runtime: a.runtime, model: a.model, effort: a.effort } : row;
+    const base = overrideReason ? { ...row, runtime: a.runtime, model: a.model, effort: a.effort } : row;
     let specFile = o['spec-file'];
-    if (use.runtime === 'codex') {
+    let content = spec;
+    if (row.routing) content = content.trimEnd() + '\n\n실행 승인: ' + approval.review + ' ' + o.id + '\n';
+    if (base.runtime === 'codex') {
       if (o.task) console.error('경고: Codex 워커 — Task spec에 작업 방식 여섯 줄이 들어 있어야 한다(codex-rules)');
-      else { try { specFile = withRules(specFile, spec); } catch (e) { return fail(e.message); } }
+      else content = content.trimEnd() + '\n\n' + rules().trimEnd() + '\n';
     }
+    state ??= {};
+    const attempt = row.routing && prepareAttempt(row, approval, state, retrySpec ?? content,
+      retrySpec ? authoredSpec(retrySpec, state.specReview, o.id) : spec);
+    const use = attempt?.requested ?? base;
+    if (!retryTask && content !== spec) specFile = specCopy(specFile, content);
     const title = tabTitle({ bracket: o.bracket, agent: o.agent, model: use.model, effort: use.effort, does: o.does });
+    const args = workerStartArgs({ row: use, specFile, run: map?.run ?? o.run, task: retryTask ?? o.task, displayName: title, worktree });
     if (map) {
-      (map.direct ??= {})[o.id] = { parent: o.parent ?? null, version: approval.version, review: approval.review, requested: true };
+      (map.direct ??= {})[o.id] = Object.assign(state, { parent: o.parent ?? null, version: approval.version, review: approval.review, agent: o.agent, unit, requested: true });
+      if (attempt && !retryTask) state.specReview = approval.review;
       deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
+      if (retryTask) {
+        try { args.push(...retryArgs(map, retryTask)); } catch (err) {
+          attempt.status = 'rejected';
+          deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
+          return fail(err.message);
+        }
+      }
       locks.unlock();
     }
-    const { code, out, res } = start(use, title, workerStartArgs({ row: use, specFile, run: map?.run ?? o.run, task: o.task, displayName: title, worktree }));
+    const { code, out, res } = start(use, title, args);
     if (map) {
       await locks.lock();
       map = JSON.parse(deps.read(mapPath));
-      const rejected = !out.task && !out.dispatch && !out.terminal && ['invalid_argument', 'invalid_arguments', 'validation_failed', 'task_not_startable', 'run_not_found'].includes(res.error?.code);
-      if (rejected) delete map.direct[o.id];
-      else Object.assign(map.direct[o.id], out, { started: out.dispatch ? deps.now() : null });
+      if (!attempt && refused(out, res)) delete map.direct[o.id];
+      else {
+        finishAttempt(map.direct[o.id].attempts?.at(-1), out, res);
+        const saved = map.direct[o.id];
+        Object.assign(saved, out, { task: out.task ?? saved.task, dispatch: out.dispatch ?? saved.dispatch, started: out.dispatch ? deps.now() : saved.started ?? null });
+      }
       deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
     }
-    return { code, out: map ? { ...out, id: o.id, version: approval.version } : out };
+    return { code: attempt && !out.matched ? 1 : code, out: map ? { ...out, id: o.id, version: approval.version,
+      ...(attempt ? { routing: map.direct[o.id].attempts.at(-1) } : {}) } : out };
   }
 
   if (cmd === 'coordinator') {
@@ -647,7 +803,7 @@ async function execute(cmd, o, deps, locks) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs review|approve|reapprove|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };

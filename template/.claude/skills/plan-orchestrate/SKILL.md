@@ -115,7 +115,7 @@ planner는 문서 형식을 위해 `superpowers:brainstorming`(설계서)과 `su
 
 ### 승인 그림
 
-창구가 해당 경로의 승인 시점마다 대기 상태의 DAG와 T+ 예상 워터폴을 보여 준다. 위임 경로는 최종 실행 승인에서 두 그림을 함께 보여 준다. 그림은 계획서에 넣지 않는다. 처음 게시할 때 그 주소를 브리프의 `그림:` 줄에 적는다. setup이 선택한 전역 DAG 렌더러에 팀장 `members` 표시가 없는 경우 설치한 키트의 `template/.claude/skills/dag-swimlane/scripts/render.mjs`로 승인본을 그린다.
+창구가 해당 경로의 승인 시점마다 대기 상태의 DAG와 T+ 예상 워터폴을 보여 준다. 위임 경로는 최종 실행 승인에서 두 그림을 함께 보여 준다. 그림은 계획서에 넣지 않는다. 처음 게시할 때 그 주소를 브리프의 `그림:` 줄에 적는다. 새 계획의 승인본은 v2 점수와 팀원별 직접 지정·위임을 표시하는 키트의 `dag-swimlane/scripts/render.mjs`로 그린다. setup이 전역 그림 스킬을 선택했다면 설치한 키트의 `template/.claude/skills/dag-swimlane/scripts/render.mjs`를 사용한다.
 
 | 단계 | 굵기 | 그림 |
 | --- | --- | --- |
@@ -124,9 +124,9 @@ planner는 문서 형식을 위해 `superpowers:brainstorming`(설계서)과 `su
 
 - 계획 승인 질문에 폭을 숫자로 넣는다: 작업 시간 합 ÷ 임계 경로 길이, 슬롯 수, 최대 동시 Task 수. 값은 계획서의 `## DAG` 절 끝에서 옮긴다.
 - 최종 계획을 PM이 검토하면 창구는 승인 대상 버전과 준비된 그림을 보여 주고 ask(Claude의 `AskUserQuestion` 또는 Codex의 선택형 질문 도구)로 “이 계획을 Orca로 실행할까요?”를 묻는다. 기본 선택지는 1·2번이다. setup에서 Task 선택이 켜져 있고 해당 버전의 `dag.json`에 직접 지정할 수 있는 Task가 있을 때만 3번을 추가한다. 선택용 DAG가 없으면 경로를 묻지 않고 기본 질문을 띄운다. 3번을 고른 뒤 선택용 DAG가 없어진 경우에도 1·2번으로 다시 묻고 답을 기다린다.
-  1. **승인** — 표시한 버전과 배정으로 승인 파일을 만들고 실행한다.
+  1. **승인** — 표시한 버전, Task·팀원의 배정과 기동 직전 위임 여부를 함께 승인한다. 질문에 자동 재평가할 배정과 직접 고정한 배정을 구분해 보여 준다. 사용자가 이미 그림에서 선택을 저장했다면 3번과 같은 절차로 현재 그림의 저장값을 대조하고, 검토본과 다른 선택은 먼저 새 버전에 반영해 확인받는다.
   2. **거절** — 응답을 브리프에 기록하고 실행 절차를 멈춘다.
-  3. **모델 직접 지정 후 승인** — 선택용 DAG를 열어 고정 역할을 제외한 실행 Task의 모델·effort와 Codex 여부를 고르게 한다. 키트 렌더러로 팀장 구성원까지 표시하고 `capabilities: {db: {}}`로 게시한다. 사용자가 선택을 마치면 `ArtifactData list choices`에서 이번 그림의 선택을 읽는다. 바뀐 Task에만 모델·effort·런타임과 사용자 예외 원문을 계획·DAG·브리프·spec에 반영한다(DAG는 `overrideReason`, Codex 치환은 `model-selection.mjs codex --pair <Claude 조합>`). 바뀐 버전을 PM이 검토한 뒤 최종 배정을 보여 주고 사용자 승인을 받아 실행한다. 프로젝트의 에이전트 설정은 유지한다.
+  3. **모델 직접 지정 후 승인** — 선택용 DAG를 `capabilities: {db: {}}`로 게시하거나 로컬 HTML로 연다. 사용자는 고정 역할을 제외한 Task와 팀원마다 모델·effort·런타임, 직접 지정 또는 기동 시 재평가를 고른다. 추천과 같은 값도 직접 고정할 수 있다. Artifact에서 `ArtifactData list choices` 전체를 `[{id,data}]` 배열로 저장하거나, 로컬 그림의 **선택 파일 저장**으로 같은 형식의 JSON을 받는다. 창구가 `node .claude/scripts/dag-routing-choices.mjs --dag <그림 원본.json> --choices <선택.json> --out <새 DAG.json>`을 실행하고 반영된 ID를 확인한다. 선택 내용을 계획·브리프·spec에 옮기고 PM이 바뀐 버전을 검토한다. 창구는 최종 그림을 보여 주고 사용자 승인 응답을 받은 뒤 실행한다.
 - PM이 `node .claude/scripts/orca-launch.mjs review --version <vN> --plan <계획.md> --dag <dag.json>` 결과의 review 해시를 검토 리포트에 남긴다. 창구는 같은 버전·해시로 그림을 보여 주고 사용자 원문과 날짜를 브리프에 적는다. 승인 대상이 바뀌었으면 새 버전으로 다시 검토한다.
 - `node .claude/scripts/orca-launch.mjs approve --version <vN> --plan <계획.md> --dag <dag.json> --review <PM이 확인한 해시> --response "<승인 원문>"`으로 승인 파일을 고정한다. 코디네이터 spec에 그 경로를 싣는다. 실행 중에는 코디네이터가 같은 파일 경로로 다시 게시해 같은 주소에서 진행을 보여 준다.
 

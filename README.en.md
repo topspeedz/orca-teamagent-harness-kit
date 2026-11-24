@@ -127,7 +127,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 **Model and effort managed in one table**
 
-- The Planner records the runtime, model and effort from `docs/harness/model-selection.md` for each role and task type. The assignments approved for execution also apply to Tasks awaiting registration.
+- The PM records backlog evidence for complexity, uncertainty, impact and verification. The Planner scores each Task and team member, consulting Haiku only when competing interpretations could change the assignment. On the DAG, users can lock a model and effort or delegate reassessment just before launch. The coordinator and team leads apply the approved runtime and model mapping. [Routing rubric and Astra ultra mapping](template/docs/harness/model-selection.md)
 - Editing the table changes the next plan. Changing a Task in the current Run requires an updated assignment and DAG and renewed approval.
 
 **Verification converges**

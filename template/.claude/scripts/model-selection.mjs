@@ -123,11 +123,15 @@ export function backlogComplexity(backlogText, ids) {
 export function choices(codex) {
   const claude = {};
   for (const m of CLAUDE_MODELS) claude[m] = NO_EFFORT_MODELS.includes(m) ? [] : [...EFFORTS];
-  return { claude, codex: Object.fromEntries(claudePairs().map((p) => { const c = toCodex(...Object.values(split(p)), codex); return [p, pair(c.model, c.effort)]; })) };
+  const mappings = codex.length ? claudePairs().map((p) => {
+    const c = toCodex(...Object.values(split(p)), codex);
+    return [p, pair(c.model, c.effort)];
+  }) : [];
+  return { claude, codex: Object.fromEntries(mappings) };
 }
 
 // `complexity` and `rules` (the parsed table) matter only for a `복잡도` row; other rows ignore them.
-function matchRow(rows, agent, unit) {
+export function matchRow(rows, agent, unit) {
   for (const [a, u, matched] of [[agent, unit, 'exact'], ['*', unit, 'unit-default'], ['*', '기본', 'default']]) {
     const r = rows.find((x) => x.agent === a && x.units.includes(u));
     if (r) return { row: r, matched };

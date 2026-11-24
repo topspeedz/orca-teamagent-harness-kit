@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>샘플 DAG</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
@@ -77,7 +78,7 @@ svg { display: block; }
 </style>
 <h1>샘플 기능 — 작업 DAG (스윔레인)</h1>
 <p class="sub"><b>샘플:</b> 레인 = 팀, 열 = 순서. <b>같은 열 = 병렬</b>. 화살표 = 선행 의존. 가로로 스크롤해서 보세요.</p>
-<div class="legend"><span><i class="sw" style="border-color:var(--plan-s);background:var(--plan)"></i>기획 — 무엇을 할지 정함(브리프·계획·백로그 분해) (기획 팀)</span><span><i class="sw" style="border-color:var(--dev-s);background:var(--dev)"></i>제작 — 산출물을 만듦(코드·문구·연출·3D) (개발 팀)</span><span><i class="sw" style="border-color:var(--verify-s);background:var(--verify)"></i>검증 — 만든 것을 확인(리뷰·QA·실측) (검증 팀)</span><span><i class="sw" style="border-color:var(--coord-s);background:var(--coord)"></i>조정 — Run 관리·사용자 승인 (코디네이터)</span><span><i class="sw" style="border-color:var(--harness-s);background:var(--harness)"></i>하네스 — 회고·스킬·규칙 개선 (하네스 팀)</span><span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX), 모델은 마우스 오버</span><span><i class="sw" style="border-color:var(--done);background:var(--node)"></i>완료 = 녹색 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node)"></i>진행 = 레인 색 굵은 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node);border-style:dashed;opacity:.6"></i>대기 = 점선·흐림</span></div>
+<div class="legend"><span><i class="sw" style="border-color:var(--plan-s);background:var(--plan)"></i>기획 — 무엇을 할지 정함(브리프·계획·백로그 분해) (기획 팀)</span><span><i class="sw" style="border-color:var(--dev-s);background:var(--dev)"></i>제작 — 산출물을 만듦(코드·문구·연출·3D) (개발 팀)</span><span><i class="sw" style="border-color:var(--verify-s);background:var(--verify)"></i>검증 — 만든 것을 확인(리뷰·QA·실측) (검증 팀)</span><span><i class="sw" style="border-color:var(--coord-s);background:var(--coord)"></i>조정 — Run 관리·사용자 승인 (코디네이터)</span><span><i class="sw" style="border-color:var(--harness-s);background:var(--harness)"></i>하네스 — 회고·스킬·규칙 개선 (하네스 팀)</span><span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX·UL), 모델은 마우스 오버</span><span><i class="sw" style="border-color:var(--done);background:var(--node)"></i>완료 = 녹색 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node)"></i>진행 = 레인 색 굵은 테두리</span><span><i class="sw" style="border-color:var(--muted);background:var(--node);border-style:dashed;opacity:.6"></i>대기 = 점선·흐림</span></div>
 <div class="scroll"><svg viewBox="0 0 2420 910" style="width:2420px;height:910px" role="group" aria-label="같은 열은 병렬: PM 뒤 T1∥T2, T3∥T5∥ADR, T4∥T6∥T7, T8, 검증 3종 병렬, 수정, 보고, 회고 순.">
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>
 <text class="colh" x="265" y="26" text-anchor="middle">BL 정리</text><text class="colh" x="515" y="26" text-anchor="middle">웨이브 ①</text><line class="colline" x1="390" y1="40" x2="390" y2="900"/><text class="colh" x="765" y="26" text-anchor="middle">웨이브 ②</text><line class="colline" x1="640" y1="40" x2="640" y2="900"/><text class="colh" x="1015" y="26" text-anchor="middle">웨이브 ③</text><line class="colline" x1="890" y1="40" x2="890" y2="900"/><text class="colh" x="1265" y="26" text-anchor="middle">웨이브 ④</text><line class="colline" x1="1140" y1="40" x2="1140" y2="900"/><text class="colh" x="1515" y="26" text-anchor="middle">검증 (병렬)</text><line class="colline" x1="1390" y1="40" x2="1390" y2="900"/><text class="colh" x="1765" y="26" text-anchor="middle">수정</text><line class="colline" x1="1640" y1="40" x2="1640" y2="900"/><text class="colh" x="2015" y="26" text-anchor="middle">보고</text><line class="colline" x1="1890" y1="40" x2="1890" y2="900"/><text class="colh" x="2265" y="26" text-anchor="middle">회고</text><line class="colline" x1="2140" y1="40" x2="2140" y2="900"/>
@@ -169,6 +170,11 @@ svg { display: block; }
     fields.replaceChildren();
     for (const [key, value] of Object.entries(node)) {
       if (key === 'title') continue;
+      if (key === 'routing') {
+        const template = document.getElementById('routing-' + card.dataset.index);
+        if (template) fields.append(template.content.cloneNode(true));
+        continue;
+      }
       let display = value;
       if (key === 'lane') display = lanes.find(l => l.id === value)?.name + ' (' + value + ')';
       if (key === 'col') display = columns[value] + ' (' + value + ')';
@@ -178,7 +184,12 @@ svg { display: block; }
     const pick = card.nextElementSibling?.querySelector('.pick[data-node]');
     if (pick) {
       const selected = pick.querySelector('select').value;
-      add('현재 선택', pick.querySelector('input').checked ? 'Codex · ' + selected + ' ' + pick.querySelector('.cx').textContent : 'Claude · ' + selected);
+      if (pick.dataset.recommended) {
+        add('배정 방식', selected ? '직접 지정 · 기동 시 고정' : '추천 사용 · 기동 직전 재평가 허용');
+        add('현재 선택', pick.querySelector('.cx').textContent);
+      } else {
+        add('현재 선택', pick.querySelector('input').checked ? 'Codex · ' + selected + ' ' + pick.querySelector('.cx').textContent : 'Claude · ' + selected);
+      }
     }
     const groupIds = groups.filter(g => g.nodes.includes(node.id)).map(g => g.id);
     if (groupIds.length) add('소속 그룹', groupIds.join(', '));
