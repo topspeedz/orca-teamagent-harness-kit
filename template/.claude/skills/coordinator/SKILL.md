@@ -133,7 +133,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 - **실패로 처리할 때는 `fail` 명령을 돌린다.** `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`. Orca는 워커의 성공 보고만으로 그 Task를 끝난 것으로 치고 뒤 Task를 준비 상태로 올린다. 이 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
 - **검증 리포트를 정산할 때는 원장에 올린다.** `node .claude/scripts/defect-ledger.mjs add --ledger <ledger.md> --map <map> --report <리포트> --source <Task ID>`. 리포트의 `## 결함` 표에서 장부의 `## 결함 원장`에 행을 만든다. 코디네이터가 고치는 것은 상태 칸뿐이다.
-- **Task와 수정을 정산할 때는 스냅샷을 찍는다.** `node .claude/scripts/tree-snapshot.mjs take`가 돌려준 `tree` 값을 장부에 적는다. 두 시점의 차이는 `node .claude/scripts/tree-snapshot.mjs diff --from <tree> --to <tree> --path <편집 범위>`로 그 Task의 편집 범위로 좁혀 본다. 병렬로 도는 동안의 차이에는 다른 Task의 편집이 섞이기 때문이다.
+- **Task와 수정을 정산할 때는 스냅샷을 찍는다.** `node .claude/scripts/tree-snapshot.mjs take`가 돌려준 `tree` 값을 장부에 적는다. 두 시점의 차이는 `node .claude/scripts/tree-snapshot.mjs diff --from <tree> --to <tree> --path <편집 범위>`로 그 Task의 편집 범위로 좁혀 바뀐 파일을 본다. 병렬로 도는 동안의 차이에는 다른 Task의 편집이 섞이기 때문이다.
 - 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다.
 - `stopReason: "finished"`인 `escalation`("Worker stopped without reporting")은 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다.
 - 기동 스크립트가 턴 시작을 확인하지 못해도 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 확인한 뒤에만 복구한다.
@@ -158,7 +158,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 1. 고치는 것은 원장의 High뿐이다. 완료 기준 미달도 High로 적힌 것만 고친다. Medium 이하는 인박스로 보낸다. 사용자가 이번에 고치라고 정한 것만 예외이고, 그 결정 줄이 장부에 있어야 한다(양식 `ledger.md`). 열린 High가 0이면 라운드를 시작하지 않고 계획의 수정·재검 Task를 `skip`으로 닫는다.
 2. 수정 Task의 spec에는 결함 ID마다 재현 테스트를 먼저 쓰고 테스트 이름에 그 결함 ID를 넣으라고 적는다. 재현 테스트를 쓸 수 없는 결함(화면을 봐야만 보이는 것 등)은 리포트에 그렇게 적게 한다.
-3. 수정이 모두 정산되면 바로 최종 테스트를 돌린다(아래). 재현 테스트가 있는 결함은 여기서 확인된다. 재검은 재현 테스트가 없는 결함이 있을 때만 그 결함 ID로 띄우고, 최종 테스트 뒤에 띄운다. 재검은 그 결함 ID의 재현 확인만 하고, 새 탐색, 새 시나리오, 전체 테스트를 하지 않는다. 재검 spec에는 `결함 ID:`와 `수정 diff:`를 넣는다(양식 `spec.md`). 수정 diff는 수정 전후 스냅샷의 차이로 만든다. 전 범위를 다시 봐야 한다고 판단되면 띄우지 않고 사용자에게 올린다.
+3. 수정이 모두 정산되면 바로 최종 테스트를 돌린다(아래). 재현 테스트가 있는 결함은 여기서 확인된다. 재검은 재현 테스트가 없는 결함이 있을 때만 그 결함 ID로 띄우고, 최종 테스트 뒤에 띄운다. 재검은 그 결함 ID의 재현 확인만 하고, 새 탐색, 새 시나리오, 전체 테스트를 하지 않는다. 재검 spec에는 `결함 ID:`와 `수정 diff:`를 넣는다(양식 `spec.md`). 코디네이터가 `git diff <수정 전 tree> <수정 후 tree> -- <수정 Task의 편집 범위>`의 출력을 장부와 같은 Run 폴더에 파일로 남기고, 그 경로를 `수정 diff:`에 적는다. 전 범위를 다시 봐야 한다고 판단되면 띄우지 않고 사용자에게 올린다.
 4. 루프는 최대 2회다. 남은 High는 그 루프의 최종 테스트에서 실패한 것 전부(재현 테스트와 다른 회귀)와, 재검을 띄웠으면 재검에서 열려 있는 High다. 재검 중에 새로 찾은 High도 여기에 든다. 2회 뒤에도 High가 남아 3회째가 필요해지면 멈추고 `ask --wait`로 사용자에게 묻는다. 남은 High 목록, 라운드별 High 수, 지금까지 검증·수정에 쓴 워커 수와 시간을 함께 싣고, 3회째를 돌릴지 인박스로 넘길지 답을 받는다. 답 없이 3회째를 띄우지 않는다. 사용자가 3회째를 승인하면 그 원문을 장부의 `## 결정`에 적고, 그 회차 재검 리포트의 판정에만 `--round-cap 3`을 붙인다.
 5. 사용자의 "알아서 진행해"는 이 상한과 재검 범위를 늘리지 않는다. 위임은 사용자가 그렇게 하라고 명시한 것뿐이다. 사용자가 반대하지 않았다는 것, 코디네이터가 "한 줄만 고치면 된다"고 본 것은 위임이 아니다.
 
