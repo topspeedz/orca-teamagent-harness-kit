@@ -1142,4 +1142,634 @@ await ta(async () => {
   }
 });
 
+// ---- Task kinds from the drawing's rounds ----
+const T = (id, more) => node(id, more);
+const E = (from, to) => ({ from, to });
+async function reviewError(nodes, edges, drawing = {}) {
+  const f = fakeDag();
+  f.fs['plan.md'] = 'phase-a 실행 계획';
+  f.fs['dag.json'] = JSON.stringify({ nodes, edges, ...drawing });
+  const { code, out } = await main(['review', ...reviewArgs('v1')], f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  return out.error;
+}
+// 50. a DAG without rounds/conditional/afterFix gets none of the new fields on its Task rows
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const plain = await approve(f, [T('T01'), { id: 'A1', kind: 'approval' }, T('T02')],
+    [E('T01', 'A1'), E('A1', 'T02'), { from: 'T02', to: 'T01', loop: true }]);
+  for (const row of Object.values(record(plain).tasks))
+    for (const k of ['kind', 'round', 'conditional', 'afterFix']) assert.equal(k in row, false);
+  // the row exactly as the function built it before rounds existed: values and key order
+  assert.equal(JSON.stringify(record(plain).tasks.T02), JSON.stringify({ agent: 'qa-inspector', unit: '흐름 검증', runtime: 'claude',
+    model: 'opus', effort: 'medium', overrideReason: null, bl: 'BL-0012', deps: ['T01'], members: [] }));
+});
+// 51. rounds mark kind and round; conditional: true is kept
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const marked = await approve(f, [T('T01'), T('Q1'), T('F1'), T('R1'), { ...T('D1'), conditional: true }],
+    [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1'), E('R1', 'D1')], 'v1',
+    { rounds: [{ n: 1, verify: ['Q1'], fix: 'F1', recheck: 'R1' }] });
+  assert.deepEqual(['Q1', 'F1', 'R1'].map(id => [record(marked).tasks[id].kind, record(marked).tasks[id].round]),
+    [['verify', 1], ['fix', 1], ['recheck', 1]]);
+  assert.equal(record(marked).tasks.D1.conditional, true);
+  assert.equal('kind' in record(marked).tasks.T01, false);
+});
+// 52. a verify Task waiting behind a fix Task is refused
+await ta(async () => {
+  assert.match(await reviewError([T('T01'), T('Q1'), T('F1'), T('Q2')], [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'Q2')],
+    { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] }), /검증 Task Q2가 수정 Task F1 뒤에 걸려 있음/);
+  // behind it through a plain Task as well
+  assert.match(await reviewError([T('Q1'), T('F1'), T('T02'), T('Q2')], [E('Q1', 'F1'), E('F1', 'T02'), E('T02', 'Q2')],
+    { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] }), /검증 Task Q2가 수정 Task F1 뒤에 걸려 있음/);
+});
+// 53. a verify Task that gives afterFix passes and keeps the reason; afterFix that is not a non-empty string is refused
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const reason = '고친 빌드가 있어야 볼 수 있는 실기기 회차';
+  const nodes = [T('T01'), T('Q1'), T('F1'), T('Q2', { afterFix: reason })];
+  const edges = [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'Q2')];
+  const rounds = { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] };
+  const done = await approve(f, nodes, edges, 'v1', rounds);
+  assert.equal(record(done).tasks.Q2.afterFix, reason);
+  assert.equal(record(done).tasks.Q2.kind, 'verify');
+  for (const afterFix of ['', true, null, 3]) {
+    assert.match(await reviewError([...nodes.slice(0, 3), T('Q2', { afterFix })], edges, rounds), /afterFix/, String(afterFix));
+  }
+});
+// 54. three fix Tasks on one dependency path are refused; two pass
+await ta(async () => {
+  const chain = ['F1', 'R1', 'F2', 'R2', 'F3'];
+  const rounds = [{ n: 1, fix: 'F1', recheck: 'R1' }, { n: 2, fix: 'F2', recheck: 'R2' }, { n: 3, fix: 'F3' }];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  assert.match(await reviewError(chain.map(id => T(id)), edges, { rounds }), /수정 Task 사슬이 2단을 넘음/);
+  const f = fakeDag();
+  await approve(f, chain.slice(0, 4).map(id => T(id)), edges.slice(0, 3), 'v1', { rounds: rounds.slice(0, 2) });
+});
+// 55. rounds naming an id that is not an executable Task is refused
+await ta(async () => {
+  const nodes = [T('T01'), { id: 'A1', kind: 'approval' }];
+  for (const id of ['Q9', 'A1', 'constructor'])
+    assert.match(await reviewError(nodes, [E('T01', 'A1')], { rounds: [{ n: 1, verify: id }] }), /rounds가 가리키는 노드 없음/, id);
+});
+// 56. a Task named more than once across rounds is refused, whatever the role or round
+await ta(async () => {
+  const nodes = [T('Q1'), T('F1'), T('Q2')];
+  const edges = [E('Q1', 'F1'), E('F1', 'Q2')];
+  for (const rounds of [
+    [{ n: 1, verify: ['Q1', 'Q1'] }],
+    [{ n: 1, verify: 'Q2', fix: 'F1' }, { n: 2, recheck: 'Q2' }], // would hide Q2's verify-after-fix
+    [{ n: 1, fix: 'F1', recheck: 'F1' }],
+  ]) assert.match(await reviewError(nodes, edges, { rounds }), /rounds에 같은 Task가 두 번 나옴/, JSON.stringify(rounds));
+});
+
+// ---- skip: close a planned Task that has nothing to do ----
+const planSpec = (id, what) => `[역할: qa-inspector]\nTask: ${id} ${what}\n배정: qa-inspector / 흐름 검증 (claude opus/medium)`;
+const skip = (id, reason = '문서 영향 없음') => ['skip', ...M, '--id', id, '--reason', reason];
+// T01 → D1(conditional) → P1, plus the extra edges given
+async function skipPlan(edges = [], drawing = {}, nodes = []) {
+  const f = fakeDag({ fileOver: { 'd.md': planSpec('D1', '문서 동기화'), 'p.md': planSpec('P1', '배포 점검') } });
+  await approve(f, [T('T01'), T('D1', { conditional: true }), T('P1'), ...nodes], [E('T01', 'D1'), E('D1', 'P1'), ...edges], 'v1', drawing);
+  await main([...runArgs, '--approval', approval], f.deps);
+  return f;
+}
+// a refusal makes no state-changing Orca call and leaves the map as it was
+async function refused(f, args, error) {
+  const before = [f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const { code, out } = await main(args, f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  assert.match(out.error, error);
+  assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+}
+// 57. skip an unregistered conditional Task: refused when unmarked or its inputs are unregistered; then created, closed, never launched
+await ta(async () => {
+  const f = await skipPlan();
+  // 1. a Task without a mark cannot be skipped. Nothing changes
+  const no = await main(skip('T01', '필요 없음'), f.deps);
+  assert.equal(no.code, 1); assert.match(no.out.error, /건너뛸 수 있는 Task가 아님/);
+  assert.equal(f.count('task-update'), 0);
+  // the reason is required and not blank
+  await refused(f, ['skip', ...M, '--id', 'D1'], /사용법: skip --map <map> --id <T01> --reason <사유>/);
+  await refused(f, skip('D1', '  '), /사용법: skip/);
+  // 2. an input that is not registered yet is refused
+  assert.match((await main(skip('D1'), f.deps)).out.error, /미등록 선행 Task: T01/);
+  await refused(f, skip('D1'), /미등록 선행 Task: T01/);
+  // 3. skipped without registering: Orca gets a Task that is shown as finished
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const ok = await main(skip('D1'), f.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.deepEqual(ok.out, { id: 'D1', skipped: true, promoted: [] });
+  const { T01, D1 } = f.map().tasks;
+  assert.equal(f.tasks.get(D1.orca).status, 'completed');
+  assert.equal(D1.skipped.reason, '문서 영향 없음');
+  assert.equal(D1.skipped.at, T0);
+  assert.match(f.tasks.get(D1.orca).spec, /건너뜀: 문서 영향 없음/);
+  assert.equal(f.tasks.get(D1.orca).spec, `Task: D1 건너뜀\n건너뜀: 문서 영향 없음\n\n실행 승인: ${f.map().review} D1\n`);
+  assert.deepEqual(f.tasks.get(D1.orca).deps, [T01.orca]);
+  assert.deepEqual(D1.registeredDeps, [T01.orca]);
+  assert.equal(val(f.call('task-update'), '--result'), '건너뜀: 문서 영향 없음');
+  assert.equal(D1.dispatch, null);
+  // 5. a skipped Task cannot be launched and is not in actual
+  assert.match((await main(go('D1'), f.deps)).out.error, /건너뛴 Task/);
+  assert.equal(f.count('worker-start'), 0);
+  assert.equal((await main(['actual', ...M], f.deps)).out.some(r => r.id === 'D1'), false);
+  // 4. a successor registers against the skipped Task's Orca id, which is completed
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.deepEqual(f.tasks.get(f.map().tasks.P1.orca).deps, [D1.orca]);
+});
+// 58. skip a registered, waiting Task: dependents that are pending with every input completed become ready, others stay
+await ta(async () => {
+  // P1 also waits on T02: while T02 is unfinished, skipping D1 promotes nothing
+  const both = async () => {
+    const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+    for (const [id, file] of [['T01', 'a.md'], ['T02', 'b.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+    f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+    return f;
+  };
+  const f = await both();
+  const wait = await main(skip('D1'), f.deps);
+  assert.equal(wait.code, 0, JSON.stringify(wait.out));
+  assert.deepEqual(wait.out.promoted, []);
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'completed');
+  assert.equal(f.tasks.get(f.map().tasks.P1.orca).status, 'pending');
+  // with T02 completed too, P1 is promoted by skip itself
+  const g = await both();
+  g.tasks.get(g.map().tasks.T02.orca).status = 'completed';
+  const ok = await main(skip('D1'), g.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.deepEqual(ok.out, { id: 'D1', skipped: true, promoted: ['P1'] });
+  assert.equal(g.tasks.get(g.map().tasks.P1.orca).status, 'ready');
+  assert.equal(g.map().tasks.D1.skipped.reason, '문서 영향 없음');
+  assert.equal('skipping' in g.map().tasks.D1, false);
+  assert.equal(g.count('task-create'), 4);
+});
+// 59. fix and recheck Tasks can be skipped without the conditional mark; a verify Task cannot
+await ta(async () => {
+  const f = await skipPlan([], { rounds: [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }] }, [T('Q1'), T('F1'), T('R1')]);
+  await refused(f, skip('Q1', '결함 없음'), /건너뛸 수 있는 Task가 아님/);
+  for (const id of ['F1', 'R1']) {
+    const { code, out } = await main(skip(id, '결함 없음'), f.deps);
+    assert.equal(code, 0, JSON.stringify(out));
+    assert.equal(f.tasks.get(f.map().tasks[id].orca).status, 'completed');
+  }
+});
+// 60. 6. a registered Task that has started, finished, has a gate or is in transition is refused
+await ta(async () => {
+  const setup = async () => {
+    const f = await skipPlan();
+    await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+    await main(reg('D1', 'd.md'), f.deps);
+    return f;
+  };
+  const started = await setup();
+  started.tasks.get(started.map().tasks.D1.orca).status = 'ready';
+  assert.equal((await main(go('D1'), started.deps)).code, 0);
+  await refused(started, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const done = await setup();
+  done.tasks.get(done.map().tasks.D1.orca).status = 'completed';
+  await refused(done, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const gated = await setup();
+  await main(['gate', ...M, '--id', 'D1', '--question', '진행할까?'], gated.deps);
+  await refused(gated, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const moving = await setup();
+  const m = moving.map(); m.transition = { id: 'D1', approval, from: m.tasks.D1.orca };
+  moving.fs['orca-tasks.json'] = JSON.stringify(m);
+  await refused(moving, skip('D1'), /이미 기동했거나 끝난 Task/);
+});
+// 61. 7. skipping twice returns the first result and changes nothing in Orca
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const before = [f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: [] });
+  assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+});
+// 62. 8. a map with no approval record is refused before Orca is touched
+await ta(async () => {
+  const f = fakeDag();
+  f.fs['orca-tasks.json'] = JSON.stringify({ run: 'run_exec', phase: 'phase-a', tasks: {} });
+  await refused(f, skip('D1'), /건너뛸 수 있는 Task가 아님/);
+  assert.equal(f.calls.length, 0);
+});
+// 63. register makes a Task created pending ready itself when every input is completed (the fake creates it pending)
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.equal(p.out.status, 'ready');
+  assert.equal(f.tasks.get(p.out.orca).status, 'ready');
+  // registering again is the existing path: nothing more happens
+  const updates = f.count('task-update');
+  assert.equal((await main(reg('P1', 'p.md'), f.deps)).out.existing, true);
+  assert.equal(f.count('task-update'), updates);
+});
+// 64. register leaves a new Task pending while an input is unfinished
+await ta(async () => {
+  const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(reg('T02', 'b.md'), f.deps);
+  await main(skip('D1'), f.deps);
+  const updates = f.count('task-update');
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.equal(p.out.status, 'pending');
+  assert.equal(f.tasks.get(p.out.orca).status, 'pending');
+  assert.equal(f.count('task-update'), updates);
+});
+// 65. skip reuses an Orca Task that already carries its approval marker (a lost task-create reply); two such Tasks are refused
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const marker = `실행 승인: ${f.map().review} D1`;
+  f.tasks.set('task_lost', { status: 'ready', deps: [f.map().tasks.T01.orca], spec: `Task: D1 건너뜀\n건너뜀: 문서 영향 없음\n\n${marker}\n` });
+  const creates = f.count('task-create');
+  const ok = await main(skip('D1'), f.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.equal(f.count('task-create'), creates);
+  assert.equal(f.map().tasks.D1.orca, 'task_lost');
+  assert.equal(f.tasks.get('task_lost').status, 'completed');
+  const g = await skipPlan();
+  await main(reg('T01', 'a.md'), g.deps); g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
+  for (const id of ['task_lost1', 'task_lost2']) g.tasks.set(id, { status: 'pending', deps: [], spec: `x\n\n실행 승인: ${g.map().review} D1\n` });
+  await refused(g, skip('D1'), /같은 승인 Task가 여러 번 등록됨: D1/);
+});
+// 66. skipping again repairs a dependent left pending: it is made ready and listed, the skipped Task is not touched
+await ta(async () => {
+  const f = await skipPlan();
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const { D1, P1 } = f.map().tasks;
+  f.tasks.get(P1.orca).status = 'pending';
+  const creates = f.count('task-create');
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: ['P1'] });
+  assert.equal(f.tasks.get(P1.orca).status, 'ready');
+  assert.equal(f.count('task-create'), creates);
+  assert.equal(f.calls.filter((a) => a[1] === 'task-update' && val(a, '--id') === D1.orca).length, 1);
+  assert.equal(f.map().tasks.D1.skipped.reason, '문서 영향 없음');
+});
+// The close (task-update --status completed) gets an unparsable reply; `applied` says whether Orca still made the change.
+function loseClose(f, applied) {
+  const call = f.deps.orca;
+  f.deps.orca = (args) => {
+    if (args[1] !== 'task-update' || val(args, '--status') !== 'completed') return call(args);
+    if (applied) call(args);
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  return () => { f.deps.orca = call; };
+}
+// 67. a close applied in Orca whose reply was lost: the entry keeps `skipping`; a re-run records `skipped` and promotes, with no second create or close
+await ta(async () => {
+  const f = await skipPlan();
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const { D1, P1 } = f.map().tasks;
+  const restore = loseClose(f, true);
+  const lost = await main(skip('D1'), f.deps);
+  restore();
+  assert.equal(lost.code, 1);
+  assert.match(lost.out.error, /task-update 실패/);
+  assert.equal(f.tasks.get(D1.orca).status, 'completed');
+  assert.deepEqual(f.map().tasks.D1.skipping, { reason: '문서 영향 없음' });
+  assert.equal('skipped' in f.map().tasks.D1, false);
+  const seen = f.calls.length;
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, promoted: ['P1'] });
+  assert.equal(f.map().tasks.D1.skipped.reason, '문서 영향 없음');
+  assert.equal('skipping' in f.map().tasks.D1, false);
+  assert.equal(f.tasks.get(P1.orca).status, 'ready');
+  // the only update on the re-run is P1's promotion
+  assert.deepEqual(f.calls.slice(seen).filter((a) => a[1] === 'task-update').map((a) => val(a, '--id')), [P1.orca]);
+  // an unregistered Task: the re-run makes no second create
+  const g = await skipPlan();
+  await main(reg('T01', 'a.md'), g.deps); g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
+  const back = loseClose(g, true);
+  assert.equal((await main(skip('D1'), g.deps)).code, 1);
+  back();
+  const creates = g.count('task-create');
+  const done = await main(skip('D1'), g.deps);
+  assert.equal(done.code, 0, JSON.stringify(done.out));
+  assert.equal(g.count('task-create'), creates);
+  assert.equal(g.map().tasks.D1.skipped.reason, '문서 영향 없음');
+});
+// 68. while the close has not landed, worker --map refuses the `skipping` Task and launchable neither launches nor lists it
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(reg('D1', 'd.md'), f.deps);
+  const restore = loseClose(f, false);
+  assert.equal((await main(skip('D1'), f.deps)).code, 1);
+  restore();
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'ready');
+  assert.ok(f.map().tasks.D1.skipping);
+  assert.match((await main(go('D1'), f.deps)).out.error, /건너뛴 Task/);
+  assert.equal(f.count('worker-start'), 0);
+  const l = await main(['launchable', ...M], f.deps);
+  assert.equal(l.code, 0, JSON.stringify(l.out));
+  assert.equal(l.out.launch.includes('D1'), false);
+  assert.equal(l.out.candidates.some((c) => c.id === 'D1'), false);
+  f.tasks.get(f.map().tasks.D1.orca).status = 'pending';
+  assert.equal((await main(['launchable', ...M], f.deps)).out.candidates.some((c) => c.id === 'D1'), false);
+  // a re-run closes it
+  const again = await main(skip('D1'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'completed');
+});
+// 69. a registered but unfinished input is refused with no Orca change, whether or not the Task is registered
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps);
+  await refused(f, skip('D1'), /선행 Task가 끝나지 않음: T01/);
+  await main(reg('D1', 'd.md'), f.deps);
+  await refused(f, skip('D1'), /선행 Task가 끝나지 않음: T01/);
+});
+// 70. register promotes from Orca's listed status when the create receipt carries none
+await ta(async () => {
+  const f = await skipPlan();
+  const call = f.deps.orca;
+  f.deps.orca = (args) => {
+    const r = call(args);
+    if (args[1] !== 'task-create') return r;
+    const out = JSON.parse(r.stdout);
+    return { ...r, stdout: JSON.stringify({ ok: true, result: { taskId: out.result.task.id } }) };
+  };
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const d = await main(reg('D1', 'd.md'), f.deps);
+  assert.equal(d.code, 0, JSON.stringify(d.out));
+  assert.equal(d.out.status, 'ready');
+  assert.equal(f.tasks.get(d.out.orca).status, 'ready');
+});
+
+// ---- refusals before launch: fix Tasks, verification after a fix, full tests in the completion criteria ----
+const LEDGER = (rows, decisions = []) => ['## 결함 원장', '', '| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |', '| --- | --- | --- | --- | --- | --- |',
+  ...rows, '', '## 결정', '', ...decisions, ''].join('\n');
+const H1 = '| H-1 | Q1 | High | 관찰 | 1 | 열림 |', M1 = '| M-1 | Q1 | Medium | 관찰 | 1 | 열림 |';
+const LEAD_Q1 = { unit: '리드', model: 'sonnet', effort: 'high', members: [{ role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' }] };
+const FIX_NO_IDS = '수정 Task의 결함 ID 줄이 없음', POST_FIX = '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함', NO_LEDGER = '장부를 읽을 수 없음';
+// T01 → Q1(verify) → F1(fix) → R1(recheck); with lead, Q1 is a team lead that launches planner members itself
+// with q2, a second verify Task Q2 hangs off T01 beside Q1 (not behind F1)
+async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '', q2 = false } = {}) {
+  const f = fakeDag({ fileOver: {
+    'q.md': lead ? '[역할: qa-inspector · 리드]\nTask: Q1 검증 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)' : planSpec('Q1', '흐름 검증'),
+    'q2.md': planSpec('Q2', '추가 검증'), 'f.md': planSpec('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
+  if (ledger !== null) f.fs['ledger.md'] = ledger;
+  await approve(f, [T('T01'), T('Q1', { ...(lead ? LEAD_Q1 : {}), ...q1 }), T('F1'), T('R1', r1), ...(q2 ? [T('Q2')] : [])],
+    [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1'), ...(q2 ? [E('T01', 'Q2')] : [])], 'v1',
+    rounds ? { rounds: [{ n: 1, verify: q2 ? ['Q1', 'Q2'] : ['Q1'], fix: 'F1', recheck: 'R1' }] } : {});
+  await main([...runArgs, '--approval', approval], f.deps);
+  const done = (id) => { f.tasks.get(f.map().tasks[id].orca).status = 'completed'; };
+  const launch = async (args) => { const r = await main(args, f.deps); assert.equal(r.code, 0, JSON.stringify(r.out)); };
+  await launch(reg('T01', 'a.md'));
+  done('T01');
+  await launch(reg('Q1', 'q.md', ...(lead ? ['--lead'] : [])));
+  if (q2) await launch(reg('Q2', 'q2.md'));
+  return { f, done, launch, member: (id, file) => ['worker', '--approval', approval, '--parent', 'Q1', '--id', id, '--agent', 'planner',
+    '--unit', '계획', '--spec-file', file, '--bracket', 'BL-0012', '--does', '검증 분해'] };
+}
+// T01 and Q1 done, F1 registered and ready
+async function atFix(opts) {
+  const p = await roundPlan(opts);
+  await p.launch(go('Q1'));
+  p.done('Q1');
+  await p.launch(reg('F1', 'f.md'));
+  return p;
+}
+// F1 launched and done, R1 registered and ready
+async function atRecheck(opts) {
+  const p = await atFix({ fix: '\n결함 ID: H-1', ...opts });
+  await p.launch(go('F1'));
+  p.done('F1');
+  await p.launch(reg('R1', 'r.md'));
+  return p;
+}
+// refused with this exact message: no worker started, no Orca status change, the map as it was
+async function refusedLaunch(f, args, error) {
+  const before = [f.count('worker-start'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const { code, out } = await main(args, f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  assert.equal(out.error, error);
+  assert.deepEqual([f.count('worker-start'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+}
+// 71. fix Task: 1. no `결함 ID:` line → refused
+await ta(async () => {
+  const { f } = await atFix();
+  await refusedLaunch(f, go('F1'), FIX_NO_IDS);
+  // an empty list counts as missing
+  const g = (await atFix({ fix: '\n결함 ID: ,' })).f;
+  await refusedLaunch(g, go('F1'), FIX_NO_IDS);
+});
+// 72. fix Task: 2. a Medium ID is refused and named with its reason
+await ta(async () => {
+  const { f } = await atFix({ fix: '\n결함 ID: H-1, M-1' });
+  await refusedLaunch(f, go('F1'), '수정에 넣을 수 없는 결함: M-1(Medium는 수정 포함 승인이 필요함)');
+});
+// 73. fix Task: 3. only open High IDs → launched
+await ta(async () => {
+  const { f, launch } = await atFix({ fix: '\n결함 ID: H-1' });
+  await launch(go('F1'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 74. fix Task: 4. a Medium ID with a `수정 포함 승인` decision → launched
+await ta(async () => {
+  const { f, launch } = await atFix({ fix: '\n결함 ID: H-1, M-1', ledger: LEDGER([H1, M1], ['- M-1 | 수정 포함 승인 | 이것도 같이 고쳐 주세요']) });
+  await launch(go('F1'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 75. fix Task: 5. no ledger file → refused with a message, nothing thrown
+await ta(async () => {
+  const { f } = await atFix({ fix: '\n결함 ID: H-1', ledger: null });
+  await refusedLaunch(f, go('F1'), NO_LEDGER);
+});
+// 76. 6. before any fix round, the verify Q1 and its members launch without `결함 ID:`
+await ta(async () => {
+  const { f, launch, member } = await roundPlan({ lead: true });
+  await launch(go('Q1'));
+  f.fs['m1.md'] = '[역할: planner]\nTask: Q1-A 검증 분해\n배정: planner / 계획 (claude sonnet/medium)';
+  await launch(member('Q1-A', 'm1.md'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 77. 7. after F1 launched, R1 needs both `결함 ID:` and `수정 diff:`
+await ta(async () => {
+  for (const recheck of ['', '\n결함 ID: H-1', '\n수정 diff: _workspace/fix.diff', '\n결함 ID: H-1\n수정 diff:  ']) {
+    const { f } = await atRecheck({ recheck });
+    await refusedLaunch(f, go('R1'), POST_FIX);
+  }
+  const { f, launch } = await atRecheck({ recheck: '\n결함 ID: H-1\n수정 diff: _workspace/fix.diff' });
+  await launch(go('R1'));
+  assert.equal(f.count('worker-start'), 3);
+});
+// 78. 8. after F1 launched, a new member of the verify lead Q1 without `결함 ID:` is refused; with both lines it launches
+await ta(async () => {
+  const { f, launch, member } = await atRecheck({ lead: true });
+  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n수정 diff: _workspace/fix.diff';
+  await refusedLaunch(f, member('Q1-B', 'm2.md'), POST_FIX);
+  assert.equal(f.map().direct?.['Q1-B'], undefined);
+  f.fs['m3.md'] = '[역할: planner]\nTask: Q1-C 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n결함 ID: H-1\n수정 diff: _workspace/fix.diff';
+  await launch(member('Q1-C', 'm3.md'));
+});
+// 79. 9. a `전 범위 검증 승인` decision for the Task (or the member's parent), or afterFix on the governing row, lets 7 and 8 pass
+await ta(async () => {
+  const wide = (id) => LEDGER([H1, M1], [`- ${id} | 전 범위 검증 승인 | 전체를 다시 봐 주세요`]);
+  await (async () => { const { launch } = await atRecheck({ ledger: wide('R1') }); await launch(go('R1')); })();
+  await (async () => { const { launch } = await atRecheck({ r1: { afterFix: '고친 빌드 전체 재검' } }); await launch(go('R1')); })();
+  // a decision for another Task does not count
+  await (async () => { const { f } = await atRecheck({ ledger: wide('T01') }); await refusedLaunch(f, go('R1'), POST_FIX); })();
+  // a decision line with no answer does not count
+  await (async () => { const { f } = await atRecheck({ ledger: LEDGER([H1], ['- R1 | 전 범위 검증 승인 |']) }); await refusedLaunch(f, go('R1'), POST_FIX); })();
+  for (const opts of [{ ledger: wide('Q1') }, { q1: { afterFix: '고친 빌드 전체 재검' } }]) {
+    const { f, launch, member } = await atRecheck({ lead: true, ...opts });
+    f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
+    await launch(member('Q1-B', 'm2.md'));
+  }
+});
+// 80. 10. an approval without kind refuses none of the above, even with no ledger
+await ta(async () => {
+  const { f, launch, member } = await atFix({ rounds: false, lead: true, ledger: null });
+  assert.equal('kind' in JSON.parse(f.fs[approval]).tasks.F1, false);
+  await launch(go('F1'));
+  f.tasks.get(f.map().tasks.F1.orca).status = 'completed';
+  await launch(reg('R1', 'r.md'));
+  await launch(go('R1'));
+  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
+  await launch(member('Q1-B', 'm2.md'));
+});
+// full tests in the completion criteria: AGENTS.md marks them in `## 명령`
+const AGENTS = ['# 공통 지침', '', '## 명령', '', '- `npm test` — 저장소 전체 (전체 테스트)', '- `npm run lint` — 린트', '',
+  '## 기술 스택', '', '- `npm run e2e` (전체 테스트) 이 절의 표시는 보지 않는다'].join('\n');
+const criteria = (...lines) => ['[역할: qa-inspector]', 'Task: T01 로그인 흐름', '금지: npm test 를 돌리지 않는다', '배정: qa-inspector / 흐름 검증 (claude opus/medium)', '', ...lines].join('\n');
+// 81. 11. a marked command inside `완료 기준:` (up to 검증 환경값 / 막히면: / 보고:) → register, direct launch refused
+await ta(async () => {
+  for (const spec of [criteria('완료 기준: npm test 통과'), criteria('완료 기준:', '- npm run lint 통과', '- npm test 통과', '보고: 리포트')]) {
+    const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': spec } });
+    await execRun(f);
+    const before = f.count('task-create');
+    const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(code, 1, JSON.stringify(out));
+    assert.equal(out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+    assert.equal(f.count('task-create'), before);
+    f.fs['qa.md'] = spec;
+    const direct = await main([...workerArgv, '--approval', approval, '--id', 'T01'], f.deps);
+    assert.equal(direct.code, 1, JSON.stringify(direct.out));
+    assert.equal(direct.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+    assert.equal(f.count('worker-start'), 0);
+  }
+});
+// 82. 12. the same command only on `금지:`, after the region, or marked outside `## 명령` → registered
+await ta(async () => {
+  const spec = criteria('완료 기준: npm run e2e 통과', '검증 환경값(설정값): 없음', '막히면: npm test 실패면 ask', '보고: npm test 결과는 (참고)');
+  const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': spec } });
+  await execRun(f);
+  const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+});
+// 83. 13. no AGENTS.md, or no mark in it → registered
+await ta(async () => {
+  for (const agents of [undefined, AGENTS.replace(' (전체 테스트)\n', '\n'), '# 공통 지침\n\n- `npm test` (전체 테스트)']) {
+    const f = fakeDag({ fileOver: { 'a.md': criteria('완료 기준: npm test 통과') } });
+    if (agents !== undefined) f.fs['AGENTS.md'] = agents;
+    await execRun(f);
+    const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(code, 0, JSON.stringify(out));
+  }
+});
+// 84. a marked command counts only as a whole command: a narrower or different command passes
+await ta(async () => {
+  const cases = [['npm test -- src/login.test.ts', 0], ['npm test src/a.test.js', 0], ['pnpm test', 0], ['npm test', 1], ['`npm test`', 1],
+    ['npm test 통과', 1], ['npm test → 0 failed', 1], ['npm test && npm run lint', 1], ['npm test 2>&1', 1]];
+  for (const [command, code] of cases) {
+    const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': criteria(`완료 기준: ${command}`) } });
+    await execRun(f);
+    const r = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(r.code, code, command + ' ' + JSON.stringify(r.out));
+    if (code) assert.equal(r.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+  }
+});
+// fix Task F1 launched directly (no --parent), with its own approved row
+const directFix = (file) => ['worker', '--agent', 'qa-inspector', '--unit', '흐름 검증', '--spec-file', file, '--bracket', 'BL-0012', '--does', '결함 수정',
+  '--approval', approval, '--id', 'F1'];
+// 85. a fix Task launched directly starts the fix round: a following verify launch without the two lines is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan({ q2: true, fix: '\n결함 ID: H-1' });
+  await launch(go('Q1'));
+  done('Q1');
+  await launch(directFix('f.md'));
+  assert.ok(f.map().direct.F1.dispatch);
+  await refusedLaunch(f, go('Q2'), POST_FIX);
+});
+// 86. a direct launch without --parent whose own row is a fix and has no `결함 ID:` line is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan();
+  await launch(go('Q1'));
+  done('Q1');
+  await refusedLaunch(f, directFix('f.md'), FIX_NO_IDS);
+  assert.equal(f.map().direct?.F1, undefined);
+});
+// 87. worker --map --retry: a verify Task retried after the fix round started, with no decision line, is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan({ q2: true, fix: '\n결함 ID: H-1' });
+  await launch(go('Q1'));
+  await launch(go('Q2'));
+  f.tasks.get(f.map().tasks.Q2.orca).status = 'failed';
+  done('Q1');
+  await launch(reg('F1', 'f.md'));
+  await launch(go('F1'));
+  await refusedLaunch(f, go('Q2', '--retry'), POST_FIX);
+});
+
+// 88. two rounds: round 2 names round 1's recheck as its verify; it stays recheck of round 1. Other repeats stay refused
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const chain = ['Q1', 'F1', 'R1', 'F2', 'R2'];
+  const nodes = chain.map(id => T(id)), edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const two = verify => [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }, { n: 2, verify, fix: 'F2', recheck: 'R2' }];
+  const done = await approve(f, nodes, edges, 'v1', { rounds: two('R1') });
+  assert.deepEqual([record(done).tasks.R1.kind, record(done).tasks.R1.round], ['recheck', 1]);
+  assert.deepEqual([record(done).tasks.R2.kind, record(done).tasks.R2.round], ['recheck', 2]);
+  for (const id of ['F1', 'Q1'])
+    assert.match(await reviewError(nodes, edges, { rounds: two(id) }), new RegExp(`rounds에 같은 Task가 두 번 나옴: ${id}`), id);
+});
+// 89. a third fix Task on one path passes only with afterFix, and is still launched under the fix-Task rules
+await ta(async () => {
+  const chain = ['T01', 'Q1', 'F1', 'R1', 'F2', 'R2', 'F3'];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const rounds = [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }, { n: 2, verify: 'R1', fix: 'F2', recheck: 'R2' }, { n: 3, fix: 'F3' }];
+  const reason = '사용자가 3회차 수정을 승인함';
+  assert.match(await reviewError(chain.map(id => T(id)), edges, { rounds }), /수정 Task 사슬이 2단을 넘음: F3/);
+  const f = fakeDag({ fileOver: Object.fromEntries(chain.map(id => [`${id}.md`, planSpec(id, '작업')])) });
+  f.fs['ledger.md'] = LEDGER([H1]);
+  await approve(f, chain.map(id => T(id, id === 'F3' ? { afterFix: reason } : {})), edges, 'v1', { rounds });
+  assert.equal(JSON.parse(f.fs[approval]).tasks.F3.afterFix, reason);
+  await main([...runArgs, '--approval', approval], f.deps);
+  for (const id of chain) {
+    const r = await main(reg(id, `${id}.md`), f.deps);
+    assert.equal(r.code, 0, JSON.stringify(r.out));
+    if (id !== 'F3') f.tasks.get(f.map().tasks[id].orca).status = 'completed';
+  }
+  await refusedLaunch(f, go('F3'), FIX_NO_IDS);
+});
+// 90. conditional is refused on a rounds verify Task; kept on a fix Task and on a Task outside rounds
+await ta(async () => {
+  const chain = ['T01', 'Q1', 'F1'];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const rounds = { rounds: [{ n: 1, verify: 'Q1', fix: 'F1' }] };
+  assert.match(await reviewError([T('T01'), T('Q1', { conditional: true }), T('F1')], edges, rounds), /검증 Task Q1에는 conditional을 둘 수 없음/);
+  const f = fakeDag();
+  await approve(f, [T('T01', { conditional: true }), T('Q1'), T('F1', { conditional: true })], edges, 'v1', rounds);
+  const tasks = JSON.parse(f.fs[approval]).tasks;
+  assert.deepEqual([tasks.T01.conditional, tasks.F1.conditional], [true, true]);
+});
+
 console.log(`orca-launch.check: ${passed} passed`);

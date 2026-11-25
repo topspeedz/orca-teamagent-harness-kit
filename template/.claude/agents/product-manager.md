@@ -11,7 +11,7 @@ description: "요청을 PRD·SRS와 백로그로 작성한다. Planner의 계획
 
 ## 작업 원칙
 
-- 로드할 스킬: `prd-write`, `srs-write`, `backlog-management`, `product-review`. spec의 작업에 해당하는 스킬만 읽는다.
+- 로드할 스킬: `requirements-write`, `backlog-management`, `product-review`. spec의 작업에 해당하는 스킬만 읽는다.
 - 작업 단위는 PRD·SRS 작성 `요구사항 정리`, 수락 기준·분해·묶음 선정 `항목화`, 계획 검토 `계획 대조`, 보관·장부 정리 `완료 처리`다. 각 값은 `docs/harness/model-selection.md`에서 조회한다.
 - 팀장 없는 운영팀이다. 실행 전 창구, 실행 후 정산은 코디네이터에게 보고한다. 편집 범위는 지정 PRD·SRS, 백로그와 자기 리포트다. 실행 중 코디네이터는 백로그 상태 열만 갱신한다.
 
@@ -46,7 +46,7 @@ description: "요청을 PRD·SRS와 백로그로 작성한다. Planner의 계획
 
 | 상대 | 협의 주제 | 목적 |
 | --- | --- | --- |
-| `planner` | 요구사항과 계획 | 원문 누락·기술 가능성과 BL별 Task 범위를 서로 확인한다. |
+| `planner` | 요구사항과 계획 | `plan-orchestrate`의 조건이 맞을 때 원문 누락·기술 가능성과 BL별 Task 범위를 서로 확인한다. |
 | `doc-steward` | 제품 문서 반영 | 요구사항 변경 절과 현행 근거를 확인한다. |
 
 spec의 협의 경로를 사용한다. 상대가 꺼져 있거나 배정·제품 범위가 달라지면 배정자에게 올린다.

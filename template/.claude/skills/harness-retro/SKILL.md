@@ -9,7 +9,8 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 
 ## 언제
 
-- phase 흐름의 7단계에서 **항상** 돌린다. 생략하지 않는다.
+- phase 흐름의 7단계에서 아래 조건 가운데 하나가 맞을 때 돌린다. 측정 표에 실패나 재시도가 있다. 수정 라운드가 2에 닿았다. 마지막 회고 뒤 phase가 5번 지났다. 사용자가 켜면 조건과 관계없이 돌린다. 조건이 안 맞으면 코디네이터가 `skip`으로 닫는다.
+- 측정 표는 회고 워커가 뜨든 안 뜨든 코디네이터가 `retro-measure.mjs`로 매번 남긴다.
 - 고칠 근거가 없으면 측정 결과와 "변경 없음"만 남기고 끝낸다.
 - 한 번 일어난 일은 규칙으로 굳히지 않는다. 같은 발견이 두 번째일 때 규칙으로 올릴지 검토한다. 이전 회고 리포트가 있으면 그것을 기준선으로 쓴다.
 
@@ -21,7 +22,9 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | --- | --- |
 | 병렬 지표: 작업 시간 합 ÷ 임계 경로, 최대 동시 Task 수, 계획값과 실제값 | 계획값 `waterfall.json`의 likely 일정, 실제값 `actual.json` |
 | 코디네이터가 깬 턴 수와 그 가운데 heartbeat만 든 깸 | Claude Code 세션 기록(`.jsonl`) |
-| 수정 루프 횟수 | `ledger.md`의 예산 줄 |
+| 수정 루프 횟수 | `ledger.md`의 예산 줄. 새 양식의 장부에는 이 줄이 없어 `측정 불가`로 나오고, `수정 라운드(결함 원장)`가 대신한다 |
+| 수정 라운드(결함 원장), 제기된 High, 확정 · 인용 · 기각 · 열림, High가 아닌데 수정에 든 결함 | `ledger.md`의 `## 결함 원장` |
+| 건너뛴 Task | `--map`으로 넘긴 Task 대응표 |
 | 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
 | 실패 Task | `actual.json`의 `status` (Orca의 기록) |
 | 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
@@ -36,9 +39,11 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
   --waterfall _workspace/_run/<phase>/waterfall.plan.json \
   --actual _workspace/_run/<phase>/actual.json \
   --ledger _workspace/_run/<phase>/ledger.md \
-  --workspace _workspace
+  --workspace _workspace \
+  --map _workspace/_run/<phase>/orca-tasks.json
 ```
 
+- `--map`은 선택이다. 결함 원장이나 대응표가 없으면 그 줄은 `측정 불가`로 나온다.
 - `waterfall.plan.json`은 `exec-run`이 실행 Run을 만들 때 `waterfall.json`을 한 번 복사해 얼려 둔 승인 계획이다. `waterfall.json`은 phase 동안 재예측으로 덮어써지므로 계획 열에 쓰지 않는다. 사본이 없는 phase는 `waterfall.json`을 넘기고, 리포트에 계획 열이 재예측일 수 있다고 적는다.
 
 - 출력은 리포트에 그대로 붙일 표다. 입력이 없거나 읽을 수 없는 지표는 `측정 불가`로 찍히고 끝에 사유가 붙는다. 0으로 세지 않는다.
@@ -91,7 +96,7 @@ node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-t
 - 근거가 있는 항목만, 원인이 있는 가장 가까운 파일 하나에서 최소로 고친다. 사실은 한 줄도 잃지 않는다.
 - 안내 문구로 실행 제약을 대신하지 않는다. 막아야 하면 훅 차단이고, 그것은 사용자 승인 대상이다.
 - 항상 로드되는 파일(`AGENTS.md`, `CLAUDE.md`, description)이 늘면 어디서 줄였는지 적는다. 세부는 스킬과 참조 문서로 내린다.
-- QA 리포트의 `## 점검표 후보`는 `qa-verification`의 `references/boundary-checklist.md`의 "이 프로젝트에서 겪은 것"에 옮긴다. 출처(phase 이름과 결함 ID)를 붙이고, 같은 뜻의 항목이 있으면 더하지 않는다. 점검 항목은 규칙이 아니라서 한 번 겪은 것도 옮긴다.
+- 점검표(`qa-verification`의 `references/boundary-checklist.md`)에 줄을 더하지 않는다. QA 리포트의 `## 점검표 후보`는 `qa-verification`에 적힌 대로 수정 Task의 테스트나 인박스의 "게이트 후보"로 간다.
 - 고친 하네스 파일마다 `docs/harness/changelog.md`에 한 줄(변경 내용 · 대상 · 사유)을 적는다.
 - 같은 수정을 플러그인 원본에도 반영하면, 플러그인 저장소 루트의 `CHANGELOG.md`에 한 줄(날짜 · 변경 내용 · 대상 · 어느 프로젝트의 어느 phase에서 왜)을 적는다. 파일이 없으면 만든다.
 - 고친 하네스 파일은 같은 PR의 **별도 커밋**으로 들어간다. 커밋은 코디네이터가 한다. 워커는 커밋하지 않는다.

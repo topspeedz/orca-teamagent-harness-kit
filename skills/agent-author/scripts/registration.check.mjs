@@ -55,7 +55,7 @@ function project(scenario) {
   const root = join(folder, scenario);
   put(root, 'answers.json', JSON.stringify({ codex: true, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'high' } }));
   run(root, setup, 'install', '--target', '.', '--answers', 'answers.json');
-  for (const name of ['prd-write', 'srs-write', 'product-review', 'backlog-management']) {
+  for (const name of ['requirements-write', 'product-review', 'backlog-management']) {
     const pointer = read(root, '.agents/skills/' + name + '/SKILL.md');
     const target = pointer.match(/본문은 `([^`]+)`/)[1];
     assert.match(read(root, target), new RegExp('^name: ' + name + '$', 'm'));

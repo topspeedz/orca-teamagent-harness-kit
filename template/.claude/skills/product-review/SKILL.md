@@ -5,7 +5,7 @@ description: "Planner는 PM의 요구사항을 검토하고 PM은 Planner의 계
 
 # product-review
 
-`요구사항 검토`는 Planner, `계획 대조`는 PM이 맡는다. 작성자의 자가 점검은 상대 역할의 리뷰로 사용할 수 없다. 기존 46-product-manager의 요구사항 추적·정합성 대조 방법(revfactory/harness-100, Apache-2.0)을 역할에 맞춰 적용한다.
+`요구사항 검토`는 Planner, `계획 대조`는 PM이 맡는다. 창구가 `plan-orchestrate`의 조건이 맞아 불렀을 때만 쓴다. 작성자의 자가 점검은 상대 역할의 리뷰로 사용할 수 없다. 기존 46-product-manager의 요구사항 추적·정합성 대조 방법(revfactory/harness-100, Apache-2.0)을 역할에 맞춰 적용한다.
 
 대상 문서·버전(파일명에 버전이 없으면 내용 해시 또는 커밋), BL ID, 작성자·검토자, 결과·열린 쟁점을 함께 기록한다. 단독 PRD에서 BL·SRS가 범위 밖이면 해당 없음과 사유를 적고 원문↔US를 본다. 같은 버전·범위의 상대 검토 결과가 있으면 재사용한다. 변경 시 영향받은 ID만 새 버전에서 재검하고 열린 High는 수정 요청을 원작성자에게 보낸다.
 

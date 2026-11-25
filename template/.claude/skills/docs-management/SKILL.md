@@ -16,7 +16,7 @@ description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTAT
 | 작업 단위 | 하는 일 | 읽는 파일 |
 | --- | --- | --- |
 | `문서 초기화` | 기존 정본·초안과 담당자를 확인하고 근거를 작성자에게 넘긴다. 사용자가 요청할 때만 한다 | [references/init.md](references/init.md), [references/audit.md](references/audit.md), 쓸 문서의 양식 |
-| `문서 동기화` | 변경 근거를 담당 절과 대조하고 지정 작성자의 반영 또는 현행 확인을 추적한다. phase의 6단계마다 한다 | [references/sync.md](references/sync.md), [references/audit.md](references/audit.md), 고칠 문서의 양식 |
+| `문서 동기화` | 변경 근거를 담당 절과 대조하고 지정 작성자의 반영 또는 현행 확인을 추적한다. 장부의 `## 라이브 문서 확인`에 행이 있을 때 한다. 없으면 코디네이터가 `skip`으로 닫는다 | [references/sync.md](references/sync.md), [references/audit.md](references/audit.md), 고칠 문서의 양식 |
 | `문서 감사` | 문서 전체를 점검표로 본다. 사용자가 요청할 때만 한다 | [references/audit.md](references/audit.md), 점검할 문서의 양식 |
 
 ## 일곱 규칙

@@ -16,6 +16,7 @@
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
+//   node .claude/scripts/orca-launch.mjs skip --map <map> --id <T01> --reason <사유>   (conditional, fix and recheck Tasks only)
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
 //   node .claude/scripts/orca-launch.mjs actual --map <map>
@@ -31,6 +32,7 @@ import { TABLE_PATH, parseTable, matchRow, lookup, choices } from './model-selec
 import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH, unclassified, readInventory } from './coordinator-settings.mjs';
 import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mjs';
+import { readLedger, fixAllowed, currentRound } from './defect-ledger.mjs';
 
 // P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's six lines in the spec instead.
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
@@ -123,6 +125,20 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // phase name or backlog ID as a whole token of the objective (`phase-a` must not match `phase-ab`)
 const csv = (s) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const hasToken = (text, token) => new RegExp(`(^|[\\s\\[,])${escapeRe(token)}($|[\\s\\],])`).test(text);
+// `cmd` as a whole command in `text`: `npm test` and `npm test 통과` count; `npm test -- a.test.ts` (narrower) and `pnpm test` do not.
+// After a space, a token that looks like an argument extends the command; a shell redirection such as `2>&1` does not.
+const QUOTES = `"'“”‘’`;
+function wholeCommand(text, cmd) {
+  for (let i = text.indexOf(cmd); i >= 0; i = text.indexOf(cmd, i + 1)) {
+    if (i > 0 && !/\s/.test(text[i - 1]) && !('`(' + QUOTES).includes(text[i - 1])) continue;
+    const rest = text.slice(i + cmd.length);
+    if (rest === '' || /^[\r\n]/.test(rest) || ('`)' + QUOTES).includes(rest[0])) return true;
+    if (!/^\s/.test(rest)) continue;
+    const next = rest.trimStart().split(/\s/)[0];
+    if (/^\d*[<>]/.test(next) || !/^[A-Za-z0-9\-./_@=~$]/.test(next)) return true;
+  }
+  return false;
+}
 
 export async function main(argv, deps) {
   const [cmd, ...rest] = argv;
@@ -266,6 +282,54 @@ async function execute(cmd, o, deps, locks) {
     if ((approved.unit === '리드') !== lead) throw new Error('승인 리드 배정과 다름');
     const errors = verifyAssignment({ spec, agent: approved.agent, unit: approved.unit, row: approved, overrideReason, lead });
     if (errors.length) throw new Error('승인 배정 불일치: ' + errors.join(', '));
+    // The whole suite runs once at the end, so a Task's own criteria may not contain a command AGENTS.md marks `(전체 테스트)`.
+    const lines = spec.split(/\r?\n/);
+    const from = lines.findIndex(l => l.startsWith('완료 기준:'));
+    if (from < 0) return;
+    const to = lines.findIndex((l, i) => i > from && /^(검증 환경값|막히면:|보고:)/.test(l));
+    const region = lines.slice(from, to < 0 ? undefined : to).join('\n');
+    const hit = fullTests().find(c => wholeCommand(region, c));
+    if (hit) throw new Error(`완료 기준에 전체 테스트 명령이 있음: ${hit}`);
+  };
+  // first backtick span of each `(전체 테스트)` line in AGENTS.md's `## 명령` section
+  const fullTests = () => {
+    const lines = (io.optional('AGENTS.md') ?? '').split(/\r?\n/);
+    const at = lines.findIndex(l => l.trim() === '## 명령');
+    if (at < 0) return [];
+    const end = lines.findIndex((l, i) => i > at && /^## /.test(l));
+    return lines.slice(at + 1, end < 0 ? undefined : end).filter(l => l.includes('(전체 테스트)'))
+      .map(l => /`([^`]+)`/.exec(l)?.[1]).filter(Boolean);
+  };
+  // A fix Task takes only defects the ledger allows; verification after a fix names its defects and diff.
+  // row: the governing approved row; ids: the launched Task and, for a member, its parent. Returns a refusal or null.
+  const launchRefusal = (m, mapFile, approval, row, spec, ids) => {
+    // a fix Task launched directly is under m.direct, so the round is read from the approved rows and either record's dispatch
+    const view = { tasks: Object.fromEntries(Object.entries(approval.tasks).map(([id, r]) =>
+      [id, { kind: r.kind, round: r.round, dispatch: m.tasks[id]?.dispatch ?? m.direct?.[id]?.dispatch }])) };
+    const post = row?.kind === 'recheck' || (row?.kind === 'verify' && currentRound(view) > 1);
+    if (row?.kind !== 'fix' && !post) return null;
+    const value = label => new RegExp(`^${label}:(.*)$`, 'm').exec(spec)?.[1].trim() ?? '';
+    const defects = csv(value('결함 ID'));
+    const ledger = () => {
+      let text;
+      try { text = deps.read(join(dirname(mapFile), 'ledger.md')); } catch { return null; }
+      return readLedger(text);
+    };
+    if (row.kind === 'fix') {
+      if (!defects.length) return '수정 Task의 결함 ID 줄이 없음';
+      const l = ledger();
+      if (!l) return '장부를 읽을 수 없음';
+      const r = fixAllowed(l, defects);
+      return r.ok ? null : '수정에 넣을 수 없는 결함: ' + r.refused.map(x => `${x.id}(${x.reason})`).join(', ');
+    }
+    if (row.afterFix || (defects.length && value('수정 diff'))) return null;
+    const l = ledger();
+    if (!l) return '장부를 읽을 수 없음';
+    const wide = l.decisions.some(d => {
+      const c = d.split('|').map(s => s.trim());
+      return ids.includes(c[0]) && c[1] === '전 범위 검증 승인' && c[2];
+    });
+    return wide ? null : '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함';
   };
   const taskId = (m, id) => m.tasks[id]?.orca ?? m.direct?.[id]?.task;
   // The approved spec and runtime stay fixed. Only an explicitly delegated model/effort can change.
@@ -371,6 +435,13 @@ async function execute(cmd, o, deps, locks) {
 
   // Orca stores an immutable spec. Its approval marker also identifies a creation
   // whose receipt was lost before the owner could save the new Task ID.
+  const markedTask = (m, id, marker) => {
+    const list = call(['orchestration', 'task-list', '--run', m.run, '--full']);
+    if (!Array.isArray(list.result?.tasks)) throw new Error('task-list 실패: 등록 여부를 확인할 수 없음');
+    const matches = list.result.tasks.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
+    if (matches.length > 1) throw new Error('같은 승인 Task가 여러 번 등록됨: ' + id);
+    return matches[0];
+  };
   const registerTask = (m, id, approval, path, lead, reason, edits, resource) => {
     const row = approval.tasks[id];
     const spec = deps.read(path);
@@ -380,11 +451,7 @@ async function execute(cmd, o, deps, locks) {
     const registeredDeps = row.deps.map(d => taskId(m, d));
     const title = /^Task:\s*(.+?)\s*$/m.exec(spec)?.[1] ?? id;
     const marker = '실행 승인: ' + approval.review + ' ' + id;
-    const list = call(['orchestration', 'task-list', '--run', m.run, '--full']);
-    if (!Array.isArray(list.result?.tasks)) throw new Error('task-list 실패: 등록 여부를 확인할 수 없음');
-    const matches = list.result.tasks.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
-    if (matches.length > 1) throw new Error('같은 승인 Task가 여러 번 등록됨: ' + id);
-    let task = matches[0];
+    let task = markedTask(m, id, marker);
     if (!task) {
       const content = spec.trimEnd() + '\n\n' + marker + '\n';
       const body = row.runtime === 'codex' ? content + '\n' + rules().trimEnd() + '\n' : content;
@@ -419,7 +486,15 @@ async function execute(cmd, o, deps, locks) {
     const result = registerTask(m, o.id, approval, o['spec-file'], lead, reason, csv(o.edits), csv(o.resource));
     m.tasks[o.id] = result.entry;
     saveMap(m);
-    return { code: 0, out: { id: o.id, orca: result.entry.orca, status: result.status, version: approval.version } };
+    // A Task registered after its inputs finished is made ready here; Orca's own readiness at creation is not measured.
+    // The status comes from Orca's listing, not the create receipt, which may not carry one.
+    let status = result.status;
+    if (row.deps.length) {
+      const st = statuses(m);
+      status = st[o.id]?.status ?? status;
+      if (status === 'pending' && row.deps.every(d => st[d]?.status === 'completed') && setStatus(m, result.entry.orca, 'ready').ok !== false) status = 'ready';
+    }
+    return { code: 0, out: { id: o.id, orca: result.entry.orca, status, version: approval.version } };
   }
 
   if (cmd === 'reapprove') {
@@ -476,6 +551,7 @@ async function execute(cmd, o, deps, locks) {
     if (!o.id || !o.bracket || !o.does) return fail('사용법: worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]');
     let m, e;
     try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
+    if (e.skipped || e.skipping) return fail(`${o.id}는 건너뛴 Task — 띄우지 않음`);
     const approval = activeApproval(m, o.id);
     if (m.transition?.id === o.id || e.gate) return fail('재승인 전환 또는 게이트 응답 대기');
     const lastAttempt = e.attempts?.at(-1);
@@ -500,6 +576,8 @@ async function execute(cmd, o, deps, locks) {
     }
     if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
     if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
+    const refusal = approved && launchRefusal(m, o.map, approval, approved,st[o.id]?.spec ?? '', [o.id]);
+    if (refusal) return fail(refusal);
     const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
     if (o.retry && previous?.turnStarted) previous.failed = true;
     const attempt = approved?.routing && prepareAttempt(approved, approval, e, st[o.id].spec, authoredSpec(st[o.id].spec, e.review, o.id));
@@ -565,7 +643,7 @@ async function execute(cmd, o, deps, locks) {
     const busy = [...running];
     const launch = [], held = [];
     const overlap = (a, b) => a.startsWith(b) || b.startsWith(a);
-    for (const id of Object.keys(m.tasks).filter((x) => st[x].status === 'ready' && m.transition?.id !== x)) {
+    for (const id of Object.keys(m.tasks).filter((x) => st[x].status === 'ready' && m.transition?.id !== x && !m.tasks[x].skipping)) {
       const e = m.tasks[id];
       let reason = null;
       for (const other of busy) {
@@ -584,7 +662,7 @@ async function execute(cmd, o, deps, locks) {
       const block = /^먼저 읽을 것:[ \t]*\r?\n((?:-.*(?:\r?\n|$))*)/m.exec(text)?.[1] ?? '';
       return block.split(/\r?\n/).filter((l) => l.startsWith('-')).map((l) => l.replace(/^-\s*/, '').trim());
     };
-    const candidates = Object.keys(m.tasks).filter((id) => st[id].status === 'pending' && !m.tasks[id].gate).map((id) => ({
+    const candidates = Object.keys(m.tasks).filter((id) => st[id].status === 'pending' && !m.tasks[id].gate && !m.tasks[id].skipping).map((id) => ({
       id, waitingOn: m.tasks[id].deps.filter((d) => st[d].status !== 'completed'), reads: m.tasks[id].spec ? reads(m.tasks[id].spec) : null }));
     return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held, candidates } };
   }
@@ -601,6 +679,71 @@ async function execute(cmd, o, deps, locks) {
     const demoted = dependents.filter((id) => st[id].status === 'ready');
     for (const id of demoted) setStatus(m, m.tasks[id].orca, 'pending');
     return { code: 0, out: { id: o.id, demoted, alreadyStarted: dependents.filter((id) => ['dispatched', 'completed'].includes(st[id].status)) } };
+  }
+
+  // Closes a planned Task that has nothing to do, so the Tasks behind it can start. Every refusal comes before any Orca change.
+  if (cmd === 'skip') {
+    if (!o.id || !o.reason?.trim()) return fail('사용법: skip --map <map> --id <T01> --reason <사유>');
+    let m, approval, st;
+    try { m = loadMap(); approval = activeApproval(m, o.id); } catch (err) { return fail(err.message); }
+    const row = approval?.tasks[o.id];
+    if (!row || !(row.conditional === true || ['fix', 'recheck'].includes(row.kind))) return fail(`${o.id}는 건너뛸 수 있는 Task가 아님`);
+    let e = m.tasks[o.id];
+    // An already skipped Task is not touched again; only the promotion below reruns, to repair dependents left pending.
+    const existing = !!e?.skipped;
+    if (!existing) {
+      const started = `${o.id}는 이미 기동했거나 끝난 Task`;
+      if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
+      const inputs = e?.deps ?? row.deps;
+      const missing = inputs.filter(d => !taskId(m, d));
+      if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
+      try { st = statuses(m); } catch (err) { return fail(err.message); }
+      // Closing ahead of its inputs would release the Tasks behind it early.
+      const unfinished = inputs.filter(d => st[d]?.status !== 'completed');
+      if (unfinished.length) return fail('선행 Task가 끝나지 않음: ' + unfinished.join(', '));
+      // closed: an earlier run's close landed in Orca but was not recorded; only the recording is left
+      let closed = false;
+      if (e) {
+        if (e.dispatch || e.started || e.gate || e.attempts?.some(a => a.status !== 'rejected')) return fail(started);
+        closed = !!e.skipping && st[o.id].status === 'completed';
+        if (!closed && !['pending', 'ready'].includes(st[o.id].status)) return fail(started);
+      } else {
+        const registeredDeps = row.deps.map(d => taskId(m, d));
+        const title = `${o.id} 건너뜀`, marker = `실행 승인: ${approval.review} ${o.id}`;
+        let orca;
+        try { orca = markedTask(m, o.id, marker)?.id; } catch (err) { return fail(err.message); }
+        if (!orca) {
+          const tempDir = mkdtempSync(join(tmpdir(), 'orca-spec-')), specFile = join(tempDir, `${o.id}.md`);
+          writeFileSync(specFile, `Task: ${title}\n건너뜀: ${o.reason}\n\n${marker}\n`);
+          let created;
+          try {
+            created = call(['orchestration', 'task-create', '--spec-file', specFile, '--task-title', title, '--run', m.run,
+              ...(registeredDeps.length ? ['--deps', JSON.stringify(registeredDeps)] : []), '--full']);
+          } finally { unlinkSync(specFile); rmdirSync(tempDir); }
+          orca = created.result?.task?.id ?? created.result?.taskId;
+          if (!orca) return fail('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
+        }
+        const { members, ...assignment } = row;
+        e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
+          lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
+      }
+      // Saved before closing: a re-run finishes a close whose reply was lost, and nothing launches the Task meanwhile.
+      e.skipping ??= { reason: o.reason };
+      saveMap(m);
+      if (!closed) {
+        const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + e.skipping.reason);
+        if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
+      }
+      e.skipped = { reason: e.skipping.reason, at: deps.now() };
+      delete e.skipping;
+      saveMap(m);
+    }
+    try { st = statuses(m); } catch (err) { return fail(err.message); }
+    // Orca's promotion on a manual status change is not relied on: dependents whose inputs are all completed are made ready here
+    const promoted = Object.keys(m.tasks).filter((id) => m.tasks[id].deps.includes(o.id) && st[id].status === 'pending' &&
+      !m.tasks[id].gate && m.transition?.id !== id && m.tasks[id].deps.every((d) => st[d]?.status === 'completed'))
+      .filter((id) => setStatus(m, m.tasks[id].orca, 'ready').ok !== false);
+    return { code: 0, out: { id: o.id, skipped: true, ...(existing ? { existing: true } : {}), promoted } };
   }
 
   if (cmd === 'gate') {
@@ -693,6 +836,9 @@ async function execute(cmd, o, deps, locks) {
         if (previous?.turnStarted) previous.failed = true;
       } else if (state && (state.dispatch || state.attempts?.at(-1)?.status !== 'rejected')) return fail('이미 직접 기동한 Task');
       if (state && (state.parent !== (o.parent ?? null) || state.agent !== o.agent || state.unit !== unit)) return fail('팀원의 이전 기동 범위와 다름');
+      // a member follows its parent's kind
+      const refusal = launchRefusal(map, mapPath, approval, parent,spec, [o.id, o.parent].filter(Boolean));
+      if (refusal) return fail(refusal);
     } else {
       if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');
       row = table(o.agent, unit, o.complexity);
@@ -803,7 +949,7 @@ async function execute(cmd, o, deps, locks) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|skip|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };

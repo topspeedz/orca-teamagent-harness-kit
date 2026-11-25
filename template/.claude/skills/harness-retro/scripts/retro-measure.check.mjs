@@ -1,11 +1,11 @@
 // Self-test for retro-measure.mjs — no Orca or session logs needed. `node .claude/skills/harness-retro/scripts/retro-measure.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parallel, planned, actual, ledger, wakes, folderSize } from './retro-measure.mjs';
+import { parallel, planned, actual, ledger, defects, wakes, folderSize } from './retro-measure.mjs';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; };
@@ -102,6 +102,22 @@ t('ledger: only the cap present → fixLoops null', () => {
   assert.equal(ledger('예산: 구현 Task 1개 · 검증 Task 1개 · 수정 루프 최대 2회\n').fixLoops, null);
 });
 
+const DEFECT_LEDGER = '## 결함 원장\n\n| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |\n| --- | --- | --- | --- | --- | --- |\n'
+  + '| H-1 | Q1 | High | 관찰 | 1 | 확정 |\n| H-2 | Q1 | High | 인용 | 1 | 인용 |\n| H-3 | Q1 | High | 관찰 | 1 | 기각 |\n| M-1 | Q1 | Medium | 관찰 | 1 | 확정 |\n\n'
+  + '## 결정\n\n- M-1 | 수정 포함 승인 | 같이 고쳐 주세요\n';
+const DEFECT_MAP = { tasks: { F1: { kind: 'fix', round: 1, dispatch: 'ctx_1' }, D1: { skipped: { reason: '문서 영향 없음' } } } };
+
+t('defects: High counts by state, lower-severity fixes, rounds and skipped from the map; no section → null', () => {
+  assert.deepEqual(defects(DEFECT_LEDGER, DEFECT_MAP), { rounds: 1, high: 3, confirmed: 1, cited: 1, dismissed: 1, open: 0, lowerFixed: 1, skipped: 1 });
+  assert.deepEqual(defects(DEFECT_LEDGER), { rounds: null, high: 3, confirmed: 1, cited: 1, dismissed: 1, open: 0, lowerFixed: 1, skipped: null });
+  assert.equal(defects('# 장부: phase-a\n\n수정 루프 1회\n'), null);
+});
+
+t('defects: the untouched ledger form counts no lower-severity fix', () => {
+  const form = readFileSync(fileURLToPath(new URL('../../../../docs/harness/templates/ledger.md', import.meta.url)), 'utf8');
+  assert.equal(defects(form).lowerFixed, 0);
+});
+
 const line = (o) => JSON.stringify(o);
 const notice = (text) => line({ type: 'user', message: { content: text } });
 const say = (id, content) => line({ type: 'assistant', message: { id, content, usage: { input_tokens: 1 } } });
@@ -185,6 +201,31 @@ t('CLI: prints all sections, approximation note, missing inputs as 측정 불가
   assert.match(bySession.stdout, /\| 코디네이터가 깬 턴 수 \(세션 abcdef12\) \| 2 \|/);
   assert.match(bySession.stdout, /heartbeat만 든 깸의 근사, 세션 abcdef12\) \| 1 \|/);
   assert.doesNotMatch(bySession.stdout, /세션 99999999/);
+});
+
+t('CLI: defect rows with --map, without --map, and with an unreadable severity', () => {
+  const script = fileURLToPath(new URL('./retro-measure.mjs', import.meta.url));
+  writeFileSync(join(root, 'dl.md'), DEFECT_LEDGER);
+  writeFileSync(join(root, 'map.json'), JSON.stringify(DEFECT_MAP));
+  const withMap = spawnSync(process.execPath, [script, '--ledger', join(root, 'dl.md'), '--map', join(root, 'map.json')], { encoding: 'utf8' });
+  assert.equal(withMap.status, 0, withMap.stderr);
+  assert.match(withMap.stdout, /\| 수정 라운드\(결함 원장\) \| 1 \|/);
+  assert.match(withMap.stdout, /\| 제기된 High \| 3 \|/);
+  assert.match(withMap.stdout, /\| 확정 · 인용 · 기각 · 열림 \| 1 · 1 · 1 · 0 \|/);
+  assert.match(withMap.stdout, /\| High가 아닌데 수정에 든 결함 \| 1 \|/);
+  assert.match(withMap.stdout, /\| 건너뛴 Task \| 1 \|/);
+  const noMap = spawnSync(process.execPath, [script, '--ledger', join(root, 'dl.md')], { encoding: 'utf8' });
+  assert.match(noMap.stdout, /\| 수정 라운드\(결함 원장\) \| 측정 불가 \|/);
+  assert.match(noMap.stdout, /\| 건너뛴 Task \| 측정 불가 \|/);
+  assert.match(noMap.stdout, /\| 제기된 High \| 3 \|/);
+  writeFileSync(join(root, 'bad.md'), DEFECT_LEDGER.replace('| Medium |', '| 중간 |'));
+  const bad = spawnSync(process.execPath, [script, '--ledger', join(root, 'bad.md'), '--map', join(root, 'map.json')], { encoding: 'utf8' });
+  assert.equal(bad.status, 0, bad.stderr);
+  assert.match(bad.stdout, /\| 제기된 High \| 측정 불가 \|/);
+  assert.match(bad.stdout, /측정 불가 사유:.*심각도를 읽을 수 없음/);
+  const old = spawnSync(process.execPath, [script, '--ledger', join(root, 'ledger.md')], { encoding: 'utf8' });
+  assert.match(old.stdout, /수정 루프 \| 1/);
+  assert.match(old.stdout, /\| 제기된 High \| 측정 불가 \|/);
 });
 
 console.log(`retro-measure.check: ${n} passed`);
