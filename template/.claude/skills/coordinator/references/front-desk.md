@@ -9,7 +9,7 @@
 `SKILL.md`의 "요청 규모별 경로" 표로 고른다. 팀은 `docs/harness/team-org.md`의 명단으로 정한다.
 
 - 단순 질문이나 백로그 ID 지정이 없는 한 파일의 작은 수정은 창구가 직접 한다. Run도 phase 폴더도 만들지 않는다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.
-- 새 요구는 PM 항목화와 `plan-orchestrate`의 조건이 맞으면 Planner 검토, 지정 BL은 Planner 직행, 한 phase 위임은 PM 묶음 선정부터 시작한다. 지정 ID는 ‘답이 정해진 작업’보다 우선한다. 설계·계획 승인 횟수와 단독 PRD·계획 검토는 `plan-orchestrate`의 접수 표를 따른다.
+- 새 요구는 PM 항목화부터 시작하고 `plan-orchestrate`의 조건이 맞으면 Planner가 검토한다. 지정 BL은 Planner 직행, 한 phase 위임은 PM 묶음 선정부터 시작한다. 지정 ID는 ‘답이 정해진 작업’보다 우선한다. 설계·계획 승인 횟수와 단독 PRD·계획 검토는 `plan-orchestrate`의 접수 표를 따른다.
 - 브리프에 승인된 BL과 동일한 버전의 배정·DAG·검토 기록을 전달한다. 일반 소규모 수정은 원래 창구 경로를 따른다. 승인된 실행 팀의 단순 Task 1개만 팀장을 거치지 않을 수 있다.
 
 
