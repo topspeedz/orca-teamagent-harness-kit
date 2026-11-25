@@ -1142,4 +1142,74 @@ await ta(async () => {
   }
 });
 
+// ---- Task kinds from the drawing's rounds ----
+const T = (id, more) => node(id, more);
+const E = (from, to) => ({ from, to });
+async function reviewError(nodes, edges, drawing = {}) {
+  const f = fakeDag();
+  f.fs['plan.md'] = 'phase-a 실행 계획';
+  f.fs['dag.json'] = JSON.stringify({ nodes, edges, ...drawing });
+  const { code, out } = await main(['review', ...reviewArgs('v1')], f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  return out.error;
+}
+// 50. a DAG without rounds/conditional/afterFix gets none of the new fields on its Task rows
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const plain = await approve(f, [T('T01'), T('T02')], [E('T01', 'T02')]);
+  for (const row of Object.values(record(plain).tasks))
+    for (const k of ['kind', 'round', 'conditional', 'afterFix']) assert.equal(k in row, false);
+});
+// 51. rounds mark kind and round; conditional: true is kept
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const marked = await approve(f, [T('T01'), T('Q1'), T('F1'), T('R1'), { ...T('D1'), conditional: true }],
+    [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1'), E('R1', 'D1')], 'v1',
+    { rounds: [{ n: 1, verify: ['Q1'], fix: 'F1', recheck: 'R1' }] });
+  assert.deepEqual(['Q1', 'F1', 'R1'].map(id => [record(marked).tasks[id].kind, record(marked).tasks[id].round]),
+    [['verify', 1], ['fix', 1], ['recheck', 1]]);
+  assert.equal(record(marked).tasks.D1.conditional, true);
+  assert.equal('kind' in record(marked).tasks.T01, false);
+});
+// 52. a verify Task waiting behind a fix Task is refused
+await ta(async () => {
+  assert.match(await reviewError([T('T01'), T('Q1'), T('F1'), T('Q2')], [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'Q2')],
+    { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] }), /검증 Task Q2가 수정 Task F1 뒤에 걸려 있음/);
+  // behind it through a plain Task as well
+  assert.match(await reviewError([T('Q1'), T('F1'), T('T02'), T('Q2')], [E('Q1', 'F1'), E('F1', 'T02'), E('T02', 'Q2')],
+    { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] }), /검증 Task Q2가 수정 Task F1 뒤에 걸려 있음/);
+});
+// 53. a verify Task that gives afterFix passes and keeps the reason; afterFix that is not a non-empty string is refused
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const reason = '고친 빌드가 있어야 볼 수 있는 실기기 회차';
+  const nodes = [T('T01'), T('Q1'), T('F1'), T('Q2', { afterFix: reason })];
+  const edges = [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'Q2')];
+  const rounds = { rounds: [{ n: 1, verify: ['Q1', 'Q2'], fix: 'F1' }] };
+  const done = await approve(f, nodes, edges, 'v1', rounds);
+  assert.equal(record(done).tasks.Q2.afterFix, reason);
+  assert.equal(record(done).tasks.Q2.kind, 'verify');
+  for (const afterFix of ['', true, null, 3]) {
+    assert.match(await reviewError([...nodes.slice(0, 3), T('Q2', { afterFix })], edges, rounds), /afterFix/, String(afterFix));
+  }
+});
+// 54. three fix Tasks on one dependency path are refused; two pass
+await ta(async () => {
+  const chain = ['F1', 'R1', 'F2', 'R2', 'F3'];
+  const rounds = [{ n: 1, fix: 'F1', recheck: 'R1' }, { n: 2, fix: 'F2', recheck: 'R2' }, { n: 3, fix: 'F3' }];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  assert.match(await reviewError(chain.map(id => T(id)), edges, { rounds }), /수정 Task 사슬이 2단을 넘음/);
+  const f = fakeDag();
+  await approve(f, chain.slice(0, 4).map(id => T(id)), edges.slice(0, 3), 'v1', { rounds: rounds.slice(0, 2) });
+});
+// 55. rounds naming an id that is not an executable Task is refused
+await ta(async () => {
+  const nodes = [T('T01'), { id: 'A1', kind: 'approval' }];
+  for (const id of ['Q9', 'A1', 'constructor'])
+    assert.match(await reviewError(nodes, [E('T01', 'A1')], { rounds: [{ n: 1, verify: id }] }), /rounds가 가리키는 노드 없음/, id);
+});
+
 console.log(`orca-launch.check: ${passed} passed`);

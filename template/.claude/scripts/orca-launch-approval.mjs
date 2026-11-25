@@ -68,7 +68,10 @@ function assignments(dag) {
     } else {
       const bl = Array.isArray(n.bl) ? n.bl : String(n.bl ?? '').trim().split(/[,\s·]+/);
       required(bl.length && bl.every(value => typeof value === 'string' && /^BL-\d{4}$/.test(value)), `${id}의 BL-#### 확인 필요`);
-      tasks[id] = { ...normalized(n), bl: n.bl, deps, members: (n.members ?? []).map(normalized) };
+      required(n.afterFix === undefined || (typeof n.afterFix === 'string' && n.afterFix !== ''), `${id}의 afterFix는 빈 문자열이 아닌 사유`);
+      // New fields only when present, so a drawing without them keeps its review hash.
+      tasks[id] = { ...normalized(n), bl: n.bl, deps, members: (n.members ?? []).map(normalized),
+        ...(n.conditional === true ? { conditional: true } : {}), ...(n.afterFix ? { afterFix: n.afterFix } : {}) };
       required(!tasks[id].members.length || n.unit === '리드', `${id}의 팀 내부 배정은 팀장 Task에서만 가능함`);
       const keys = tasks[id].members.map(m => JSON.stringify([m.agent, m.unit]));
       required(new Set(keys).size === keys.length, `${id}의 팀 내부 배정 중복`);
@@ -79,6 +82,29 @@ function assignments(dag) {
   };
   for (const id of nodes.keys()) visit(id);
   required(Object.keys(tasks).length, '실행 Task가 없는 DAG');
+  for (const round of dag.rounds ?? []) for (const kind of ['verify', 'fix', 'recheck']) {
+    for (const id of [round[kind] ?? []].flat()) {
+      required(Object.hasOwn(tasks, id), `rounds가 가리키는 노드 없음: ${id}`);
+      required(Number.isInteger(round.n), `rounds의 n은 정수: ${id}`);
+      Object.assign(tasks[id], { kind, round: round.n });
+    }
+  }
+  // Walk the projected deps: a verify Task may not wait behind a fix Task unless it gives afterFix,
+  // and no dependency path holds more than two fix Tasks.
+  const behind = new Map(), fixes = new Map();
+  const trace = id => {
+    if (behind.has(id)) return;
+    const { deps, kind } = tasks[id];
+    deps.forEach(trace);
+    behind.set(id, new Set(deps.flatMap(d => [d, ...behind.get(d)])));
+    fixes.set(id, (kind === 'fix' ? 1 : 0) + Math.max(0, ...deps.map(d => fixes.get(d))));
+  };
+  for (const [id, t] of Object.entries(tasks)) {
+    trace(id);
+    required(fixes.get(id) <= 2, `수정 Task 사슬이 2단을 넘음: ${id}`);
+    const fix = t.kind === 'verify' && !t.afterFix && [...behind.get(id)].find(d => tasks[d].kind === 'fix');
+    required(!fix, `검증 Task ${id}가 수정 Task ${fix} 뒤에 걸려 있음`);
+  }
   return tasks;
 }
 
