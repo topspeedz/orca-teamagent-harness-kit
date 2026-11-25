@@ -372,6 +372,13 @@ async function execute(cmd, o, deps, locks) {
 
   // Orca stores an immutable spec. Its approval marker also identifies a creation
   // whose receipt was lost before the owner could save the new Task ID.
+  const markedTask = (m, id, marker) => {
+    const list = call(['orchestration', 'task-list', '--run', m.run, '--full']);
+    if (!Array.isArray(list.result?.tasks)) throw new Error('task-list 실패: 등록 여부를 확인할 수 없음');
+    const matches = list.result.tasks.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
+    if (matches.length > 1) throw new Error('같은 승인 Task가 여러 번 등록됨: ' + id);
+    return matches[0];
+  };
   const registerTask = (m, id, approval, path, lead, reason, edits, resource) => {
     const row = approval.tasks[id];
     const spec = deps.read(path);
@@ -381,11 +388,7 @@ async function execute(cmd, o, deps, locks) {
     const registeredDeps = row.deps.map(d => taskId(m, d));
     const title = /^Task:\s*(.+?)\s*$/m.exec(spec)?.[1] ?? id;
     const marker = '실행 승인: ' + approval.review + ' ' + id;
-    const list = call(['orchestration', 'task-list', '--run', m.run, '--full']);
-    if (!Array.isArray(list.result?.tasks)) throw new Error('task-list 실패: 등록 여부를 확인할 수 없음');
-    const matches = list.result.tasks.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
-    if (matches.length > 1) throw new Error('같은 승인 Task가 여러 번 등록됨: ' + id);
-    let task = matches[0];
+    let task = markedTask(m, id, marker);
     if (!task) {
       const content = spec.trimEnd() + '\n\n' + marker + '\n';
       const body = row.runtime === 'codex' ? content + '\n' + rules().trimEnd() + '\n' : content;
@@ -420,7 +423,13 @@ async function execute(cmd, o, deps, locks) {
     const result = registerTask(m, o.id, approval, o['spec-file'], lead, reason, csv(o.edits), csv(o.resource));
     m.tasks[o.id] = result.entry;
     saveMap(m);
-    return { code: 0, out: { id: o.id, orca: result.entry.orca, status: result.status, version: approval.version } };
+    // A Task registered after its inputs finished is made ready here; Orca's own readiness at creation is not measured.
+    let status = result.status;
+    if (status === 'pending' && row.deps.length) {
+      const st = statuses(m);
+      if (row.deps.every(d => st[d]?.status === 'completed') && setStatus(m, result.entry.orca, 'ready').ok !== false) status = 'ready';
+    }
+    return { code: 0, out: { id: o.id, orca: result.entry.orca, status, version: approval.version } };
   }
 
   if (cmd === 'reapprove') {
@@ -613,44 +622,50 @@ async function execute(cmd, o, deps, locks) {
     const row = approval?.tasks[o.id];
     if (!row || !(row.conditional === true || ['fix', 'recheck'].includes(row.kind))) return fail(`${o.id}는 건너뛸 수 있는 Task가 아님`);
     let e = m.tasks[o.id];
-    if (e?.skipped) return { code: 0, out: { id: o.id, skipped: true, existing: true, promoted: [] } };
-    const started = `${o.id}는 이미 기동했거나 끝난 Task`;
-    if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
-    if (e) {
-      if (e.dispatch || e.started || e.gate || e.attempts?.some(a => a.status !== 'rejected')) return fail(started);
-      try { st = statuses(m); } catch (err) { return fail(err.message); }
-      if (!['pending', 'ready'].includes(st[o.id].status)) return fail(started);
-    } else {
-      const missing = row.deps.filter(d => !taskId(m, d));
-      if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
-      const registeredDeps = row.deps.map(d => taskId(m, d));
-      const title = `${o.id} 건너뜀`;
-      const body = `Task: ${title}\n건너뜀: ${o.reason}\n\n실행 승인: ${approval.review} ${o.id}\n`;
-      const tempDir = mkdtempSync(join(tmpdir(), 'orca-spec-')), specFile = join(tempDir, `${o.id}.md`);
-      writeFileSync(specFile, body);
-      let created;
-      try {
-        created = call(['orchestration', 'task-create', '--spec-file', specFile, '--task-title', title, '--run', m.run,
-          ...(registeredDeps.length ? ['--deps', JSON.stringify(registeredDeps)] : []), '--full']);
-      } finally { unlinkSync(specFile); rmdirSync(tempDir); }
-      const orca = created.result?.task?.id ?? created.result?.taskId;
-      if (!orca) return fail('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
-      const { members, ...assignment } = row;
-      e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
-        lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
-      // saved before closing: a failed close is retried by the registered path instead of creating a second Task
+    // An already skipped Task is not touched again; only the promotion below reruns, to repair dependents left pending.
+    const existing = !!e?.skipped;
+    if (!existing) {
+      const started = `${o.id}는 이미 기동했거나 끝난 Task`;
+      if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
+      if (e) {
+        if (e.dispatch || e.started || e.gate || e.attempts?.some(a => a.status !== 'rejected')) return fail(started);
+        try { st = statuses(m); } catch (err) { return fail(err.message); }
+        if (!['pending', 'ready'].includes(st[o.id].status)) return fail(started);
+      } else {
+        const missing = row.deps.filter(d => !taskId(m, d));
+        if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
+        const registeredDeps = row.deps.map(d => taskId(m, d));
+        const title = `${o.id} 건너뜀`, marker = `실행 승인: ${approval.review} ${o.id}`;
+        let orca;
+        try { orca = markedTask(m, o.id, marker)?.id; } catch (err) { return fail(err.message); }
+        if (!orca) {
+          const tempDir = mkdtempSync(join(tmpdir(), 'orca-spec-')), specFile = join(tempDir, `${o.id}.md`);
+          writeFileSync(specFile, `Task: ${title}\n건너뜀: ${o.reason}\n\n${marker}\n`);
+          let created;
+          try {
+            created = call(['orchestration', 'task-create', '--spec-file', specFile, '--task-title', title, '--run', m.run,
+              ...(registeredDeps.length ? ['--deps', JSON.stringify(registeredDeps)] : []), '--full']);
+          } finally { unlinkSync(specFile); rmdirSync(tempDir); }
+          orca = created.result?.task?.id ?? created.result?.taskId;
+          if (!orca) return fail('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
+        }
+        const { members, ...assignment } = row;
+        e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
+          lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
+        // saved before closing: a failed close is retried by the registered path instead of creating a second Task
+        saveMap(m);
+      }
+      const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + o.reason);
+      if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
+      e.skipped = { reason: o.reason, at: deps.now() };
       saveMap(m);
     }
-    const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + o.reason);
-    if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
-    e.skipped = { reason: o.reason, at: deps.now() };
-    saveMap(m);
     try { st = statuses(m); } catch (err) { return fail(err.message); }
     // Orca's promotion on a manual status change is not relied on: dependents whose inputs are all completed are made ready here
     const promoted = Object.keys(m.tasks).filter((id) => m.tasks[id].deps.includes(o.id) && st[id].status === 'pending' &&
       !m.tasks[id].gate && m.transition?.id !== id && m.tasks[id].deps.every((d) => st[d]?.status === 'completed'))
       .filter((id) => setStatus(m, m.tasks[id].orca, 'ready').ok !== false);
-    return { code: 0, out: { id: o.id, skipped: true, promoted } };
+    return { code: 0, out: { id: o.id, skipped: true, ...(existing ? { existing: true } : {}), promoted } };
   }
 
   if (cmd === 'gate') {

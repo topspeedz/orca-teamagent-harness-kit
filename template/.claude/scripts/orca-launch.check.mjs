@@ -1353,5 +1353,65 @@ await ta(async () => {
   await refused(f, skip('D1'), /건너뛸 수 있는 Task가 아님/);
   assert.equal(f.calls.length, 0);
 });
+// 63. register makes a Task created pending ready itself when every input is completed (the fake creates it pending)
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.equal(p.out.status, 'ready');
+  assert.equal(f.tasks.get(p.out.orca).status, 'ready');
+  // registering again is the existing path: nothing more happens
+  const updates = f.count('task-update');
+  assert.equal((await main(reg('P1', 'p.md'), f.deps)).out.existing, true);
+  assert.equal(f.count('task-update'), updates);
+});
+// 64. register leaves a new Task pending while an input is unfinished
+await ta(async () => {
+  const f = await skipPlan([E('T01', 'P1')]);
+  await main(reg('T01', 'a.md'), f.deps);
+  await main(skip('D1'), f.deps);
+  const updates = f.count('task-update');
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.equal(p.out.status, 'pending');
+  assert.equal(f.tasks.get(p.out.orca).status, 'pending');
+  assert.equal(f.count('task-update'), updates);
+});
+// 65. skip reuses an Orca Task that already carries its approval marker (a lost task-create reply); two such Tasks are refused
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const marker = `실행 승인: ${f.map().review} D1`;
+  f.tasks.set('task_lost', { status: 'ready', deps: [f.map().tasks.T01.orca], spec: `Task: D1 건너뜀\n건너뜀: 문서 영향 없음\n\n${marker}\n` });
+  const creates = f.count('task-create');
+  const ok = await main(skip('D1'), f.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.equal(f.count('task-create'), creates);
+  assert.equal(f.map().tasks.D1.orca, 'task_lost');
+  assert.equal(f.tasks.get('task_lost').status, 'completed');
+  const g = await skipPlan();
+  await main(reg('T01', 'a.md'), g.deps);
+  for (const id of ['task_lost1', 'task_lost2']) g.tasks.set(id, { status: 'pending', deps: [], spec: `x\n\n실행 승인: ${g.map().review} D1\n` });
+  await refused(g, skip('D1'), /같은 승인 Task가 여러 번 등록됨: D1/);
+});
+// 66. skipping again repairs a dependent left pending: it is made ready and listed, the skipped Task is not touched
+await ta(async () => {
+  const f = await skipPlan();
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const { D1, P1 } = f.map().tasks;
+  f.tasks.get(P1.orca).status = 'pending';
+  const creates = f.count('task-create');
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: ['P1'] });
+  assert.equal(f.tasks.get(P1.orca).status, 'ready');
+  assert.equal(f.count('task-create'), creates);
+  assert.equal(f.calls.filter((a) => a[1] === 'task-update' && val(a, '--id') === D1.orca).length, 1);
+  assert.equal(f.map().tasks.D1.skipped.reason, '문서 영향 없음');
+});
 
 console.log(`orca-launch.check: ${passed} passed`);
