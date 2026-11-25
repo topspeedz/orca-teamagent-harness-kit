@@ -125,6 +125,20 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // phase name or backlog ID as a whole token of the objective (`phase-a` must not match `phase-ab`)
 const csv = (s) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const hasToken = (text, token) => new RegExp(`(^|[\\s\\[,])${escapeRe(token)}($|[\\s\\],])`).test(text);
+// `cmd` as a whole command in `text`: `npm test` and `npm test 통과` count; `npm test -- a.test.ts` (narrower) and `pnpm test` do not.
+// After a space, a token that looks like an argument extends the command; a shell redirection such as `2>&1` does not.
+const QUOTES = `"'“”‘’`;
+function wholeCommand(text, cmd) {
+  for (let i = text.indexOf(cmd); i >= 0; i = text.indexOf(cmd, i + 1)) {
+    if (i > 0 && !/\s/.test(text[i - 1]) && !('`(' + QUOTES).includes(text[i - 1])) continue;
+    const rest = text.slice(i + cmd.length);
+    if (rest === '' || /^[\r\n]/.test(rest) || ('`)' + QUOTES).includes(rest[0])) return true;
+    if (!/^\s/.test(rest)) continue;
+    const next = rest.trimStart().split(/\s/)[0];
+    if (/^\d*[<>]/.test(next) || !/^[A-Za-z0-9\-./_@=~$]/.test(next)) return true;
+  }
+  return false;
+}
 
 export async function main(argv, deps) {
   const [cmd, ...rest] = argv;
@@ -274,7 +288,7 @@ async function execute(cmd, o, deps, locks) {
     if (from < 0) return;
     const to = lines.findIndex((l, i) => i > from && /^(검증 환경값|막히면:|보고:)/.test(l));
     const region = lines.slice(from, to < 0 ? undefined : to).join('\n');
-    const hit = fullTests().find(c => region.includes(c));
+    const hit = fullTests().find(c => wholeCommand(region, c));
     if (hit) throw new Error(`완료 기준에 전체 테스트 명령이 있음: ${hit}`);
   };
   // first backtick span of each `(전체 테스트)` line in AGENTS.md's `## 명령` section
@@ -288,8 +302,11 @@ async function execute(cmd, o, deps, locks) {
   };
   // A fix Task takes only defects the ledger allows; verification after a fix names its defects and diff.
   // row: the governing approved row; ids: the launched Task and, for a member, its parent. Returns a refusal or null.
-  const launchRefusal = (m, mapFile, row, spec, ids) => {
-    const post = row?.kind === 'recheck' || (row?.kind === 'verify' && currentRound(m) > 1);
+  const launchRefusal = (m, mapFile, approval, row, spec, ids) => {
+    // a fix Task launched directly is under m.direct, so the round is read from the approved rows and either record's dispatch
+    const view = { tasks: Object.fromEntries(Object.entries(approval.tasks).map(([id, r]) =>
+      [id, { kind: r.kind, round: r.round, dispatch: m.tasks[id]?.dispatch ?? m.direct?.[id]?.dispatch }])) };
+    const post = row?.kind === 'recheck' || (row?.kind === 'verify' && currentRound(view) > 1);
     if (row?.kind !== 'fix' && !post) return null;
     const value = label => new RegExp(`^${label}:(.*)$`, 'm').exec(spec)?.[1].trim() ?? '';
     const defects = csv(value('결함 ID'));
@@ -559,7 +576,7 @@ async function execute(cmd, o, deps, locks) {
     }
     if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
     if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
-    const refusal = approved && launchRefusal(m, o.map, approved, st[o.id]?.spec ?? '', [o.id]);
+    const refusal = approved && launchRefusal(m, o.map, approval, approved,st[o.id]?.spec ?? '', [o.id]);
     if (refusal) return fail(refusal);
     const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
     if (o.retry && previous?.turnStarted) previous.failed = true;
@@ -820,7 +837,7 @@ async function execute(cmd, o, deps, locks) {
       } else if (state && (state.dispatch || state.attempts?.at(-1)?.status !== 'rejected')) return fail('이미 직접 기동한 Task');
       if (state && (state.parent !== (o.parent ?? null) || state.agent !== o.agent || state.unit !== unit)) return fail('팀원의 이전 기동 범위와 다름');
       // a member follows its parent's kind
-      const refusal = launchRefusal(map, mapPath, parent, spec, [o.id, o.parent].filter(Boolean));
+      const refusal = launchRefusal(map, mapPath, approval, parent,spec, [o.id, o.parent].filter(Boolean));
       if (refusal) return fail(refusal);
     } else {
       if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');

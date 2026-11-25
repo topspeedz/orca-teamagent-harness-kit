@@ -1519,19 +1519,22 @@ const H1 = '| H-1 | Q1 | High | 관찰 | 1 | 열림 |', M1 = '| M-1 | Q1 | Mediu
 const LEAD_Q1 = { unit: '리드', model: 'sonnet', effort: 'high', members: [{ role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' }] };
 const FIX_NO_IDS = '수정 Task의 결함 ID 줄이 없음', POST_FIX = '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함', NO_LEDGER = '장부를 읽을 수 없음';
 // T01 → Q1(verify) → F1(fix) → R1(recheck); with lead, Q1 is a team lead that launches planner members itself
-async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '' } = {}) {
+// with q2, a second verify Task Q2 hangs off T01 beside Q1 (not behind F1)
+async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '', q2 = false } = {}) {
   const f = fakeDag({ fileOver: {
     'q.md': lead ? '[역할: qa-inspector · 리드]\nTask: Q1 검증 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)' : planSpec('Q1', '흐름 검증'),
-    'f.md': planSpec('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
+    'q2.md': planSpec('Q2', '추가 검증'), 'f.md': planSpec('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
   if (ledger !== null) f.fs['ledger.md'] = ledger;
-  await approve(f, [T('T01'), T('Q1', { ...(lead ? LEAD_Q1 : {}), ...q1 }), T('F1'), T('R1', r1)], [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1')], 'v1',
-    rounds ? { rounds: [{ n: 1, verify: ['Q1'], fix: 'F1', recheck: 'R1' }] } : {});
+  await approve(f, [T('T01'), T('Q1', { ...(lead ? LEAD_Q1 : {}), ...q1 }), T('F1'), T('R1', r1), ...(q2 ? [T('Q2')] : [])],
+    [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1'), ...(q2 ? [E('T01', 'Q2')] : [])], 'v1',
+    rounds ? { rounds: [{ n: 1, verify: q2 ? ['Q1', 'Q2'] : ['Q1'], fix: 'F1', recheck: 'R1' }] } : {});
   await main([...runArgs, '--approval', approval], f.deps);
   const done = (id) => { f.tasks.get(f.map().tasks[id].orca).status = 'completed'; };
   const launch = async (args) => { const r = await main(args, f.deps); assert.equal(r.code, 0, JSON.stringify(r.out)); };
   await launch(reg('T01', 'a.md'));
   done('T01');
   await launch(reg('Q1', 'q.md', ...(lead ? ['--lead'] : [])));
+  if (q2) await launch(reg('Q2', 'q2.md'));
   return { f, done, launch, member: (id, file) => ['worker', '--approval', approval, '--parent', 'Q1', '--id', id, '--agent', 'planner',
     '--unit', '계획', '--spec-file', file, '--bracket', 'BL-0012', '--does', '검증 분해'] };
 }
@@ -1680,6 +1683,49 @@ await ta(async () => {
     const { code, out } = await main(reg('T01', 'a.md'), f.deps);
     assert.equal(code, 0, JSON.stringify(out));
   }
+});
+// 84. a marked command counts only as a whole command: a narrower or different command passes
+await ta(async () => {
+  const cases = [['npm test -- src/login.test.ts', 0], ['npm test src/a.test.js', 0], ['pnpm test', 0], ['npm test', 1], ['`npm test`', 1],
+    ['npm test 통과', 1], ['npm test → 0 failed', 1], ['npm test && npm run lint', 1], ['npm test 2>&1', 1]];
+  for (const [command, code] of cases) {
+    const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': criteria(`완료 기준: ${command}`) } });
+    await execRun(f);
+    const r = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(r.code, code, command + ' ' + JSON.stringify(r.out));
+    if (code) assert.equal(r.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+  }
+});
+// fix Task F1 launched directly (no --parent), with its own approved row
+const directFix = (file) => ['worker', '--agent', 'qa-inspector', '--unit', '흐름 검증', '--spec-file', file, '--bracket', 'BL-0012', '--does', '결함 수정',
+  '--approval', approval, '--id', 'F1'];
+// 85. a fix Task launched directly starts the fix round: a following verify launch without the two lines is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan({ q2: true, fix: '\n결함 ID: H-1' });
+  await launch(go('Q1'));
+  done('Q1');
+  await launch(directFix('f.md'));
+  assert.ok(f.map().direct.F1.dispatch);
+  await refusedLaunch(f, go('Q2'), POST_FIX);
+});
+// 86. a direct launch without --parent whose own row is a fix and has no `결함 ID:` line is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan();
+  await launch(go('Q1'));
+  done('Q1');
+  await refusedLaunch(f, directFix('f.md'), FIX_NO_IDS);
+  assert.equal(f.map().direct?.F1, undefined);
+});
+// 87. worker --map --retry: a verify Task retried after the fix round started, with no decision line, is refused
+await ta(async () => {
+  const { f, done, launch } = await roundPlan({ q2: true, fix: '\n결함 ID: H-1' });
+  await launch(go('Q1'));
+  await launch(go('Q2'));
+  f.tasks.get(f.map().tasks.Q2.orca).status = 'failed';
+  done('Q1');
+  await launch(reg('F1', 'f.md'));
+  await launch(go('F1'));
+  await refusedLaunch(f, go('Q2', '--retry'), POST_FIX);
 });
 
 console.log(`orca-launch.check: ${passed} passed`);
