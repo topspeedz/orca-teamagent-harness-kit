@@ -81,4 +81,17 @@ assert.equal(r.status, 1);
 assert.ok(JSON.parse(r.stdout).error);
 ok();
 
+// 8. unrecognised severity is refused, not dropped; messy spellings are normalised
+const tbl = (rows) => ['## 결함', '', '| ID | 심각도 | 증거 | 위치 | 요지 |', '| --- | --- | --- | --- | --- |', rows, ''].join('\n');
+assert.deepEqual(parseDefects(tbl('| H-3 | high | 관찰`t.mjs` | a | b |\n| H-4 | **High** | 관찰 x | a | b |')).map(d => [d.severity, d.evidence]),
+  [['High', '관찰'], ['High', '관찰']]);
+assert.throws(() => parseDefects(tbl('| H-3 | Critical | 관찰 x | a | b |')), /H-3.*Critical/);
+assert.throws(() => readLedger(once.replace('| H-1 | T07 | High |', '| H-1 | T07 | Critical |')), /H-1/);
+const badP = f('bad.md', tbl('| H-3 | Critical | 관찰 x | a | b |'));
+r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', badP, '--source', 'T08');
+assert.equal(r.status, 1);
+assert.match(JSON.parse(r.stdout).error, /H-3/);
+assert.equal(readFileSync(ledgerP, 'utf8'), addDefects(led, { source: 'T07', round: 2, defects: parseDefects(report) }));
+ok();
+
 console.log(`defect-ledger.check: ${passed} passed`);

@@ -11,6 +11,8 @@ const HEAD = '| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 
 const SEP = '| --- | --- | --- | --- | --- | --- |';
 const SEVERITIES = ['High', 'Medium', 'Low'];
 
+// `**High**`, ` high ` -> High; anything else -> undefined (callers throw: a dropped row would hide a blocker)
+const normSeverity = (cell = '') => SEVERITIES.find((v) => v.toLowerCase() === cell.replace(/^[\s*`]+|[\s*`]+$/g, '').toLowerCase());
 const cells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 const isRow = (l) => l.trim().startsWith('|');
 // lines of the section opened by `## <title>`, up to the next `## ` heading; start = index of the first body line
@@ -37,11 +39,12 @@ export function parseDefects(reportText) {
   for (const l of body.slice(h + 2)) {
     if (!isRow(l)) break;
     const [id, sev, ev = '', where = ''] = cells(l);
-    if (!id || !SEVERITIES.includes(sev)) continue;
-    const word = ev.split(/\s+/)[0].replace(/`/g, '');
-    const evidence = word === '관찰' || word === '인용' ? word : '없음';
-    const d = { id, severity: sev, evidence, where };
-    if (sev === 'High' && evidence === '없음') { d.severity = 'Medium'; d.demoted = true; }
+    if (!id) continue;
+    const severity = normSeverity(sev);
+    if (!severity) throw new Error(`심각도를 읽을 수 없음: ${id} "${sev ?? ''}"`);
+    const evidence = ['관찰', '인용'].find((w) => ev.replace(/^[\s*`]+/, '').startsWith(w)) ?? '없음';
+    const d = { id, severity, evidence, where };
+    if (severity === 'High' && evidence === '없음') { d.severity = 'Medium'; d.demoted = true; }
     out.push(d);
   }
   return out;
@@ -55,8 +58,10 @@ export function readLedger(ledgerText) {
     for (const l of lines.slice(led.start, led.end)) {
       if (!isRow(l)) continue;
       const [id, source, severity, evidence, round, state] = cells(l);
-      if (!SEVERITIES.includes(severity)) continue; // header and separator rows
-      defects.push({ id, source, severity, evidence, round: Number(round), state });
+      if (id === 'ID' || /^[-: ]+$/.test(id)) continue; // header and separator rows
+      const sev = normSeverity(severity);
+      if (!sev) throw new Error(`원장의 심각도를 읽을 수 없음: ${id} "${severity ?? ''}"`);
+      defects.push({ id, source, severity: sev, evidence, round: Number(round), state });
     }
   }
   const dec = section(lines, '결정');
