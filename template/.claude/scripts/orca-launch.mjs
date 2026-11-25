@@ -424,10 +424,12 @@ async function execute(cmd, o, deps, locks) {
     m.tasks[o.id] = result.entry;
     saveMap(m);
     // A Task registered after its inputs finished is made ready here; Orca's own readiness at creation is not measured.
+    // The status comes from Orca's listing, not the create receipt, which may not carry one.
     let status = result.status;
-    if (status === 'pending' && row.deps.length) {
+    if (row.deps.length) {
       const st = statuses(m);
-      if (row.deps.every(d => st[d]?.status === 'completed') && setStatus(m, result.entry.orca, 'ready').ok !== false) status = 'ready';
+      status = st[o.id]?.status ?? status;
+      if (status === 'pending' && row.deps.every(d => st[d]?.status === 'completed') && setStatus(m, result.entry.orca, 'ready').ok !== false) status = 'ready';
     }
     return { code: 0, out: { id: o.id, orca: result.entry.orca, status, version: approval.version } };
   }
@@ -486,7 +488,7 @@ async function execute(cmd, o, deps, locks) {
     if (!o.id || !o.bracket || !o.does) return fail('사용법: worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]');
     let m, e;
     try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
-    if (e.skipped) return fail(`${o.id}는 건너뛴 Task — 띄우지 않음`);
+    if (e.skipped || e.skipping) return fail(`${o.id}는 건너뛴 Task — 띄우지 않음`);
     const approval = activeApproval(m, o.id);
     if (m.transition?.id === o.id || e.gate) return fail('재승인 전환 또는 게이트 응답 대기');
     const lastAttempt = e.attempts?.at(-1);
@@ -576,7 +578,7 @@ async function execute(cmd, o, deps, locks) {
     const busy = [...running];
     const launch = [], held = [];
     const overlap = (a, b) => a.startsWith(b) || b.startsWith(a);
-    for (const id of Object.keys(m.tasks).filter((x) => st[x].status === 'ready' && m.transition?.id !== x)) {
+    for (const id of Object.keys(m.tasks).filter((x) => st[x].status === 'ready' && m.transition?.id !== x && !m.tasks[x].skipping)) {
       const e = m.tasks[id];
       let reason = null;
       for (const other of busy) {
@@ -595,7 +597,7 @@ async function execute(cmd, o, deps, locks) {
       const block = /^먼저 읽을 것:[ \t]*\r?\n((?:-.*(?:\r?\n|$))*)/m.exec(text)?.[1] ?? '';
       return block.split(/\r?\n/).filter((l) => l.startsWith('-')).map((l) => l.replace(/^-\s*/, '').trim());
     };
-    const candidates = Object.keys(m.tasks).filter((id) => st[id].status === 'pending' && !m.tasks[id].gate).map((id) => ({
+    const candidates = Object.keys(m.tasks).filter((id) => st[id].status === 'pending' && !m.tasks[id].gate && !m.tasks[id].skipping).map((id) => ({
       id, waitingOn: m.tasks[id].deps.filter((d) => st[d].status !== 'completed'), reads: m.tasks[id].spec ? reads(m.tasks[id].spec) : null }));
     return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held, candidates } };
   }
@@ -627,13 +629,20 @@ async function execute(cmd, o, deps, locks) {
     if (!existing) {
       const started = `${o.id}는 이미 기동했거나 끝난 Task`;
       if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
+      const inputs = e?.deps ?? row.deps;
+      const missing = inputs.filter(d => !taskId(m, d));
+      if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
+      try { st = statuses(m); } catch (err) { return fail(err.message); }
+      // Closing ahead of its inputs would release the Tasks behind it early.
+      const unfinished = inputs.filter(d => st[d]?.status !== 'completed');
+      if (unfinished.length) return fail('선행 Task가 끝나지 않음: ' + unfinished.join(', '));
+      // closed: an earlier run's close landed in Orca but was not recorded; only the recording is left
+      let closed = false;
       if (e) {
         if (e.dispatch || e.started || e.gate || e.attempts?.some(a => a.status !== 'rejected')) return fail(started);
-        try { st = statuses(m); } catch (err) { return fail(err.message); }
-        if (!['pending', 'ready'].includes(st[o.id].status)) return fail(started);
+        closed = !!e.skipping && st[o.id].status === 'completed';
+        if (!closed && !['pending', 'ready'].includes(st[o.id].status)) return fail(started);
       } else {
-        const missing = row.deps.filter(d => !taskId(m, d));
-        if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
         const registeredDeps = row.deps.map(d => taskId(m, d));
         const title = `${o.id} 건너뜀`, marker = `실행 승인: ${approval.review} ${o.id}`;
         let orca;
@@ -652,12 +661,16 @@ async function execute(cmd, o, deps, locks) {
         const { members, ...assignment } = row;
         e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
           lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
-        // saved before closing: a failed close is retried by the registered path instead of creating a second Task
-        saveMap(m);
       }
-      const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + o.reason);
-      if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
-      e.skipped = { reason: o.reason, at: deps.now() };
+      // Saved before closing: a re-run finishes a close whose reply was lost, and nothing launches the Task meanwhile.
+      e.skipping ??= { reason: o.reason };
+      saveMap(m);
+      if (!closed) {
+        const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + e.skipping.reason);
+        if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
+      }
+      e.skipped = { reason: e.skipping.reason, at: deps.now() };
+      delete e.skipping;
       saveMap(m);
     }
     try { st = statuses(m); } catch (err) { return fail(err.message); }

@@ -1283,24 +1283,29 @@ await ta(async () => {
 });
 // 58. skip a registered, waiting Task: dependents that are pending with every input completed become ready, others stay
 await ta(async () => {
-  // P1 also waits on T01: while T01 is unfinished, skipping D1 promotes nothing
-  const f = await skipPlan([E('T01', 'P1')]);
-  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  // P1 also waits on T02: while T02 is unfinished, skipping D1 promotes nothing
+  const both = async () => {
+    const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+    for (const [id, file] of [['T01', 'a.md'], ['T02', 'b.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+    f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+    return f;
+  };
+  const f = await both();
   const wait = await main(skip('D1'), f.deps);
   assert.equal(wait.code, 0, JSON.stringify(wait.out));
   assert.deepEqual(wait.out.promoted, []);
   assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'completed');
   assert.equal(f.tasks.get(f.map().tasks.P1.orca).status, 'pending');
-  // with T01 completed, P1 is promoted by skip itself
-  const g = await skipPlan([E('T01', 'P1')]);
-  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), g.deps);
-  g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
+  // with T02 completed too, P1 is promoted by skip itself
+  const g = await both();
+  g.tasks.get(g.map().tasks.T02.orca).status = 'completed';
   const ok = await main(skip('D1'), g.deps);
   assert.equal(ok.code, 0, JSON.stringify(ok.out));
   assert.deepEqual(ok.out, { id: 'D1', skipped: true, promoted: ['P1'] });
   assert.equal(g.tasks.get(g.map().tasks.P1.orca).status, 'ready');
   assert.equal(g.map().tasks.D1.skipped.reason, '문서 영향 없음');
-  assert.equal(g.count('task-create'), 3);
+  assert.equal('skipping' in g.map().tasks.D1, false);
+  assert.equal(g.count('task-create'), 4);
 });
 // 59. fix and recheck Tasks can be skipped without the conditional mark; a verify Task cannot
 await ta(async () => {
@@ -1369,8 +1374,9 @@ await ta(async () => {
 });
 // 64. register leaves a new Task pending while an input is unfinished
 await ta(async () => {
-  const f = await skipPlan([E('T01', 'P1')]);
-  await main(reg('T01', 'a.md'), f.deps);
+  const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(reg('T02', 'b.md'), f.deps);
   await main(skip('D1'), f.deps);
   const updates = f.count('task-update');
   const p = await main(reg('P1', 'p.md'), f.deps);
@@ -1392,7 +1398,7 @@ await ta(async () => {
   assert.equal(f.map().tasks.D1.orca, 'task_lost');
   assert.equal(f.tasks.get('task_lost').status, 'completed');
   const g = await skipPlan();
-  await main(reg('T01', 'a.md'), g.deps);
+  await main(reg('T01', 'a.md'), g.deps); g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
   for (const id of ['task_lost1', 'task_lost2']) g.tasks.set(id, { status: 'pending', deps: [], spec: `x\n\n실행 승인: ${g.map().review} D1\n` });
   await refused(g, skip('D1'), /같은 승인 Task가 여러 번 등록됨: D1/);
 });
@@ -1412,6 +1418,98 @@ await ta(async () => {
   assert.equal(f.count('task-create'), creates);
   assert.equal(f.calls.filter((a) => a[1] === 'task-update' && val(a, '--id') === D1.orca).length, 1);
   assert.equal(f.map().tasks.D1.skipped.reason, '문서 영향 없음');
+});
+// The close (task-update --status completed) gets an unparsable reply; `applied` says whether Orca still made the change.
+function loseClose(f, applied) {
+  const call = f.deps.orca;
+  f.deps.orca = (args) => {
+    if (args[1] !== 'task-update' || val(args, '--status') !== 'completed') return call(args);
+    if (applied) call(args);
+    return { status: 0, stdout: '', stderr: '' };
+  };
+  return () => { f.deps.orca = call; };
+}
+// 67. a close applied in Orca whose reply was lost: the entry keeps `skipping`; a re-run records `skipped` and promotes, with no second create or close
+await ta(async () => {
+  const f = await skipPlan();
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const { D1, P1 } = f.map().tasks;
+  const restore = loseClose(f, true);
+  const lost = await main(skip('D1'), f.deps);
+  restore();
+  assert.equal(lost.code, 1);
+  assert.match(lost.out.error, /task-update 실패/);
+  assert.equal(f.tasks.get(D1.orca).status, 'completed');
+  assert.deepEqual(f.map().tasks.D1.skipping, { reason: '문서 영향 없음' });
+  assert.equal('skipped' in f.map().tasks.D1, false);
+  const seen = f.calls.length;
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, promoted: ['P1'] });
+  assert.equal(f.map().tasks.D1.skipped.reason, '문서 영향 없음');
+  assert.equal('skipping' in f.map().tasks.D1, false);
+  assert.equal(f.tasks.get(P1.orca).status, 'ready');
+  // the only update on the re-run is P1's promotion
+  assert.deepEqual(f.calls.slice(seen).filter((a) => a[1] === 'task-update').map((a) => val(a, '--id')), [P1.orca]);
+  // an unregistered Task: the re-run makes no second create
+  const g = await skipPlan();
+  await main(reg('T01', 'a.md'), g.deps); g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
+  const back = loseClose(g, true);
+  assert.equal((await main(skip('D1'), g.deps)).code, 1);
+  back();
+  const creates = g.count('task-create');
+  const done = await main(skip('D1'), g.deps);
+  assert.equal(done.code, 0, JSON.stringify(done.out));
+  assert.equal(g.count('task-create'), creates);
+  assert.equal(g.map().tasks.D1.skipped.reason, '문서 영향 없음');
+});
+// 68. while the close has not landed, worker --map refuses the `skipping` Task and launchable neither launches nor lists it
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(reg('D1', 'd.md'), f.deps);
+  const restore = loseClose(f, false);
+  assert.equal((await main(skip('D1'), f.deps)).code, 1);
+  restore();
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'ready');
+  assert.ok(f.map().tasks.D1.skipping);
+  assert.match((await main(go('D1'), f.deps)).out.error, /건너뛴 Task/);
+  assert.equal(f.count('worker-start'), 0);
+  const l = await main(['launchable', ...M], f.deps);
+  assert.equal(l.code, 0, JSON.stringify(l.out));
+  assert.equal(l.out.launch.includes('D1'), false);
+  assert.equal(l.out.candidates.some((c) => c.id === 'D1'), false);
+  f.tasks.get(f.map().tasks.D1.orca).status = 'pending';
+  assert.equal((await main(['launchable', ...M], f.deps)).out.candidates.some((c) => c.id === 'D1'), false);
+  // a re-run closes it
+  const again = await main(skip('D1'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'completed');
+});
+// 69. a registered but unfinished input is refused with no Orca change, whether or not the Task is registered
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps);
+  await refused(f, skip('D1'), /선행 Task가 끝나지 않음: T01/);
+  await main(reg('D1', 'd.md'), f.deps);
+  await refused(f, skip('D1'), /선행 Task가 끝나지 않음: T01/);
+});
+// 70. register promotes from Orca's listed status when the create receipt carries none
+await ta(async () => {
+  const f = await skipPlan();
+  const call = f.deps.orca;
+  f.deps.orca = (args) => {
+    const r = call(args);
+    if (args[1] !== 'task-create') return r;
+    const out = JSON.parse(r.stdout);
+    return { ...r, stdout: JSON.stringify({ ok: true, result: { taskId: out.result.task.id } }) };
+  };
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const d = await main(reg('D1', 'd.md'), f.deps);
+  assert.equal(d.code, 0, JSON.stringify(d.out));
+  assert.equal(d.out.status, 'ready');
+  assert.equal(f.tasks.get(d.out.orca).status, 'ready');
 });
 
 console.log(`orca-launch.check: ${passed} passed`);
