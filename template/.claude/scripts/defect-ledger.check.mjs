@@ -96,6 +96,8 @@ ok();
 assert.deepEqual(parseDefects(tbl('| H-3 | high | 관찰`t.mjs` | a | b |\n| H-4 | **High** | 관찰 x | a | b |')).map(d => [d.severity, d.evidence]),
   [['High', '관찰'], ['High', '관찰']]);
 assert.throws(() => parseDefects(tbl('| H-3 | Critical | 관찰 x | a | b |')), /H-3.*Critical/);
+// an ID used twice in one report is refused instead of keeping only the first row
+assert.throws(() => parseDefects(tbl('| H-3 | High | 관찰 x | a | b |\n| H-3 | Medium | 관찰 y | c | d |')), /H-3/);
 assert.throws(() => readLedger(once.replace('| H-1 | T07 | High |', '| H-1 | T07 | Critical |')), /H-1/);
 const badP = f('bad.md', tbl('| H-3 | Critical | 관찰 x | a | b |'));
 r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', badP, '--source', 'T08');

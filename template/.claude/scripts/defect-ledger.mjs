@@ -41,6 +41,7 @@ export function parseDefects(reportText) {
     if (!isRow(l)) break;
     const [id, sev, ev = '', where = ''] = cells(l);
     if (!id) continue;
+    if (out.some((d) => d.id === id)) throw new Error(`리포트에 같은 결함 ID가 두 번 나옴: ${id}`);
     const severity = normSeverity(sev);
     if (!severity) throw new Error(`심각도를 읽을 수 없음: ${id} "${sev ?? ''}"`);
     const evidence = ['관찰', '인용'].find((w) => ev.replace(/^[\s*`]+/, '').startsWith(w)) ?? '없음';
