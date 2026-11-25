@@ -71,7 +71,7 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 New requirements · named backlog IDs · delegated phase → design and plan → execution approval → execution and QA → close-out → retro → commit and PR approval
 ```
 
-- For new requirements, the PM writes the PRD, SRS and backlog items. The Planner checks coverage and feasibility. The user confirms coverage and the batch before design starts. Named backlog IDs go straight to the Planner. Both routes require design and execution-plan approval.
+- For new requirements, the PM writes the PRD, SRS and backlog items. If `plan-orchestrate`'s conditions are met, the Planner checks coverage and feasibility. The user confirms coverage and the batch before design starts. Named backlog IDs go straight to the Planner. Both routes require design and execution-plan approval.
 - For a delegated phase, the PM selects the goal and items and gives the Planner the rationale. The user reviews the batch and estimated diagrams together at execution approval. Before execution the DAG shows pending Tasks and the waterfall shows T+ estimates. After approval, progress comes from the same Run.
 - The planner writes the design doc and implementation plan in the format of the superpowers `brainstorming` and `writing-plans` skills.
 - The retro runs when the measurement table shows a failure or a retry, the fix round reached 2, or five phases have passed since the last retro. Otherwise it is closed with `skip`, and the coordinator leaves the measurement table every time. If it runs and there is no evidence for a change, it records the measurements and "no change". The coordinator skill defines the conditions.

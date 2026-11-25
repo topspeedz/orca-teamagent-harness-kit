@@ -69,7 +69,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 새 요구 · 지정 백로그 ID · 한 phase 위임 → 설계·계획 → 실행 승인 → 실행·QA → 완료 처리 → 하네스 회고 → commit과 PR 승인
 ```
 
-- 새 요구는 PM이 PRD·SRS·백로그에 반영하고 Planner가 누락과 실행 가능성을 검토한다. 사용자가 전체 반영 여부와 이번 묶음을 확인한 뒤 설계·계획으로 넘어간다. 지정 ID는 Planner가 바로 설계한다. 두 경로 모두 설계와 실행 계획을 승인받는다.
+- 새 요구는 PM이 PRD·SRS·백로그에 반영하고, `plan-orchestrate`의 조건이 맞으면 Planner가 누락과 실행 가능성을 검토한다. 사용자가 전체 반영 여부와 이번 묶음을 확인한 뒤 설계·계획으로 넘어간다. 지정 ID는 Planner가 바로 설계한다. 두 경로 모두 설계와 실행 계획을 승인받는다.
 - 한 phase를 위임하면 PM이 목표·항목·선정 이유를 정하고 Planner가 계획한다. 사용자는 최종 실행 승인에서 묶음과 예상 그림을 함께 확인한다. 시작 전에는 대기 상태 DAG와 T+ 예상 워터폴을, 승인 뒤에는 같은 Run의 진행 상황을 본다.
 - 설계 문서와 구현 계획은 planner가 superpowers의 `brainstorming`, `writing-plans` 형식으로 작성한다.
 - 회고는 측정 표에 실패나 재시도가 있거나 수정 라운드가 2에 닿았거나 마지막 회고 뒤 phase가 5번 지났을 때 띄운다. 아니면 `skip`으로 닫고, 측정 표는 코디네이터가 매번 남긴다. 띄웠는데 고칠 근거가 없으면 측정 결과와 "변경 없음"만 기록한다. 조건은 coordinator 스킬이 정한다.

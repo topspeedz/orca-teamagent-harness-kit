@@ -27,7 +27,7 @@
 
 phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/templates/ledger.md`로 쓴다.
 
-- 예산 줄: 구현 Task 수, 검증 Task 수. 수정 라운드는 손으로 세지 않는다. `defect-ledger.mjs`가 이미 띄운 수정 Task의 수를 센다.
+- 예산 줄: 구현 Task 수, 검증 Task 수. 수정 라운드는 손으로 세지 않는다. `defect-ledger.mjs`가 수정 Task를 띄운 라운드의 수를 센다.
 - 기동 장부의 열은 `Task | 에이전트 | 배정(요청과 적용) | 재시도(원인) | 질문 | 리포트 경로`다.
 - 산문과 결정은 표 밖의 `## 결정` 절에 쓴다. 표 사이에 산문을 끼우지 않는다.
 - **Task의 상태는 장부에 적지 않는다.** Orca가 기준이고 `ready` 명령의 `status`로 본다. 결정을 기다리는 Task는 게이트로 막는다(`SKILL.md`의 결정 대기).
