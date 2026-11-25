@@ -1,7 +1,7 @@
 // Self-test for retro-measure.mjs — no Orca or session logs needed. `node .claude/skills/harness-retro/scripts/retro-measure.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,6 +111,11 @@ t('defects: High counts by state, lower-severity fixes, rounds and skipped from 
   assert.deepEqual(defects(DEFECT_LEDGER, DEFECT_MAP), { rounds: 1, high: 3, confirmed: 1, cited: 1, dismissed: 1, open: 0, lowerFixed: 1, skipped: 1 });
   assert.deepEqual(defects(DEFECT_LEDGER), { rounds: null, high: 3, confirmed: 1, cited: 1, dismissed: 1, open: 0, lowerFixed: 1, skipped: null });
   assert.equal(defects('# 장부: phase-a\n\n수정 루프 1회\n'), null);
+});
+
+t('defects: the untouched ledger form counts no lower-severity fix', () => {
+  const form = readFileSync(fileURLToPath(new URL('../../../../docs/harness/templates/ledger.md', import.meta.url)), 'utf8');
+  assert.equal(defects(form).lowerFixed, 0);
 });
 
 const line = (o) => JSON.stringify(o);

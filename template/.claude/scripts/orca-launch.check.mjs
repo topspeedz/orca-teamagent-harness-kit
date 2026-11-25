@@ -1728,4 +1728,48 @@ await ta(async () => {
   await refusedLaunch(f, go('Q2', '--retry'), POST_FIX);
 });
 
+// 88. two rounds: round 2 names round 1's recheck as its verify; it stays recheck of round 1. Other repeats stay refused
+await ta(async () => {
+  const f = fakeDag();
+  const record = p => JSON.parse(f.fs[p]);
+  const chain = ['Q1', 'F1', 'R1', 'F2', 'R2'];
+  const nodes = chain.map(id => T(id)), edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const two = verify => [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }, { n: 2, verify, fix: 'F2', recheck: 'R2' }];
+  const done = await approve(f, nodes, edges, 'v1', { rounds: two('R1') });
+  assert.deepEqual([record(done).tasks.R1.kind, record(done).tasks.R1.round], ['recheck', 1]);
+  assert.deepEqual([record(done).tasks.R2.kind, record(done).tasks.R2.round], ['recheck', 2]);
+  for (const id of ['F1', 'Q1'])
+    assert.match(await reviewError(nodes, edges, { rounds: two(id) }), new RegExp(`rounds에 같은 Task가 두 번 나옴: ${id}`), id);
+});
+// 89. a third fix Task on one path passes only with afterFix, and is still launched under the fix-Task rules
+await ta(async () => {
+  const chain = ['T01', 'Q1', 'F1', 'R1', 'F2', 'R2', 'F3'];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const rounds = [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }, { n: 2, verify: 'R1', fix: 'F2', recheck: 'R2' }, { n: 3, fix: 'F3' }];
+  const reason = '사용자가 3회차 수정을 승인함';
+  assert.match(await reviewError(chain.map(id => T(id)), edges, { rounds }), /수정 Task 사슬이 2단을 넘음: F3/);
+  const f = fakeDag({ fileOver: Object.fromEntries(chain.map(id => [`${id}.md`, planSpec(id, '작업')])) });
+  f.fs['ledger.md'] = LEDGER([H1]);
+  await approve(f, chain.map(id => T(id, id === 'F3' ? { afterFix: reason } : {})), edges, 'v1', { rounds });
+  assert.equal(JSON.parse(f.fs[approval]).tasks.F3.afterFix, reason);
+  await main([...runArgs, '--approval', approval], f.deps);
+  for (const id of chain) {
+    const r = await main(reg(id, `${id}.md`), f.deps);
+    assert.equal(r.code, 0, JSON.stringify(r.out));
+    if (id !== 'F3') f.tasks.get(f.map().tasks[id].orca).status = 'completed';
+  }
+  await refusedLaunch(f, go('F3'), FIX_NO_IDS);
+});
+// 90. conditional is refused on a rounds verify Task; kept on a fix Task and on a Task outside rounds
+await ta(async () => {
+  const chain = ['T01', 'Q1', 'F1'];
+  const edges = chain.slice(1).map((id, i) => E(chain[i], id));
+  const rounds = { rounds: [{ n: 1, verify: 'Q1', fix: 'F1' }] };
+  assert.match(await reviewError([T('T01'), T('Q1', { conditional: true }), T('F1')], edges, rounds), /검증 Task Q1에는 conditional을 둘 수 없음/);
+  const f = fakeDag();
+  await approve(f, [T('T01', { conditional: true }), T('Q1'), T('F1', { conditional: true })], edges, 'v1', rounds);
+  const tasks = JSON.parse(f.fs[approval]).tasks;
+  assert.deepEqual([tasks.T01.conditional, tasks.F1.conditional], [true, true]);
+});
+
 console.log(`orca-launch.check: ${passed} passed`);

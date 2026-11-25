@@ -1,6 +1,7 @@
 // Snapshot the working tree as a git tree id without committing or touching the real index.
 // `node .claude/scripts/tree-snapshot.mjs take` | `diff --from <tree> --to <tree> [--path <p>]...`
 import { spawnSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,7 +33,7 @@ export function diff(git, from, to, paths = []) {
   return files;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const [cmd, ...rest] = process.argv.slice(2);
     if (cmd === 'take') console.log(JSON.stringify({ tree: take(defaultGit) }));

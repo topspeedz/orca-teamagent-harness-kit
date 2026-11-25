@@ -93,7 +93,7 @@ export function ledger(text) {
 }
 
 // Defect rows from the ledger's `## 결함 원장` section (null when the ledger has none) and, with a task map, rounds and skipped Tasks.
-// 이월 rows count in none of the four states. lowerFixed = `- <ID> | 수정 포함 승인 | <text>` decision lines.
+// 이월 rows count in none of the four states. lowerFixed = `- <ID> | 수정 포함 승인 | <text>` decision lines whose ID is a ledger row.
 export function defects(ledgerText, map) {
   if (!/^## 결함 원장\s*$/m.test(ledgerText)) return null;
   const { defects: rows, decisions } = readLedger(ledgerText);
@@ -102,7 +102,8 @@ export function defects(ledgerText, map) {
   return {
     rounds: map ? currentRound(map) - 1 : null,
     high: high.length, confirmed: n('확정'), cited: n('인용'), dismissed: n('기각'), open: n('열림'),
-    lowerFixed: decisions.filter((l) => l.split('|')[1]?.trim() === '수정 포함 승인').length,
+    lowerFixed: decisions.filter((l) => { const [id, kind] = l.split('|').map((c) => c.trim());
+      return kind === '수정 포함 승인' && rows.some((d) => d.id === id); }).length,
     skipped: map ? Object.values(map.tasks ?? {}).filter((t) => t.skipped).length : null,
   };
 }

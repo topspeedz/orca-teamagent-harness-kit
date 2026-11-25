@@ -20,6 +20,7 @@ const mk = (commit) => {
   git(['config', 'user.email', 't@example.com']);
   git(['config', 'user.name', 't']);
   git(['config', 'core.autocrlf', 'false']);
+  git(['config', 'commit.gpgsign', 'false']);
   const put = (p, body) => { mkdirSync(join(cwd, p, '..'), { recursive: true }); writeFileSync(join(cwd, p), body); };
   if (commit) {
     put('.gitignore', '_workspace/\n');

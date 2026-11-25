@@ -82,25 +82,31 @@ function assignments(dag) {
   };
   for (const id of nodes.keys()) visit(id);
   required(Object.keys(tasks).length, '실행 Task가 없는 DAG');
-  const named = new Set();
+  const named = new Set(), renamed = new Set();
   for (const round of dag.rounds ?? []) for (const kind of ['verify', 'fix', 'recheck']) {
     for (const id of [round[kind] ?? []].flat()) {
       required(Object.hasOwn(tasks, id), `rounds가 가리키는 노드 없음: ${id}`);
+      required(Number.isInteger(round.n), `rounds의 n은 정수: ${id}`);
+      // A recheck may be named once more as a later round's verify; it keeps its kind and first round.
+      if (named.has(id) && kind === 'verify' && tasks[id].kind === 'recheck' && round.n > tasks[id].round && !renamed.has(id)) {
+        renamed.add(id);
+        continue;
+      }
       required(!named.has(id), `rounds에 같은 Task가 두 번 나옴: ${id}`);
       named.add(id);
-      required(Number.isInteger(round.n), `rounds의 n은 정수: ${id}`);
       Object.assign(tasks[id], { kind, round: round.n });
     }
   }
+  for (const [id, t] of Object.entries(tasks)) required(!(t.kind === 'verify' && t.conditional), `검증 Task ${id}에는 conditional을 둘 수 없음`);
   // Walk the projected deps: a verify Task may not wait behind a fix Task unless it gives afterFix,
-  // and no dependency path holds more than two fix Tasks.
+  // and no dependency path holds more than two fix Tasks (a fix Task with afterFix is not counted).
   const behind = new Map(), fixes = new Map();
   const trace = id => {
     if (behind.has(id)) return;
-    const { deps, kind } = tasks[id];
+    const { deps, kind, afterFix } = tasks[id];
     deps.forEach(trace);
     behind.set(id, new Set(deps.flatMap(d => [d, ...behind.get(d)])));
-    fixes.set(id, (kind === 'fix' ? 1 : 0) + Math.max(0, ...deps.map(d => fixes.get(d))));
+    fixes.set(id, (kind === 'fix' && !afterFix ? 1 : 0) + Math.max(0, ...deps.map(d => fixes.get(d))));
   };
   for (const [id, t] of Object.entries(tasks)) {
     trace(id);
