@@ -1226,4 +1226,132 @@ await ta(async () => {
   ]) assert.match(await reviewError(nodes, edges, { rounds }), /rounds에 같은 Task가 두 번 나옴/, JSON.stringify(rounds));
 });
 
+// ---- skip: close a planned Task that has nothing to do ----
+const planSpec = (id, what) => `[역할: qa-inspector]\nTask: ${id} ${what}\n배정: qa-inspector / 흐름 검증 (claude opus/medium)`;
+const skip = (id, reason = '문서 영향 없음') => ['skip', ...M, '--id', id, '--reason', reason];
+// T01 → D1(conditional) → P1, plus the extra edges given
+async function skipPlan(edges = [], drawing = {}, nodes = []) {
+  const f = fakeDag({ fileOver: { 'd.md': planSpec('D1', '문서 동기화'), 'p.md': planSpec('P1', '배포 점검') } });
+  await approve(f, [T('T01'), T('D1', { conditional: true }), T('P1'), ...nodes], [E('T01', 'D1'), E('D1', 'P1'), ...edges], 'v1', drawing);
+  await main([...runArgs, '--approval', approval], f.deps);
+  return f;
+}
+// a refusal makes no state-changing Orca call and leaves the map as it was
+async function refused(f, args, error) {
+  const before = [f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const { code, out } = await main(args, f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  assert.match(out.error, error);
+  assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+}
+// 57. skip an unregistered conditional Task: refused when unmarked or its inputs are unregistered; then created, closed, never launched
+await ta(async () => {
+  const f = await skipPlan();
+  // 1. a Task without a mark cannot be skipped. Nothing changes
+  const no = await main(skip('T01', '필요 없음'), f.deps);
+  assert.equal(no.code, 1); assert.match(no.out.error, /건너뛸 수 있는 Task가 아님/);
+  assert.equal(f.count('task-update'), 0);
+  // the reason is required and not blank
+  await refused(f, ['skip', ...M, '--id', 'D1'], /사용법: skip --map <map> --id <T01> --reason <사유>/);
+  await refused(f, skip('D1', '  '), /사용법: skip/);
+  // 2. an input that is not registered yet is refused
+  assert.match((await main(skip('D1'), f.deps)).out.error, /미등록 선행 Task: T01/);
+  await refused(f, skip('D1'), /미등록 선행 Task: T01/);
+  // 3. skipped without registering: Orca gets a Task that is shown as finished
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  const ok = await main(skip('D1'), f.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.deepEqual(ok.out, { id: 'D1', skipped: true, promoted: [] });
+  const { T01, D1 } = f.map().tasks;
+  assert.equal(f.tasks.get(D1.orca).status, 'completed');
+  assert.equal(D1.skipped.reason, '문서 영향 없음');
+  assert.equal(D1.skipped.at, T0);
+  assert.match(f.tasks.get(D1.orca).spec, /건너뜀: 문서 영향 없음/);
+  assert.equal(f.tasks.get(D1.orca).spec, `Task: D1 건너뜀\n건너뜀: 문서 영향 없음\n\n실행 승인: ${f.map().review} D1\n`);
+  assert.deepEqual(f.tasks.get(D1.orca).deps, [T01.orca]);
+  assert.deepEqual(D1.registeredDeps, [T01.orca]);
+  assert.equal(val(f.call('task-update'), '--result'), '건너뜀: 문서 영향 없음');
+  assert.equal(D1.dispatch, null);
+  // 5. a skipped Task cannot be launched and is not in actual
+  assert.match((await main(go('D1'), f.deps)).out.error, /건너뛴 Task/);
+  assert.equal(f.count('worker-start'), 0);
+  assert.equal((await main(['actual', ...M], f.deps)).out.some(r => r.id === 'D1'), false);
+  // 4. a successor registers against the skipped Task's Orca id, which is completed
+  const p = await main(reg('P1', 'p.md'), f.deps);
+  assert.equal(p.code, 0, JSON.stringify(p.out));
+  assert.deepEqual(f.tasks.get(f.map().tasks.P1.orca).deps, [D1.orca]);
+});
+// 58. skip a registered, waiting Task: dependents that are pending with every input completed become ready, others stay
+await ta(async () => {
+  // P1 also waits on T01: while T01 is unfinished, skipping D1 promotes nothing
+  const f = await skipPlan([E('T01', 'P1')]);
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
+  const wait = await main(skip('D1'), f.deps);
+  assert.equal(wait.code, 0, JSON.stringify(wait.out));
+  assert.deepEqual(wait.out.promoted, []);
+  assert.equal(f.tasks.get(f.map().tasks.D1.orca).status, 'completed');
+  assert.equal(f.tasks.get(f.map().tasks.P1.orca).status, 'pending');
+  // with T01 completed, P1 is promoted by skip itself
+  const g = await skipPlan([E('T01', 'P1')]);
+  for (const [id, file] of [['T01', 'a.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), g.deps);
+  g.tasks.get(g.map().tasks.T01.orca).status = 'completed';
+  const ok = await main(skip('D1'), g.deps);
+  assert.equal(ok.code, 0, JSON.stringify(ok.out));
+  assert.deepEqual(ok.out, { id: 'D1', skipped: true, promoted: ['P1'] });
+  assert.equal(g.tasks.get(g.map().tasks.P1.orca).status, 'ready');
+  assert.equal(g.map().tasks.D1.skipped.reason, '문서 영향 없음');
+  assert.equal(g.count('task-create'), 3);
+});
+// 59. fix and recheck Tasks can be skipped without the conditional mark; a verify Task cannot
+await ta(async () => {
+  const f = await skipPlan([], { rounds: [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }] }, [T('Q1'), T('F1'), T('R1')]);
+  await refused(f, skip('Q1', '결함 없음'), /건너뛸 수 있는 Task가 아님/);
+  for (const id of ['F1', 'R1']) {
+    const { code, out } = await main(skip(id, '결함 없음'), f.deps);
+    assert.equal(code, 0, JSON.stringify(out));
+    assert.equal(f.tasks.get(f.map().tasks[id].orca).status, 'completed');
+  }
+});
+// 60. 6. a registered Task that has started, finished, has a gate or is in transition is refused
+await ta(async () => {
+  const setup = async () => {
+    const f = await skipPlan();
+    await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+    await main(reg('D1', 'd.md'), f.deps);
+    return f;
+  };
+  const started = await setup();
+  started.tasks.get(started.map().tasks.D1.orca).status = 'ready';
+  assert.equal((await main(go('D1'), started.deps)).code, 0);
+  await refused(started, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const done = await setup();
+  done.tasks.get(done.map().tasks.D1.orca).status = 'completed';
+  await refused(done, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const gated = await setup();
+  await main(['gate', ...M, '--id', 'D1', '--question', '진행할까?'], gated.deps);
+  await refused(gated, skip('D1'), /이미 기동했거나 끝난 Task/);
+  const moving = await setup();
+  const m = moving.map(); m.transition = { id: 'D1', approval, from: m.tasks.D1.orca };
+  moving.fs['orca-tasks.json'] = JSON.stringify(m);
+  await refused(moving, skip('D1'), /이미 기동했거나 끝난 Task/);
+});
+// 61. 7. skipping twice returns the first result and changes nothing in Orca
+await ta(async () => {
+  const f = await skipPlan();
+  await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
+  await main(skip('D1'), f.deps);
+  const before = [f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const again = await main(skip('D1', '다른 사유'), f.deps);
+  assert.equal(again.code, 0, JSON.stringify(again.out));
+  assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: [] });
+  assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+});
+// 62. 8. a map with no approval record is refused before Orca is touched
+await ta(async () => {
+  const f = fakeDag();
+  f.fs['orca-tasks.json'] = JSON.stringify({ run: 'run_exec', phase: 'phase-a', tasks: {} });
+  await refused(f, skip('D1'), /건너뛸 수 있는 Task가 아님/);
+  assert.equal(f.calls.length, 0);
+});
+
 console.log(`orca-launch.check: ${passed} passed`);

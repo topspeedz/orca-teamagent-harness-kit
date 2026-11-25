@@ -16,6 +16,7 @@
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
+//   node .claude/scripts/orca-launch.mjs skip --map <map> --id <T01> --reason <사유>   (conditional, fix and recheck Tasks only)
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
 //   node .claude/scripts/orca-launch.mjs actual --map <map>
@@ -476,6 +477,7 @@ async function execute(cmd, o, deps, locks) {
     if (!o.id || !o.bracket || !o.does) return fail('사용법: worker --map <map> --id <T01> --bracket <b> --does <d> [--retry]');
     let m, e;
     try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
+    if (e.skipped) return fail(`${o.id}는 건너뛴 Task — 띄우지 않음`);
     const approval = activeApproval(m, o.id);
     if (m.transition?.id === o.id || e.gate) return fail('재승인 전환 또는 게이트 응답 대기');
     const lastAttempt = e.attempts?.at(-1);
@@ -601,6 +603,54 @@ async function execute(cmd, o, deps, locks) {
     const demoted = dependents.filter((id) => st[id].status === 'ready');
     for (const id of demoted) setStatus(m, m.tasks[id].orca, 'pending');
     return { code: 0, out: { id: o.id, demoted, alreadyStarted: dependents.filter((id) => ['dispatched', 'completed'].includes(st[id].status)) } };
+  }
+
+  // Closes a planned Task that has nothing to do, so the Tasks behind it can start. Every refusal comes before any Orca change.
+  if (cmd === 'skip') {
+    if (!o.id || !o.reason?.trim()) return fail('사용법: skip --map <map> --id <T01> --reason <사유>');
+    let m, approval, st;
+    try { m = loadMap(); approval = activeApproval(m, o.id); } catch (err) { return fail(err.message); }
+    const row = approval?.tasks[o.id];
+    if (!row || !(row.conditional === true || ['fix', 'recheck'].includes(row.kind))) return fail(`${o.id}는 건너뛸 수 있는 Task가 아님`);
+    let e = m.tasks[o.id];
+    if (e?.skipped) return { code: 0, out: { id: o.id, skipped: true, existing: true, promoted: [] } };
+    const started = `${o.id}는 이미 기동했거나 끝난 Task`;
+    if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
+    if (e) {
+      if (e.dispatch || e.started || e.gate || e.attempts?.some(a => a.status !== 'rejected')) return fail(started);
+      try { st = statuses(m); } catch (err) { return fail(err.message); }
+      if (!['pending', 'ready'].includes(st[o.id].status)) return fail(started);
+    } else {
+      const missing = row.deps.filter(d => !taskId(m, d));
+      if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
+      const registeredDeps = row.deps.map(d => taskId(m, d));
+      const title = `${o.id} 건너뜀`;
+      const body = `Task: ${title}\n건너뜀: ${o.reason}\n\n실행 승인: ${approval.review} ${o.id}\n`;
+      const tempDir = mkdtempSync(join(tmpdir(), 'orca-spec-')), specFile = join(tempDir, `${o.id}.md`);
+      writeFileSync(specFile, body);
+      let created;
+      try {
+        created = call(['orchestration', 'task-create', '--spec-file', specFile, '--task-title', title, '--run', m.run,
+          ...(registeredDeps.length ? ['--deps', JSON.stringify(registeredDeps)] : []), '--full']);
+      } finally { unlinkSync(specFile); rmdirSync(tempDir); }
+      const orca = created.result?.task?.id ?? created.result?.taskId;
+      if (!orca) return fail('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
+      const { members, ...assignment } = row;
+      e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
+        lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
+      // saved before closing: a failed close is retried by the registered path instead of creating a second Task
+      saveMap(m);
+    }
+    const done = setStatus(m, e.orca, 'completed', '--result', '건너뜀: ' + o.reason);
+    if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
+    e.skipped = { reason: o.reason, at: deps.now() };
+    saveMap(m);
+    try { st = statuses(m); } catch (err) { return fail(err.message); }
+    // Orca's promotion on a manual status change is not relied on: dependents whose inputs are all completed are made ready here
+    const promoted = Object.keys(m.tasks).filter((id) => m.tasks[id].deps.includes(o.id) && st[id].status === 'pending' &&
+      !m.tasks[id].gate && m.transition?.id !== id && m.tasks[id].deps.every((d) => st[d]?.status === 'completed'))
+      .filter((id) => setStatus(m, m.tasks[id].orca, 'ready').ok !== false);
+    return { code: 0, out: { id: o.id, skipped: true, promoted } };
   }
 
   if (cmd === 'gate') {
@@ -803,7 +853,7 @@ async function execute(cmd, o, deps, locks) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|skip|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };
