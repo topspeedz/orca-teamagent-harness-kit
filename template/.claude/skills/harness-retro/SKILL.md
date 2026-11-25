@@ -39,11 +39,11 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
   --waterfall _workspace/_run/<phase>/waterfall.plan.json \
   --actual _workspace/_run/<phase>/actual.json \
   --ledger _workspace/_run/<phase>/ledger.md \
-  --workspace _workspace \n  --map _workspace/_run/<phase>/orca-tasks.json
+  --workspace _workspace \
+  --map _workspace/_run/<phase>/orca-tasks.json
 ```
 
 - `--map`은 선택이다. 결함 원장이나 대응표가 없으면 그 줄은 `측정 불가`로 나온다.
-
 - `waterfall.plan.json`은 `exec-run`이 실행 Run을 만들 때 `waterfall.json`을 한 번 복사해 얼려 둔 승인 계획이다. `waterfall.json`은 phase 동안 재예측으로 덮어써지므로 계획 열에 쓰지 않는다. 사본이 없는 phase는 `waterfall.json`을 넘기고, 리포트에 계획 열이 재예측일 수 있다고 적는다.
 
 - 출력은 리포트에 그대로 붙일 표다. 입력이 없거나 읽을 수 없는 지표는 `측정 불가`로 찍히고 끝에 사유가 붙는다. 0으로 세지 않는다.
