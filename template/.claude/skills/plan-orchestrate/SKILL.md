@@ -51,7 +51,7 @@ description: "새 요구사항, 사용자가 지정한 백로그 ID, 한 phase �
 
 ## 2. 기획 (창구가 운영팀에 배정한다)
 
-PM은 `prd-write`·`srs-write`·`backlog-management`로 작성하고 Planner는 `product-review`로 대조한다. 운영팀 리포트는 `01_product-manager_requirements_v<N>.md`, `02_product-manager_backlog_v<N>.md`, `03_planner_review_v<N>.md`, `06_product-manager_plan-check_v<N>.md`로 기록한다. 다음 워커의 spec에 앞 리포트와 버전을 적는다. High 결함은 작성자 수정과 상대의 결함 ID 재검토를 최대 2회까지 돌리고 여전히 열려 있으면 사용자에게 올린다. 워커 자체 실패는 사유와 이전 파일을 갖고 1회 재기동한 뒤 창구에 보고한다.
+PM은 `requirements-write`·`backlog-management`로 작성하고 Planner는 `product-review`로 대조한다. 운영팀 리포트는 `01_product-manager_requirements_v<N>.md`, `02_product-manager_backlog_v<N>.md`, `03_planner_review_v<N>.md`, `06_product-manager_plan-check_v<N>.md`로 기록한다. 다음 워커의 spec에 앞 리포트와 버전을 적는다. High 결함은 작성자 수정과 상대의 결함 ID 재검토를 최대 2회까지 돌리고 여전히 열려 있으면 사용자에게 올린다. 워커 자체 실패는 사유와 이전 파일을 갖고 1회 재기동한 뒤 창구에 보고한다.
 
 - spec은 양식 `docs/harness/templates/spec.md`로 `_workspace/product/<phase>/spec/`에 쓴다. 담는 것: 브리프 경로, 앞 팀원의 리포트 경로, 지금의 PRD·SRS·백로그 경로, 산출물과 리포트 경로, 다시 띄울 때는 이전 리포트와 결함 ID.
 - 배정 줄은 모델 표에서 읽는다: `node .claude/scripts/model-selection.mjs lookup --agent <에이전트> --unit <작업 단위>`.

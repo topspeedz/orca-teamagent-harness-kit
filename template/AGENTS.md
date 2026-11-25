@@ -39,7 +39,7 @@ Claude와 Codex가 함께 읽는 공통 규칙이다. 값, 표, 이력, 긴 예�
 | 큰 작업 요청 | `plan-orchestrate` 스킬 |
 | 실행 감독 | `coordinator` 스킬 |
 | 팀장으로 뜬 워커 | `team-lead` 스킬과 자기 팀 스킬 |
-| 요구사항 정리, 항목화, 우선순위 | `prd-write`, `srs-write`, `backlog-management`. 상대 검토는 `product-review` |
+| 요구사항 정리, 항목화, 우선순위 | `requirements-write`, `backlog-management`. 상대 검토는 `product-review` |
 | 백로그 | `backlog-management` 스킬 |
 | 모델 배정 | `docs/harness/model-selection.md` |
 | 팀 구성 | `docs/harness/team-org.md` |

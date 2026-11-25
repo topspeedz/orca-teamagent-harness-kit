@@ -61,7 +61,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/session-digest.mjs" --target . 
 
 ## 4. 역할 스킬 정하기
 
-팀원마다 기존 역할 스킬(`.claude/skills/`의 `backlog-management`, `change-review`, `qa-verification`, `phase-planning`, `harness-retro`, `docs-management`, `prd-write`, `srs-write`, `product-review`)의 `description`을 읽는다. 그 팀원이 맡을 일의 절차가 거기 있으면 그 스킬을 쓴다.
+팀원마다 기존 역할 스킬(`.claude/skills/`의 `backlog-management`, `change-review`, `qa-verification`, `phase-planning`, `harness-retro`, `docs-management`, `requirements-write`, `product-review`)의 `description`을 읽는다. 그 팀원이 맡을 일의 절차가 거기 있으면 그 스킬을 쓴다.
 
 없으면 `.claude/skills/<역할>/SKILL.md`를 새로 만든다. 그 일의 절차와 산출물, 완료 기준만 적고, 1절에서 확인한 프로젝트의 실제 명령(테스트, 빌드)을 넣는다.
 

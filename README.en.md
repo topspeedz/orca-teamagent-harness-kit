@@ -271,7 +271,7 @@ AGENTS.md, CLAUDE.md             shared instructions and routing
   agents/                        6 built-in agents
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 docs-management, prd-write, srs-write, product-review, team-qa,
+                                 docs-management, requirements-write, product-review, team-qa,
                                  dag-swimlane, waterfall-timeline
   hooks/                         approval, waiting, context compaction, worker rule injection,
                                  browser secret blocking

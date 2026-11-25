@@ -269,7 +269,7 @@ AGENTS.md, CLAUDE.md             공통 지침과 라우팅
   agents/                        기본 에이전트 6개
   skills/                        coordinator, team-lead, plan-orchestrate, phase-planning,
                                  backlog-management, qa-verification, change-review, harness-retro,
-                                 docs-management, prd-write, srs-write, product-review, team-qa,
+                                 docs-management, requirements-write, product-review, team-qa,
                                  dag-swimlane, waterfall-timeline
   hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입, 브라우저 비밀값 차단
   scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정, 브라우저 런처
