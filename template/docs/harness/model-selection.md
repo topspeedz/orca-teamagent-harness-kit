@@ -79,6 +79,6 @@ Claude의 모든 model/effort 조합을 Codex 값으로 바꾼다. 형식 검사
 | `code-reviewer` | 일반 변경 리뷰 | claude | 복잡도 | | 끝 리뷰 |
 | `code-reviewer` | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정(사용자 결정 2026-11-22) |
 | `harness-engineer` | 회고, 구조 변경 | claude | opus | high | |
-| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | fable | high | 동기화는 phase의 6단계마다. 초기화와 감사는 사용자가 요청할 때만 |
+| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | fable | high | 동기화는 장부의 `## 라이브 문서 확인`에 행이 있을 때만. 초기화와 감사는 사용자가 요청할 때만 |
 | `*` | 리드 | claude | opus | high | 팀장으로 띄울 때 |
 | `*` | 기본 | claude | 복잡도 | | 표에 없는 조합(사용자 결정 2026-11-22: 복잡도를 따름) |
