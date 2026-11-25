@@ -1,13 +1,14 @@
 // harness-retro measurements for one phase (read-only). Prints a markdown table for the retro report.
 // Usage (project root): node .claude/skills/harness-retro/scripts/retro-measure.mjs
 //   --waterfall <waterfall.json> --actual <actual.json> --ledger <ledger.md> --workspace <_workspace>
-//   [--sessions <dir with .jsonl>] [--days 7]
+//   [--sessions <dir with .jsonl>] [--days 7] [--map <orca-tasks.json>]
 // Any input left out or unreadable prints 측정 불가 for its rows — never a silent 0.
 // Coordinator-wake counting is ported from harness-design measure-token-usage.mjs (notice detection only).
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { currentRound, readLedger } from '../../../scripts/defect-ledger.mjs';
 
 const round2 = (x) => Math.round(x * 100) / 100;
 
@@ -91,6 +92,21 @@ export function ledger(text) {
   };
 }
 
+// Defect rows from the ledger's `## 결함 원장` section (null when the ledger has none) and, with a task map, rounds and skipped Tasks.
+// 이월 rows count in none of the four states. lowerFixed = `- <ID> | 수정 포함 승인 | <text>` decision lines.
+export function defects(ledgerText, map) {
+  if (!/^## 결함 원장\s*$/m.test(ledgerText)) return null;
+  const { defects: rows, decisions } = readLedger(ledgerText);
+  const high = rows.filter((d) => d.severity === 'High');
+  const n = (state) => high.filter((d) => d.state === state).length;
+  return {
+    rounds: map ? currentRound(map) - 1 : null,
+    high: high.length, confirmed: n('확정'), cited: n('인용'), dismissed: n('기각'), open: n('열림'),
+    lowerFixed: decisions.filter((l) => l.split('|')[1]?.trim() === '수정 포함 승인').length,
+    skipped: map ? Object.values(map.tasks ?? {}).filter((t) => t.skipped).length : null,
+  };
+}
+
 const NOTICE = /^\s*You have \d+ orchestration message/;
 // The wait contract runs `check --wait` as a background command; its completion notice is the wake.
 const BG_DONE = /^\s*<task-notification>[\s\S]*?<tool-use-id>([^<\s]+)<\/tool-use-id>/;
@@ -161,6 +177,9 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   let act = tryRead(arg('--actual'), JSON.parse);
   if (act.v) { try { act = { v: actual(act.v, wf.v ?? { tasks: [] }) }; } catch (e) { act = { err: e.message }; } }
   const led = tryRead(arg('--ledger'), ledger);
+  const mp = tryRead(arg('--map'), JSON.parse);
+  const led2 = led.err ? { err: led.err } : (() => { try { return { v: defects(readFileSync(arg('--ledger'), 'utf8'), mp.v) }; } catch (e) { return { err: e.message }; } })();
+  const df = led2.v;
   const out = ['| 지표 | 계획 | 실제 |', '| --- | --- | --- |'];
   const pv = (o, k) => (o ? o[k] : NA);
   for (const [label, k] of [['Task 수', 'tasks'], ['작업 시간 합(분)', 'sum'], ['임계 경로(분)', 'critical'],
@@ -168,7 +187,11 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     out.push(`| ${label} | ${pv(plan, k)} | ${pv(act.v, k)} |`);
   out.push(`| 슬롯 수 | ${pv(plan, 'slots')} | - |`, '', '| 지표 | 값 |', '| --- | --- |');
   const l = led.v;
-  out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`, `| 재시도 합 | ${l ? l.retries : NA} |`,
+  out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`,
+    `| 수정 라운드(결함 원장) | ${df?.rounds ?? NA} |`, `| 제기된 High | ${df ? df.high : NA} |`,
+    `| 확정 · 인용 · 기각 · 열림 | ${df ? [df.confirmed, df.cited, df.dismissed, df.open].join(' · ') : NA} |`,
+    `| High가 아닌데 수정에 든 결함 | ${df ? df.lowerFixed : NA} |`, `| 건너뛴 Task | ${df?.skipped ?? NA} |`,
+    `| 재시도 합 | ${l ? l.retries : NA} |`,
     `| 실패 Task | ${act.v ? act.v.failed : NA} |`, `| 질문이 있던 Task | ${l ? l.questions : NA} |`);
   const rd = act.v?.readyDelay;
   out.push(`| 준비→기동 지연 합(분) | ${rd ? rd.sum : NA} |`, `| 준비→기동 지연 최대(분) | ${rd ? (rd.at ? `${rd.max} (${rd.at})` : 0) : NA} |`);
@@ -183,7 +206,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   try { const s = folderSize(arg('--workspace')); ws = `${s.bytes} bytes · ${s.files} files`; } catch {}
   out.push(`| 작업 폴더 | ${ws} |`);
   if (l?.causes.length) { out.push('', '| Task | 재시도 | 원인 |', '| --- | --- | --- |'); for (const c of l.causes) out.push(`| ${c.task} | ${c.count} | ${c.cause} |`); }
-  const why = [['waterfall', wf], ['actual', act], ['ledger', led]].filter(([, r]) => r.err).map(([k, r]) => `${k}: ${r.err}`);
+  const why = [['waterfall', wf], ['actual', act], ['ledger', led], ['defects', led2.err && !led.err ? led2 : {}], ['map', arg('--map') ? mp : {}]].filter(([, r]) => r.err).map(([k, r]) => `${k}: ${r.err}`);
   if (!coord.length) why.push(`sessions: 코디네이터 세션 없음(.jsonl ${files.length}개 중 exec-run·register를 쓴 세션 0개)`);
   if (ws === NA) why.push('workspace: 입력 없음 또는 읽기 실패');
   if (act.v?.skipped) out.push('', `actual: 계획(waterfall)에 없는 Task ${act.v.skipped}개는 병렬 지표에서 뺐다`);
