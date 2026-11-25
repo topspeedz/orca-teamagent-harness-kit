@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Keep the `## 결함 원장` section of a phase ledger from verification reports, so the coordinator does not type severities or round counts by hand.
 // Usage: node .claude/scripts/defect-ledger.mjs add --ledger <ledger.md> --map <orca-tasks.json> --report <리포트.md> --source <Task ID>
-// stdout: {"added":["H-1"],"round":1,"open":{"High":1,"Medium":0,"Low":0}}. Errors: exit 1 and {"error":"<사유>"}.
-// A High row whose evidence (first word of the cell: 관찰·인용·없음; anything else is 없음) is 없음 is recorded as Medium with demoted: true.
+// stdout: {"added":["H-1"],"round":1,"open":{"High":1,"Medium":0,"Low":0},"existing":[{"id":"M-1","source":"T05"}]}. Errors: exit 1 and {"error":"<사유>"}.
+// existing: report IDs already in the ledger, with the 제기한 검증 recorded for them; those rows are not rewritten.
+// A High row whose evidence (the cell starts with 관찰 or 인용; anything else is 없음) is 없음 is recorded as Medium with demoted: true.
 // An ID already in the ledger is never touched, so a hand-edited 상태 cell survives a second add.
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -132,12 +133,13 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     const text = readFileSync(ledgerP, 'utf8');
     const round = currentRound(JSON.parse(readFileSync(mapP, 'utf8')));
     const defects = parseDefects(readFileSync(reportP, 'utf8'));
-    const before = new Set(readLedger(text).defects.map((d) => d.id));
+    const before = new Map(readLedger(text).defects.map((d) => [d.id, d.source]));
     const next = addDefects(text, { source, round, defects });
     if (next !== text) writeFileSync(ledgerP, next, 'utf8');
     const open = { High: 0, Medium: 0, Low: 0 };
     for (const d of readLedger(next).defects) if (d.state === '열림') open[d.severity]++;
-    console.log(JSON.stringify({ added: defects.map((d) => d.id).filter((id) => !before.has(id)), round, open }));
+    const existing = defects.filter((d) => before.has(d.id)).map((d) => ({ id: d.id, source: before.get(d.id) }));
+    console.log(JSON.stringify({ added: defects.map((d) => d.id).filter((id) => !before.has(id)), round, open, existing }));
   } catch (e) {
     console.log(JSON.stringify({ error: e.message }));
     process.exit(1);

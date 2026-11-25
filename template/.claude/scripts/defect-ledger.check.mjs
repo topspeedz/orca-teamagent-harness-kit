@@ -59,6 +59,8 @@ assert.deepEqual(fixAllowed(readLedger(once), ['M-1', 'X-9']).refused.map(r => r
 assert.equal(fixAllowed(readLedger(closed), ['H-1']).ok, false);   // 이미 닫힌 High
 ok();
 
+const tbl = (rows) => ['## 결함', '', '| ID | 심각도 | 증거 | 위치 | 요지 |', '| --- | --- | --- | --- | --- |', rows, ''].join('\n');
+
 // 7. CLI add
 const script = fileURLToPath(new URL('./defect-ledger.mjs', import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), 'defect-ledger-'));
@@ -69,10 +71,19 @@ const reportP = f('report.md', report);
 const cli = (...a) => spawnSync(process.execPath, [script, ...a], { encoding: 'utf8' });
 let r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', reportP, '--source', 'T07');
 assert.equal(r.status, 0);
-assert.deepEqual(JSON.parse(r.stdout), { added: ['H-1', 'A-H-2', 'M-1'], round: 2, open: { High: 1, Medium: 2, Low: 0 } });
+assert.deepEqual(JSON.parse(r.stdout), { added: ['H-1', 'A-H-2', 'M-1'], round: 2, open: { High: 1, Medium: 2, Low: 0 }, existing: [] });
 assert.equal(readLedger(readFileSync(ledgerP, 'utf8')).defects.length, 3);
 r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', reportP, '--source', 'T07');
 assert.deepEqual(JSON.parse(r.stdout).added, []);
+// 같은 리포트를 두 번 넣으면 그 ID가 existing에 나오고 아무것도 붙지 않는다
+assert.deepEqual(JSON.parse(r.stdout).existing, [{ id: 'H-1', source: 'T07' }, { id: 'A-H-2', source: 'T07' }, { id: 'M-1', source: 'T07' }]);
+// 다른 검증이 같은 ID를 다른 결함에 쓰면 장부는 그대로이고, 그 ID가 먼저 적힌 출처와 함께 existing에 나온다
+const beforeOther = readFileSync(ledgerP, 'utf8');
+const otherP = f('other.md', tbl('| H-1 | High | 관찰 다른 테스트 | src/c.mjs:1 | 다른 결함 |'));
+r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', otherP, '--source', 'T11');
+assert.equal(r.status, 0);
+assert.equal(readFileSync(ledgerP, 'utf8'), beforeOther);
+assert.deepEqual(JSON.parse(r.stdout), { added: [], round: 2, open: { High: 1, Medium: 2, Low: 0 }, existing: [{ id: 'H-1', source: 'T07' }] });
 r = cli('add', '--ledger', join(dir, 'none.md'), '--map', mapP, '--report', reportP, '--source', 'T07');
 assert.equal(r.status, 1);
 assert.ok(JSON.parse(r.stdout).error);
@@ -82,7 +93,6 @@ assert.ok(JSON.parse(r.stdout).error);
 ok();
 
 // 8. unrecognised severity is refused, not dropped; messy spellings are normalised
-const tbl = (rows) => ['## 결함', '', '| ID | 심각도 | 증거 | 위치 | 요지 |', '| --- | --- | --- | --- | --- |', rows, ''].join('\n');
 assert.deepEqual(parseDefects(tbl('| H-3 | high | 관찰`t.mjs` | a | b |\n| H-4 | **High** | 관찰 x | a | b |')).map(d => [d.severity, d.evidence]),
   [['High', '관찰'], ['High', '관찰']]);
 assert.throws(() => parseDefects(tbl('| H-3 | Critical | 관찰 x | a | b |')), /H-3.*Critical/);
@@ -92,6 +102,12 @@ r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', badP, '--source',
 assert.equal(r.status, 1);
 assert.match(JSON.parse(r.stdout).error, /H-3/);
 assert.equal(readFileSync(ledgerP, 'utf8'), addDefects(led, { source: 'T07', round: 2, defects: parseDefects(report) }));
+ok();
+
+// 9. `## 스냅샷` 절이 채워져 있어도 원장 읽기와 add 결과는 같다
+const snap = '\n## 스냅샷\n\n- T07 | 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n- T09 | 9daeafb9864cf43055ae93beb0afd6c7d144bfa4\n';
+assert.deepEqual(readLedger(once + snap), readLedger(once));
+assert.equal(addDefects(led + snap, { source: 'T07', round: 1, defects: parseDefects(report) }), once + snap);
 ok();
 
 console.log(`defect-ledger.check: ${passed} passed`);
