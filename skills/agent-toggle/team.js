@@ -1,3 +1,4 @@
+new EventSource('/alive') // server exits when every page holding this is closed
 const views = ['팀 구조도', '직접 협업', '문서 소유권']
 const fontStylesheet = document.createElement('link')
 fontStylesheet.rel = 'stylesheet'
@@ -334,7 +335,10 @@ class TeamChart extends HTMLElement {
         }
         docs.append(grid)
         const buttons = element('div', 'sources')
-        for (const d of role.docs) buttons.append(action(d.engine + ' 원문 보기 · ' + d.state.toUpperCase(), () => navigate({role:role.name, source:d.rel})))
+        for (const d of role.docs) buttons.append(action(d.engine + ' 원문 보기 · ' + d.state.toUpperCase(), async () => {
+          const res = await fetch('/open?' + new URLSearchParams({rel:d.rel}), {method:'POST', headers:{'x-agent-toggle':document.querySelector('meta[name=agent-toggle-token]')?.content ?? ''}})
+          if (!res.ok) alert(await res.text())
+        }))
         docs.append(buttons)
       }
     }

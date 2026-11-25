@@ -1,5 +1,7 @@
 import { readFileSync, readdirSync, realpathSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, lstatSync, accessSync, constants } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,6 +16,19 @@ const m = manager(source, project)
 const token = randomUUID()
 const revision = text => createHash('sha256').update(text).digest('hex')
 const tablePath = 'docs/harness/model-selection.md'
+// Open an agent file with the user's .md default app (also for .toml, which usually has no handler).
+async function openWithMarkdownApp(file) {
+  if (process.platform !== 'win32') return execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [file])
+  const run = promisify(execFile)
+  try {
+    const value = async (key, name) => (await run('reg', ['query', key, ...(name ? ['/v', name] : ['/ve'])])).stdout.match(/REG_(?:EXPAND_)?SZ\s+(.+)/)[1].trim()
+    const progId = await value('HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.md\\UserChoice', 'ProgId')
+    const command = await value('HKCR\\' + progId + '\\shell\\open\\command')
+    const [exe, ...args] = [...command.matchAll(/"([^"]*)"|(\S+)/g)].map(m => (m[1] ?? m[2]).replace(/%[1L]/g, file))
+    execFile(exe.replace(/%(\w+)%/g, (_, v) => process.env[v] ?? ''), args).on('error', () => {})
+  } catch { execFile('explorer.exe', [file]) } // shortcut: no .md handler found -> Windows picks (exits 1 even on success)
+}
+let pages = 0
 const problem = (status, message) => Object.assign(Error(message), {status})
 // Only load code from the user's installed kit. The project copies (including HTML) are data for version matching.
 async function surveyAssets() {
@@ -120,6 +135,20 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(204).end()
       return
     }
+    if (req.method === 'POST' && url.pathname === '/open') {
+      const rel = url.searchParams.get('rel') ?? ''
+      const file = /^\.(claude|codex)\/agents\/[\w.-]+$/.test(rel) && regular(project, rel)
+      if (!file) throw problem(400, '열 수 없는 파일')
+      await openWithMarkdownApp(file)
+      return res.writeHead(204).end()
+    }
+    if (req.method === 'GET' && url.pathname === '/alive') {
+      pages++
+      res.writeHead(200, {'Content-Type':'text/event-stream'}).write(':\n\n')
+      // Exit once every page is closed; the grace period lets a reload reconnect.
+      req.on('close', () => { if (--pages === 0) setTimeout(() => pages || process.exit(0), 5000) })
+      return
+    }
     if (req.method === 'GET' && url.pathname === '/team.json') {
       const json = JSON.stringify(teamStructure(project))
       const tag = '"' + createHash('sha256').update(json).digest('hex') + '"'
@@ -132,7 +161,7 @@ const server = http.createServer(async (req, res) => {
       return res.writeHead(200, {'Content-Type':type + '; charset=utf-8'}).end(readFileSync(new URL('.' + url.pathname, import.meta.url)))
     }
     if (req.method === 'GET' && url.pathname === '/team-structure.html') {
-      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>팀 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
+      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="agent-toggle-token" content="' + token + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>팀 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
     }
     if (req.method !== 'GET' || url.pathname !== '/') return res.writeHead(404).end()
     function row({name, state, reason, engine, scope}) {
@@ -147,7 +176,7 @@ const server = http.createServer(async (req, res) => {
     const projectRows = m.inventory().map(row).join('')
     const rows = m.list().map(row).join('')
     res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end(`<!doctype html><html lang="ko">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Toggle</title><style>${css}</style>
+<meta charset="utf-8"><meta name="agent-toggle-token" content="${token}"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Toggle</title><style>${css}</style>
 <header><h1>Agent Toggle</h1><div class="sub" id="meta"><span><b>프로젝트</b>${esc(project)}</span><span><b>원본</b>${esc(source)}</span></div>
 <div class="sub">켬 = Claude Code와 Codex에 설치 · 끔 = 설치한 복사본 제거</div>
 <div class="bar"><input type="search" id="q" placeholder="키트·에이전트 이름 검색" aria-label="키트·에이전트 이름 검색">
