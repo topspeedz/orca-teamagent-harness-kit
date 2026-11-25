@@ -25,8 +25,8 @@
   │     └── planner               요구 검토, 기술 설계, 계획·DAG
   └── 코디네이터 (실행 승인 뒤)
         ├── 실행 팀장 ── 팀원     검증 팀 및 프로젝트에서 추가한 팀
-        ├── doc-steward           QA 뒤 문서 정합성 확인
-        └── harness-engineer      문서 확인 뒤 매 phase 회고
+        ├── doc-steward           라이브 문서 확인 행이 있을 때 QA 뒤 문서 정합성 확인
+        └── harness-engineer      조건이 맞을 때 문서 확인 뒤 회고
 ```
 
 ## Quick Start
@@ -72,7 +72,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 - 새 요구는 PM이 PRD·SRS·백로그에 반영하고 Planner가 누락과 실행 가능성을 검토한다. 사용자가 전체 반영 여부와 이번 묶음을 확인한 뒤 설계·계획으로 넘어간다. 지정 ID는 Planner가 바로 설계한다. 두 경로 모두 설계와 실행 계획을 승인받는다.
 - 한 phase를 위임하면 PM이 목표·항목·선정 이유를 정하고 Planner가 계획한다. 사용자는 최종 실행 승인에서 묶음과 예상 그림을 함께 확인한다. 시작 전에는 대기 상태 DAG와 T+ 예상 워터폴을, 승인 뒤에는 같은 Run의 진행 상황을 본다.
 - 설계 문서와 구현 계획은 planner가 superpowers의 `brainstorming`, `writing-plans` 형식으로 작성한다.
-- 회고는 생략하지 않는다. 변경할 근거가 없으면 측정 결과와 "변경 없음"만 기록한다.
+- 회고는 측정 표에 실패나 재시도가 있거나 수정 라운드가 2에 닿았거나 마지막 회고 뒤 phase가 5번 지났을 때 띄운다. 아니면 `skip`으로 닫고, 측정 표는 코디네이터가 매번 남긴다. 띄웠는데 고칠 근거가 없으면 측정 결과와 "변경 없음"만 기록한다. 조건은 coordinator 스킬이 정한다.
 - 완료 처리에서는 지정 작성자가 제품 문서를 갱신한다. `doc-steward`는 코드·테스트와 대조해 색인과 연결을 정리하고, 내용 결함은 원작성자에게 돌려보낸다.
 
 **기본 제공 역할**
@@ -81,10 +81,10 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | --- | --- | --- |
 | 운영 | `product-manager` | PRD·SRS 작성, 수락 기준, 항목화·우선순위, 묶음 선정, 계획 대조와 백로그 정산 |
 | 운영 | `planner` | 요구사항 검토, 기술 설계, 실행 계획과 DAG |
-| 직속 | `doc-steward` | QA 뒤 제품 문서 정합성 확인, 색인과 연결 관리 |
+| 직속 | `doc-steward` | 장부의 `## 라이브 문서 확인`에 행이 있을 때 QA 뒤 제품 문서 정합성 확인, 색인과 연결 관리 |
 | 검증 | `qa-inspector` | 실행 기반 검증 |
 | 검증 | `code-reviewer` | 코드 리뷰 (읽기 전용) |
-| 직속 | `harness-engineer` | 문서 확인 뒤 매 phase 회고와 근거 있는 하네스 개선 |
+| 직속 | `harness-engineer` | 조건이 맞을 때 문서 확인 뒤 회고와 근거 있는 하네스 개선 |
 
 개발, 디자인 같은 도메인 팀은 포함하지 않는다. `setup`의 7단계가 지난 작업을 보고 추천해 고른 대로 만들고, 템플릿으로 직접 추가할 수도 있다.
 
@@ -97,7 +97,9 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
 | `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
 | `secret-gate` hook | Playwright MCP 입력에 쿠키, 토큰, 비밀번호가 들어가거나 쿠키를 읽으려 하면 차단한다. 넣은 값이 대화 기록에 남는 것을 막는다 |
-| `orca-launch.mjs` | 실행 Run에서 승인된 Task 배정으로 워커를 기동하고 탭에 역할·모델·effort를 표시한다. 의존 관계 등록, 준비된 Task 조회, 결정 대기, 실패 처리, 재시도를 지원한다 |
+| `orca-launch.mjs` | 실행 Run에서 승인된 Task 배정으로 워커를 기동하고 탭에 역할·모델·effort를 표시한다. 의존 관계 등록, 준비된 Task 조회, 결정 대기, 실패 처리, 재시도를 지원한다. `skip` 명령은 `conditional: true`인 Task나 `rounds`의 수정·재검 Task를 워커 없이 닫는다 |
+| `tree-snapshot.mjs` | 작업 폴더 전체를 실제 인덱스와 작업 트리를 건드리지 않고 트리로 찍고(`take`), 두 트리의 변경 파일을 낸다(`diff`) |
+| `defect-ledger.mjs` | 리포트의 `## 결함` 표를 장부의 `## 결함 원장`에 옮긴다. 증거가 없는 High는 Medium으로 기록하고, 이미 있는 행은 다시 쓰지 않는다 |
 | `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
 | `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정하고, 그 Task의 산출물 파일이 실제로 있는지 확인한다 |
 | `wait-contract-check.mjs` | 세 skill에 포함된 대기 규약이 원본과 일치하는지 비교한다 |

@@ -27,8 +27,8 @@ Front desk (user session)          requirements interview and approvals, request
   │     └── planner                requirements review, technical design, plan and DAG
   └── Coordinator (after execution approval)
         ├── Execution lead ── members     verification and project-specific teams
-        ├── doc-steward                   checks document consistency after QA
-        └── harness-engineer              runs the retro after the document check
+        ├── doc-steward                   checks document consistency after QA when the ledger has live-document rows
+        └── harness-engineer              runs the retro after the document check when its conditions are met
 ```
 
 ## Quick Start
@@ -74,7 +74,7 @@ New requirements · named backlog IDs · delegated phase → design and plan →
 - For new requirements, the PM writes the PRD, SRS and backlog items. The Planner checks coverage and feasibility. The user confirms coverage and the batch before design starts. Named backlog IDs go straight to the Planner. Both routes require design and execution-plan approval.
 - For a delegated phase, the PM selects the goal and items and gives the Planner the rationale. The user reviews the batch and estimated diagrams together at execution approval. Before execution the DAG shows pending Tasks and the waterfall shows T+ estimates. After approval, progress comes from the same Run.
 - The planner writes the design doc and implementation plan in the format of the superpowers `brainstorming` and `writing-plans` skills.
-- The retro is never skipped. If there is no evidence for a change, it records the measurements and "no change".
+- The retro runs when the measurement table shows a failure or a retry, the fix round reached 2, or five phases have passed since the last retro. Otherwise it is closed with `skip`, and the coordinator leaves the measurement table every time. If it runs and there is no evidence for a change, it records the measurements and "no change". The coordinator skill defines the conditions.
 - During close-out, designated authors update their product documents. `doc-steward` checks them against the code and tests, maintains the index and links, and returns content defects to the author.
 
 **Built-in roles**
@@ -83,10 +83,10 @@ New requirements · named backlog IDs · delegated phase → design and plan →
 | --- | --- | --- |
 | Operations | `product-manager` | Writes the PRD, SRS and acceptance criteria, organizes and prioritizes backlog items, selects a batch, reviews the plan and closes completed items |
 | Operations | `planner` | Reviews requirements and produces the technical design, execution plan and DAG |
-| Direct report | `doc-steward` | Checks product documents after QA and maintains their index and links |
+| Direct report | `doc-steward` | When the ledger's `## 라이브 문서 확인` has rows, checks product documents after QA and maintains their index and links |
 | Verification | `qa-inspector` | Verification by running the product |
 | Verification | `code-reviewer` | Code review (read-only) |
-| Direct report | `harness-engineer` | Runs the retro after document checks each phase and makes changes supported by the findings |
+| Direct report | `harness-engineer` | When its conditions are met, runs the retro after document checks and makes changes supported by the findings |
 
 Domain teams such as development or design are not included. Step 7 of `setup` recommends them from past work and creates the ones you pick, or you add them from templates by hand.
 
@@ -99,7 +99,9 @@ Domain teams such as development or design are not included. Step 7 of `setup` r
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
 | `secret-gate` hook | Blocks Playwright MCP calls that carry cookies, tokens or passwords, or that try to read cookies, so those values never land in the conversation log |
-| `orca-launch.mjs` | Starts workers in the execution Run with the approved Task assignments and shows the role, model and effort in each tab. Supports dependency registration, ready Tasks, decision gates, failure handling and retries |
+| `orca-launch.mjs` | Starts workers in the execution Run with the approved Task assignments and shows the role, model and effort in each tab. Supports dependency registration, ready Tasks, decision gates, failure handling and retries. The `skip` command closes a Task whose node has `conditional: true`, or a fix or recheck Task in `rounds`, without running a worker |
+| `tree-snapshot.mjs` | Snapshots the whole working folder as a tree without touching the real index or working tree (`take`) and lists the files that changed between two trees (`diff`) |
+| `defect-ledger.mjs` | Copies the report's `## 결함` table into the ledger's `## 결함 원장`. A High row with no evidence is recorded as Medium, and an existing row is never rewritten |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
 | `wait-contract-check.mjs` | Checks that the wait contract embedded in three skills matches its source file |
