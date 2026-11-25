@@ -1157,9 +1157,13 @@ async function reviewError(nodes, edges, drawing = {}) {
 await ta(async () => {
   const f = fakeDag();
   const record = p => JSON.parse(f.fs[p]);
-  const plain = await approve(f, [T('T01'), T('T02')], [E('T01', 'T02')]);
+  const plain = await approve(f, [T('T01'), { id: 'A1', kind: 'approval' }, T('T02')],
+    [E('T01', 'A1'), E('A1', 'T02'), { from: 'T02', to: 'T01', loop: true }]);
   for (const row of Object.values(record(plain).tasks))
     for (const k of ['kind', 'round', 'conditional', 'afterFix']) assert.equal(k in row, false);
+  // the row exactly as the function built it before rounds existed: values and key order
+  assert.equal(JSON.stringify(record(plain).tasks.T02), JSON.stringify({ agent: 'qa-inspector', unit: '흐름 검증', runtime: 'claude',
+    model: 'opus', effort: 'medium', overrideReason: null, bl: 'BL-0012', deps: ['T01'], members: [] }));
 });
 // 51. rounds mark kind and round; conditional: true is kept
 await ta(async () => {
@@ -1210,6 +1214,16 @@ await ta(async () => {
   const nodes = [T('T01'), { id: 'A1', kind: 'approval' }];
   for (const id of ['Q9', 'A1', 'constructor'])
     assert.match(await reviewError(nodes, [E('T01', 'A1')], { rounds: [{ n: 1, verify: id }] }), /rounds가 가리키는 노드 없음/, id);
+});
+// 56. a Task named more than once across rounds is refused, whatever the role or round
+await ta(async () => {
+  const nodes = [T('Q1'), T('F1'), T('Q2')];
+  const edges = [E('Q1', 'F1'), E('F1', 'Q2')];
+  for (const rounds of [
+    [{ n: 1, verify: ['Q1', 'Q1'] }],
+    [{ n: 1, verify: 'Q2', fix: 'F1' }, { n: 2, recheck: 'Q2' }], // would hide Q2's verify-after-fix
+    [{ n: 1, fix: 'F1', recheck: 'F1' }],
+  ]) assert.match(await reviewError(nodes, edges, { rounds }), /rounds에 같은 Task가 두 번 나옴/, JSON.stringify(rounds));
 });
 
 console.log(`orca-launch.check: ${passed} passed`);

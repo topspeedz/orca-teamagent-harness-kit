@@ -82,9 +82,12 @@ function assignments(dag) {
   };
   for (const id of nodes.keys()) visit(id);
   required(Object.keys(tasks).length, '실행 Task가 없는 DAG');
+  const named = new Set();
   for (const round of dag.rounds ?? []) for (const kind of ['verify', 'fix', 'recheck']) {
     for (const id of [round[kind] ?? []].flat()) {
       required(Object.hasOwn(tasks, id), `rounds가 가리키는 노드 없음: ${id}`);
+      required(!named.has(id), `rounds에 같은 Task가 두 번 나옴: ${id}`);
+      named.add(id);
       required(Number.isInteger(round.n), `rounds의 n은 정수: ${id}`);
       Object.assign(tasks[id], { kind, round: round.n });
     }
