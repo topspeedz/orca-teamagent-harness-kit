@@ -32,6 +32,7 @@ import { TABLE_PATH, parseTable, matchRow, lookup, choices } from './model-selec
 import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH, unclassified, readInventory } from './coordinator-settings.mjs';
 import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mjs';
+import { readLedger, fixAllowed, currentRound } from './defect-ledger.mjs';
 
 // P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's six lines in the spec instead.
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
@@ -267,6 +268,51 @@ async function execute(cmd, o, deps, locks) {
     if ((approved.unit === '리드') !== lead) throw new Error('승인 리드 배정과 다름');
     const errors = verifyAssignment({ spec, agent: approved.agent, unit: approved.unit, row: approved, overrideReason, lead });
     if (errors.length) throw new Error('승인 배정 불일치: ' + errors.join(', '));
+    // The whole suite runs once at the end, so a Task's own criteria may not contain a command AGENTS.md marks `(전체 테스트)`.
+    const lines = spec.split(/\r?\n/);
+    const from = lines.findIndex(l => l.startsWith('완료 기준:'));
+    if (from < 0) return;
+    const to = lines.findIndex((l, i) => i > from && /^(검증 환경값|막히면:|보고:)/.test(l));
+    const region = lines.slice(from, to < 0 ? undefined : to).join('\n');
+    const hit = fullTests().find(c => region.includes(c));
+    if (hit) throw new Error(`완료 기준에 전체 테스트 명령이 있음: ${hit}`);
+  };
+  // first backtick span of each `(전체 테스트)` line in AGENTS.md's `## 명령` section
+  const fullTests = () => {
+    const lines = (io.optional('AGENTS.md') ?? '').split(/\r?\n/);
+    const at = lines.findIndex(l => l.trim() === '## 명령');
+    if (at < 0) return [];
+    const end = lines.findIndex((l, i) => i > at && /^## /.test(l));
+    return lines.slice(at + 1, end < 0 ? undefined : end).filter(l => l.includes('(전체 테스트)'))
+      .map(l => /`([^`]+)`/.exec(l)?.[1]).filter(Boolean);
+  };
+  // A fix Task takes only defects the ledger allows; verification after a fix names its defects and diff.
+  // row: the governing approved row; ids: the launched Task and, for a member, its parent. Returns a refusal or null.
+  const launchRefusal = (m, mapFile, row, spec, ids) => {
+    const post = row?.kind === 'recheck' || (row?.kind === 'verify' && currentRound(m) > 1);
+    if (row?.kind !== 'fix' && !post) return null;
+    const value = label => new RegExp(`^${label}:(.*)$`, 'm').exec(spec)?.[1].trim() ?? '';
+    const defects = csv(value('결함 ID'));
+    const ledger = () => {
+      let text;
+      try { text = deps.read(join(dirname(mapFile), 'ledger.md')); } catch { return null; }
+      return readLedger(text);
+    };
+    if (row.kind === 'fix') {
+      if (!defects.length) return '수정 Task의 결함 ID 줄이 없음';
+      const l = ledger();
+      if (!l) return '장부를 읽을 수 없음';
+      const r = fixAllowed(l, defects);
+      return r.ok ? null : '수정에 넣을 수 없는 결함: ' + r.refused.map(x => `${x.id}(${x.reason})`).join(', ');
+    }
+    if (row.afterFix || (defects.length && value('수정 diff'))) return null;
+    const l = ledger();
+    if (!l) return '장부를 읽을 수 없음';
+    const wide = l.decisions.some(d => {
+      const c = d.split('|').map(s => s.trim());
+      return ids.includes(c[0]) && c[1] === '전 범위 검증 승인' && c[2];
+    });
+    return wide ? null : '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함';
   };
   const taskId = (m, id) => m.tasks[id]?.orca ?? m.direct?.[id]?.task;
   // The approved spec and runtime stay fixed. Only an explicitly delegated model/effort can change.
@@ -513,6 +559,8 @@ async function execute(cmd, o, deps, locks) {
     }
     if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
     if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
+    const refusal = approved && launchRefusal(m, o.map, approved, st[o.id]?.spec ?? '', [o.id]);
+    if (refusal) return fail(refusal);
     const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
     if (o.retry && previous?.turnStarted) previous.failed = true;
     const attempt = approved?.routing && prepareAttempt(approved, approval, e, st[o.id].spec, authoredSpec(st[o.id].spec, e.review, o.id));
@@ -771,6 +819,9 @@ async function execute(cmd, o, deps, locks) {
         if (previous?.turnStarted) previous.failed = true;
       } else if (state && (state.dispatch || state.attempts?.at(-1)?.status !== 'rejected')) return fail('이미 직접 기동한 Task');
       if (state && (state.parent !== (o.parent ?? null) || state.agent !== o.agent || state.unit !== unit)) return fail('팀원의 이전 기동 범위와 다름');
+      // a member follows its parent's kind
+      const refusal = launchRefusal(map, mapPath, parent, spec, [o.id, o.parent].filter(Boolean));
+      if (refusal) return fail(refusal);
     } else {
       if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');
       row = table(o.agent, unit, o.complexity);

@@ -1512,4 +1512,174 @@ await ta(async () => {
   assert.equal(f.tasks.get(d.out.orca).status, 'ready');
 });
 
+// ---- refusals before launch: fix Tasks, verification after a fix, full tests in the completion criteria ----
+const LEDGER = (rows, decisions = []) => ['## 결함 원장', '', '| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |', '| --- | --- | --- | --- | --- | --- |',
+  ...rows, '', '## 결정', '', ...decisions, ''].join('\n');
+const H1 = '| H-1 | Q1 | High | 관찰 | 1 | 열림 |', M1 = '| M-1 | Q1 | Medium | 관찰 | 1 | 열림 |';
+const LEAD_Q1 = { unit: '리드', model: 'sonnet', effort: 'high', members: [{ role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' }] };
+const FIX_NO_IDS = '수정 Task의 결함 ID 줄이 없음', POST_FIX = '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함', NO_LEDGER = '장부를 읽을 수 없음';
+// T01 → Q1(verify) → F1(fix) → R1(recheck); with lead, Q1 is a team lead that launches planner members itself
+async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '' } = {}) {
+  const f = fakeDag({ fileOver: {
+    'q.md': lead ? '[역할: qa-inspector · 리드]\nTask: Q1 검증 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)' : planSpec('Q1', '흐름 검증'),
+    'f.md': planSpec('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
+  if (ledger !== null) f.fs['ledger.md'] = ledger;
+  await approve(f, [T('T01'), T('Q1', { ...(lead ? LEAD_Q1 : {}), ...q1 }), T('F1'), T('R1', r1)], [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1')], 'v1',
+    rounds ? { rounds: [{ n: 1, verify: ['Q1'], fix: 'F1', recheck: 'R1' }] } : {});
+  await main([...runArgs, '--approval', approval], f.deps);
+  const done = (id) => { f.tasks.get(f.map().tasks[id].orca).status = 'completed'; };
+  const launch = async (args) => { const r = await main(args, f.deps); assert.equal(r.code, 0, JSON.stringify(r.out)); };
+  await launch(reg('T01', 'a.md'));
+  done('T01');
+  await launch(reg('Q1', 'q.md', ...(lead ? ['--lead'] : [])));
+  return { f, done, launch, member: (id, file) => ['worker', '--approval', approval, '--parent', 'Q1', '--id', id, '--agent', 'planner',
+    '--unit', '계획', '--spec-file', file, '--bracket', 'BL-0012', '--does', '검증 분해'] };
+}
+// T01 and Q1 done, F1 registered and ready
+async function atFix(opts) {
+  const p = await roundPlan(opts);
+  await p.launch(go('Q1'));
+  p.done('Q1');
+  await p.launch(reg('F1', 'f.md'));
+  return p;
+}
+// F1 launched and done, R1 registered and ready
+async function atRecheck(opts) {
+  const p = await atFix({ fix: '\n결함 ID: H-1', ...opts });
+  await p.launch(go('F1'));
+  p.done('F1');
+  await p.launch(reg('R1', 'r.md'));
+  return p;
+}
+// refused with this exact message: no worker started, no Orca status change, the map as it was
+async function refusedLaunch(f, args, error) {
+  const before = [f.count('worker-start'), f.count('task-update'), f.fs['orca-tasks.json']];
+  const { code, out } = await main(args, f.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  assert.equal(out.error, error);
+  assert.deepEqual([f.count('worker-start'), f.count('task-update'), f.fs['orca-tasks.json']], before);
+}
+// 71. fix Task: 1. no `결함 ID:` line → refused
+await ta(async () => {
+  const { f } = await atFix();
+  await refusedLaunch(f, go('F1'), FIX_NO_IDS);
+  // an empty list counts as missing
+  const g = (await atFix({ fix: '\n결함 ID: ,' })).f;
+  await refusedLaunch(g, go('F1'), FIX_NO_IDS);
+});
+// 72. fix Task: 2. a Medium ID is refused and named with its reason
+await ta(async () => {
+  const { f } = await atFix({ fix: '\n결함 ID: H-1, M-1' });
+  await refusedLaunch(f, go('F1'), '수정에 넣을 수 없는 결함: M-1(Medium는 수정 포함 승인이 필요함)');
+});
+// 73. fix Task: 3. only open High IDs → launched
+await ta(async () => {
+  const { f, launch } = await atFix({ fix: '\n결함 ID: H-1' });
+  await launch(go('F1'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 74. fix Task: 4. a Medium ID with a `수정 포함 승인` decision → launched
+await ta(async () => {
+  const { f, launch } = await atFix({ fix: '\n결함 ID: H-1, M-1', ledger: LEDGER([H1, M1], ['- M-1 | 수정 포함 승인 | 이것도 같이 고쳐 주세요']) });
+  await launch(go('F1'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 75. fix Task: 5. no ledger file → refused with a message, nothing thrown
+await ta(async () => {
+  const { f } = await atFix({ fix: '\n결함 ID: H-1', ledger: null });
+  await refusedLaunch(f, go('F1'), NO_LEDGER);
+});
+// 76. 6. before any fix round, the verify Q1 and its members launch without `결함 ID:`
+await ta(async () => {
+  const { f, launch, member } = await roundPlan({ lead: true });
+  await launch(go('Q1'));
+  f.fs['m1.md'] = '[역할: planner]\nTask: Q1-A 검증 분해\n배정: planner / 계획 (claude sonnet/medium)';
+  await launch(member('Q1-A', 'm1.md'));
+  assert.equal(f.count('worker-start'), 2);
+});
+// 77. 7. after F1 launched, R1 needs both `결함 ID:` and `수정 diff:`
+await ta(async () => {
+  for (const recheck of ['', '\n결함 ID: H-1', '\n수정 diff: _workspace/fix.diff', '\n결함 ID: H-1\n수정 diff:  ']) {
+    const { f } = await atRecheck({ recheck });
+    await refusedLaunch(f, go('R1'), POST_FIX);
+  }
+  const { f, launch } = await atRecheck({ recheck: '\n결함 ID: H-1\n수정 diff: _workspace/fix.diff' });
+  await launch(go('R1'));
+  assert.equal(f.count('worker-start'), 3);
+});
+// 78. 8. after F1 launched, a new member of the verify lead Q1 without `결함 ID:` is refused; with both lines it launches
+await ta(async () => {
+  const { f, launch, member } = await atRecheck({ lead: true });
+  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n수정 diff: _workspace/fix.diff';
+  await refusedLaunch(f, member('Q1-B', 'm2.md'), POST_FIX);
+  assert.equal(f.map().direct?.['Q1-B'], undefined);
+  f.fs['m3.md'] = '[역할: planner]\nTask: Q1-C 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n결함 ID: H-1\n수정 diff: _workspace/fix.diff';
+  await launch(member('Q1-C', 'm3.md'));
+});
+// 79. 9. a `전 범위 검증 승인` decision for the Task (or the member's parent), or afterFix on the governing row, lets 7 and 8 pass
+await ta(async () => {
+  const wide = (id) => LEDGER([H1, M1], [`- ${id} | 전 범위 검증 승인 | 전체를 다시 봐 주세요`]);
+  await (async () => { const { launch } = await atRecheck({ ledger: wide('R1') }); await launch(go('R1')); })();
+  await (async () => { const { launch } = await atRecheck({ r1: { afterFix: '고친 빌드 전체 재검' } }); await launch(go('R1')); })();
+  // a decision for another Task does not count
+  await (async () => { const { f } = await atRecheck({ ledger: wide('T01') }); await refusedLaunch(f, go('R1'), POST_FIX); })();
+  // a decision line with no answer does not count
+  await (async () => { const { f } = await atRecheck({ ledger: LEDGER([H1], ['- R1 | 전 범위 검증 승인 |']) }); await refusedLaunch(f, go('R1'), POST_FIX); })();
+  for (const opts of [{ ledger: wide('Q1') }, { q1: { afterFix: '고친 빌드 전체 재검' } }]) {
+    const { f, launch, member } = await atRecheck({ lead: true, ...opts });
+    f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
+    await launch(member('Q1-B', 'm2.md'));
+  }
+});
+// 80. 10. an approval without kind refuses none of the above, even with no ledger
+await ta(async () => {
+  const { f, launch, member } = await atFix({ rounds: false, lead: true, ledger: null });
+  assert.equal('kind' in JSON.parse(f.fs[approval]).tasks.F1, false);
+  await launch(go('F1'));
+  f.tasks.get(f.map().tasks.F1.orca).status = 'completed';
+  await launch(reg('R1', 'r.md'));
+  await launch(go('R1'));
+  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
+  await launch(member('Q1-B', 'm2.md'));
+});
+// full tests in the completion criteria: AGENTS.md marks them in `## 명령`
+const AGENTS = ['# 공통 지침', '', '## 명령', '', '- `npm test` — 저장소 전체 (전체 테스트)', '- `npm run lint` — 린트', '',
+  '## 기술 스택', '', '- `npm run e2e` (전체 테스트) 이 절의 표시는 보지 않는다'].join('\n');
+const criteria = (...lines) => ['[역할: qa-inspector]', 'Task: T01 로그인 흐름', '금지: npm test 를 돌리지 않는다', '배정: qa-inspector / 흐름 검증 (claude opus/medium)', '', ...lines].join('\n');
+// 81. 11. a marked command inside `완료 기준:` (up to 검증 환경값 / 막히면: / 보고:) → register, direct launch refused
+await ta(async () => {
+  for (const spec of [criteria('완료 기준: npm test 통과'), criteria('완료 기준:', '- npm run lint 통과', '- npm test 통과', '보고: 리포트')]) {
+    const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': spec } });
+    await execRun(f);
+    const before = f.count('task-create');
+    const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(code, 1, JSON.stringify(out));
+    assert.equal(out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+    assert.equal(f.count('task-create'), before);
+    f.fs['qa.md'] = spec;
+    const direct = await main([...workerArgv, '--approval', approval, '--id', 'T01'], f.deps);
+    assert.equal(direct.code, 1, JSON.stringify(direct.out));
+    assert.equal(direct.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
+    assert.equal(f.count('worker-start'), 0);
+  }
+});
+// 82. 12. the same command only on `금지:`, after the region, or marked outside `## 명령` → registered
+await ta(async () => {
+  const spec = criteria('완료 기준: npm run e2e 통과', '검증 환경값(설정값): 없음', '막히면: npm test 실패면 ask', '보고: npm test 결과는 (참고)');
+  const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': spec } });
+  await execRun(f);
+  const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+  assert.equal(code, 0, JSON.stringify(out));
+});
+// 83. 13. no AGENTS.md, or no mark in it → registered
+await ta(async () => {
+  for (const agents of [undefined, AGENTS.replace(' (전체 테스트)\n', '\n'), '# 공통 지침\n\n- `npm test` (전체 테스트)']) {
+    const f = fakeDag({ fileOver: { 'a.md': criteria('완료 기준: npm test 통과') } });
+    if (agents !== undefined) f.fs['AGENTS.md'] = agents;
+    await execRun(f);
+    const { code, out } = await main(reg('T01', 'a.md'), f.deps);
+    assert.equal(code, 0, JSON.stringify(out));
+  }
+});
+
 console.log(`orca-launch.check: ${passed} passed`);
