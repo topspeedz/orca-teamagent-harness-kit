@@ -5,6 +5,7 @@
 // --results: the JSON report of the full test run. vitest: `--reporter=json --outputFile=<file>`; jest: `--json --outputFile=<file>`.
 // stdout: {"cases":{"passed":2,"failed":1,"missing":["TC-CART-004"]},"rtm":{"verified":[…],"reverted":[…]},"files":[…]}
 // A case whose test is not in the run (renamed, skipped, a partial run) keeps the result it had and is listed in `missing`.
+// A test name the ledger cut short with `…` is matched by the part before it.
 // A case with no backticked test in 자동화 위치 is run by hand and is left alone.
 // Only 구현됨 and 검증됨 are switched. 계획됨 and 확인 필요 are judgments and stay as written.
 import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
@@ -37,7 +38,10 @@ export function apply({ results, phase, command, cases, rtm }) {
     const tests = byFile.filter((r) => r.file === file || r.file.endsWith(`/${file}`)).flatMap((r) => r.tests);
     if (!names.length) return tests.map((t) => t.status);
     return names.flatMap((name) => {
-      const hit = tests.filter((t) => t.title === name || t.fullName === name || t.fullName?.endsWith(` ${name}`));
+      // a ledger may cut a long test name short with `…`; such a name is matched by the part before it
+      const head = name.endsWith('…') ? name.slice(0, -1).trimEnd() : null;
+      const hit = tests.filter((t) => (head ? t.title?.startsWith(head) || t.fullName?.startsWith(head)
+        : t.title === name || t.fullName === name || t.fullName?.endsWith(` ${name}`)));
       return hit.length ? hit.map((t) => t.status) : [null];
     });
   };

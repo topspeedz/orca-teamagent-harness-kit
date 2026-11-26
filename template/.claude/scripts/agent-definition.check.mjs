@@ -50,6 +50,9 @@ check(body.replace('`contract.md`', '`missing.md`'), '문서 책임');
 check(body.replace('`src/client.mjs`', '`src/gone.mjs`'), '읽는 입력');
 check(body.replace('Task 리포트', '[근거](missing.md)'), '문서 링크');
 check(body.replace('응답 | 작성', '응답 | 소유'), '책임 값');
+// a project may add columns after the three required ones, such as the form each document follows
+check(body.replace('| 문서 | 범위 | 책임 |', '| 문서 | 범위 | 책임 | 양식 |')
+  .replace('| `contract.md` | 응답 | 작성 |', '| `contract.md` | 응답 | 작성 | `contract.md` |'));
 check(body.replace('`계약 변경`', '`미등록 작업`'), '작업 단위');
 put('docs/harness/team-org.md', roster.replace('`api-owner`, ', ''));
 check(body, '명시적 팀원 행');
