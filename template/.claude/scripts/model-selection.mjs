@@ -77,7 +77,7 @@ export function checkTable(rows, { agentNames, noEffortModels }) {
 // Formula rows and the Codex table: a formula row on codex takes its pair from the Codex table, so it must cover every Claude pair.
 export function checkRules(rows, { codex, legacyTable = 0 }) {
   const errors = [];
-  for (const r of rows.filter((x) => x.model === OLD_FORMULA)) errors.push(`L${r.line}: model \`${OLD_FORMULA}\`는 0.6.1에서 \`${BY_FORMULA}\`로 바뀌었다`);
+  for (const r of rows.filter((x) => x.model === OLD_FORMULA)) errors.push(`L${r.line}: model \`${OLD_FORMULA}\`는 0.6.1에서 \`${BY_FORMULA}\`으로 바뀌었다`);
   if (legacyTable) errors.push(`L${legacyTable}: 복잡도 기본표는 0.6.1에서 없어졌다 — 산정 행은 Task 점수로 정하므로 표를 지운다`);
   for (const r of rows.filter((x) => x.model === BY_FORMULA && x.effort !== null)) errors.push(`L${r.line}: ${BY_FORMULA} 줄은 effort를 비움`);
   if (!codex.length && !rows.some((r) => r.model === BY_FORMULA)) return errors;
