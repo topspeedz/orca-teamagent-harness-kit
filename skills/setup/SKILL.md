@@ -50,7 +50,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .
 | `codex` | Codex를 함께 쓸 수 없다. 2단계의 Codex 질문에 이 사실을 붙인다 |
 | `existing` | 이미 있는 지침·설정 파일. 3단계에서 충돌로 올라올 수 있다고 알린다 |
 
-`migration`이 비어 있지 않으면 옛 명단(`docs/harness/team-org.md`)을 쓰던 0.5.1 프로젝트다. 3단계 깔기가 물러난 파일을 지우고 7단계가 옛 역할을 옮기므로, 작업 트리를 먼저 커밋해 달라고 하고 답을 기다린다. 되돌릴 때는 그 커밋으로 돌아간다. 이 출력은 7단계에서 다시 쓴다(깔기 뒤에는 `migration`이 `null`이 된다).
+`migration`이 비어 있지 않으면 옛 명단(`docs/harness/team-org.md`)을 쓰던 0.5.1 프로젝트다. 3단계 깔기가 물러난 파일을 지우고 7단계가 옛 역할을 옮기므로, 작업 트리를 먼저 커밋해 달라고 하고 답을 기다린다. 되돌릴 때는 그 커밋으로 돌아간다. `migration`은 옮기기의 마지막 단계가 `docs/harness/team-org.md`를 지울 때까지 남으므로 7단계에서 `inspect`를 다시 돌려도 같은 값을 받는다.
 
 `existing`에 `package.json`이나 `Makefile`이 있으면 읽어서 프로젝트의 검증 명령(테스트, 린트, 빌드)을 찾아 보고에 적는다. 없으면 없다고 적는다.
 
@@ -154,7 +154,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 [references/agent-units.md](references/agent-units.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 에이전트 단위 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(예: `/model opus`, `/effort max`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
 
-1. 1단계 `inspect` 출력의 `migration`이 비어 있지 않으면 agent-author의 "0.5.1 프로젝트 옮기기"를 먼저 따른다. 프로젝트가 추가한 역할을 단위로 합치거나 따로 남기고, 옛 역할 파일·옛 팀 스킬·`docs/harness/team-org.md`를 지운다.
+1. `inspect` 출력(1단계의 것이나 다시 돌린 것)의 `migration`이 비어 있지 않으면 agent-author의 "0.5.1 프로젝트 옮기기"를 먼저 따른다. 프로젝트가 추가한 역할을 단위로 합치거나 따로 남기고, 옛 역할 파일·옛 팀 스킬·`docs/harness/team-org.md`를 지운다.
 2. 지난 세션 기록과 기존 파이프라인을 모은다(`session-digest.mjs`).
 3. 근거와 함께 기존 에이전트에 더할 스킬, 기본 에이전트의 이름·스킬·편집 범위 바꾸기, 새 에이전트를 추천하고 설문으로 고르게 한다: 추천대로 / 골라서·고쳐서 / 직접 적기 / 지금은 만들지 않음. 새 에이전트는 agent-units.md 2절의 세 기준 가운데 하나가 사실일 때만 추천한다.
 4. 색인의 정본(없으면 설치 초안), 양식, 문서·절과 미배정 상태를 확인한다. 실제로 결정·구현·검증할 전문가와 근거를 제시해 역할 생성·나중에 배정·해당 없음 중 선택받는다. PRD·SRS는 `product-manager`, 색인은 `doc-steward`가 맡는다. 새 역할은 agent-author의 전문 판단 질문과 프로젝트의 `docs/harness/templates/agent.md`를 함께 사용한다. 수락된 역할·절만 역할 정의와 명단·모델 표에 등록하고, 추천을 거절한 범위는 미배정, 제외한 범위는 해당 없음으로 색인에 남긴다. 이미 지정되거나 제외된 범위는 추천에서 뺀다.

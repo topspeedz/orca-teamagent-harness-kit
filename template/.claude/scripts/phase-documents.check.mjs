@@ -43,7 +43,7 @@ try {
   assert.deepEqual(wait.verified, ['BL-0002']);
   assert.deepEqual(run(table + row([...a, '반영', sync, '', '']) + '\n' + confirmed(b)).verified, ['BL-0001', 'BL-0002']);
   assert.equal(run(table + row([...a, '반영', qa, '', ''])).code, 1);
-  assert.equal(run(table + row([...a.slice(0, 3), 'qa-inspector', '반영', sync, '', ''])).code, 1);
+  assert.equal(run(table + row([...a.slice(0, 3), 'verifier', '반영', sync, '', ''])).code, 1);
   assert.equal(run(table + confirmed([b[0], b[1], '다른 절', b[3]])).code, 1);
   assert.equal(run(table + row([b[0], ...a.slice(1), '반영', sync, '', ''])).code, 1);
 

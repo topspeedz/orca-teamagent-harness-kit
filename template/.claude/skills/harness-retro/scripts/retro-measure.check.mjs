@@ -82,9 +82,9 @@ const LEDGER = `# 장부: x
 
 | Task | 에이전트 | 배정(요청과 적용) | 재시도(원인) | 질문 | 리포트 경로 |
 | --- | --- | --- | --- | --- | --- |
-| T1 | planner | 요청 a · 적용 a | 0 | 없음 | r1 |
-| T2 | qa-inspector | 요청 a · 적용 a | 1 (리포트 검사 실패) | 1 | r2 |
-| T3 | code-reviewer | 요청 a · 적용 a | 2 (기동 실패) | 없음 | r3 |
+| T1 | product-manager | 요청 a · 적용 a | 0 | 없음 | r1 |
+| T2 | verifier | 요청 a · 적용 a | 1 (리포트 검사 실패) | 1 | r2 |
+| T3 | verifier | 요청 a · 적용 a | 2 (기동 실패) | 없음 | r3 |
 
 ## 결정
 

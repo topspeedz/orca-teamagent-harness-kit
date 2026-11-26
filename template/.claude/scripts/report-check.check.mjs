@@ -99,12 +99,12 @@ ok();
 // a higher version in the same folder wins
 const versions = join(dir, 'versions');
 mkdirSync(versions);
-writeFileSync(join(versions, '05_qa-inspector_qa-report_v2.md'), `${head}- ✅ check\n`, 'utf8');
-r = run('05_qa-inspector_qa-report_v1.md', `${head}- ✅ check\n`, versions);
+writeFileSync(join(versions, '05_verifier_qa-report_v2.md'), `${head}- ✅ check\n`, 'utf8');
+r = run('05_verifier_qa-report_v1.md', `${head}- ✅ check\n`, versions);
 assert.equal(r.code, 1);
 assert.match(r.out.error, /_v2\.md/);
 ok();
-r = run('05_qa-inspector_qa-report_v2.md', undefined, versions);
+r = run('05_verifier_qa-report_v2.md', undefined, versions);
 assert.equal(r.code, 0);
 ok();
 

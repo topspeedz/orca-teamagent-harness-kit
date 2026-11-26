@@ -57,7 +57,7 @@ description: Claude Code용 전문 서브에이전트를 신규 설계하거나 
 
 ### 4. 0.5.1 프로젝트 옮기기
 
-setup 7단계가 1단계 `inspect` 출력의 `migration`이 비어 있지 않을 때 부른다. 3단계 깔기로 새 명단 `docs/harness/agents.md`가 생기면 `inspect`는 `migration: null`을 돌려주므로, 1단계에서 받은 출력을 쓴다. 이 절차는 프로젝트 파일을 지우므로 옮기기 전 커밋이 되돌릴 자리다.
+setup 7단계가 `inspect` 출력의 `migration`이 비어 있지 않을 때 부른다. `migration`은 이 절차의 마지막 단계가 `docs/harness/team-org.md`를 지울 때까지 남으므로, 깔기 뒤나 새 세션에서 `inspect`를 다시 돌려도 받을 수 있다. 이 절차는 프로젝트 파일을 지우므로 옮기기 전 커밋이 되돌릴 자리다.
 
 1. `git status --short`로 작업 트리가 커밋돼 있는지 본다. 커밋하지 않은 변경이 있으면 커밋해 달라고 하고 멈춘다.
 2. `migration.projectRoles`(프로젝트가 추가한 역할, 꺼진 것 포함)를 받는다. 옛 명단 `docs/harness/team-org.md`, 그 역할들의 파일(`.claude/agents/<역할>.md`, 꺼졌으면 `.md.agent-toggle-off`), 옛 명단에 적힌 팀 스킬(`.claude/skills/<팀 스킬>/`)을 읽는다.

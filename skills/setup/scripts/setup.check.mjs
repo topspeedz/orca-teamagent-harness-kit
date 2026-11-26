@@ -389,13 +389,17 @@ const addRecord = (t, rel, body) => put(t, '.claude/harness-install.json', JSON.
 test('retired file with the recorded hash is deleted and leaves the record', () => {
   const t = target('retire unchanged');
   install(t);
-  const rel = '.claude/agents/code-reviewer.md';
+  const rel = '.claude/agents/code-reviewer.md', skill = '.claude/skills/team-lead/SKILL.md';
   put(t, rel, '# 0.5.1 code-reviewer\n');
   addRecord(t, rel, '# 0.5.1 code-reviewer\n');
+  put(t, skill, '# 0.5.1 team-lead\n');
+  addRecord(t, skill, '# 0.5.1 team-lead\n');
   const r = install(t);
   assert.equal(existsSync(join(t, rel)), false);
   assert.equal(rel in record(t), false);
-  assert.deepEqual(r.retired, [rel]);
+  assert.deepEqual(r.retired, [skill, rel]);
+  assert.equal(existsSync(join(t, '.claude/skills/team-lead')), false, 'empty folder of a retired skill is removed');
+  assert.equal(existsSync(join(t, '.claude/agents')), true, 'a non-empty parent stays');
   assert.deepEqual(r.conflicts, []);
 });
 
@@ -487,7 +491,10 @@ test('inspect reports a pending migration and unfilled skills', () => {
   assert.equal(r.migration.roster, 'docs/harness/team-org.md');
   assert.deepEqual(r.migration.projectRoles, ['api-editor', 'prd-writer']);
   assert.deepEqual(r.unfilledSkills, ['frontend-ux']);
+  // both rosters: the migration stays pending until its last step deletes team-org.md
   put(t, 'docs/harness/agents.md', '# 명단\n');
+  assert.equal(inspect(t, deps).migration.roster, 'docs/harness/team-org.md');
+  unlinkSync(join(t, 'docs/harness/team-org.md'));
   assert.equal(inspect(t, deps).migration, null);
   assert.equal(inspect(target('migration none'), deps).migration, null);
 });

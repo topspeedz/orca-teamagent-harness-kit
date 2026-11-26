@@ -5,7 +5,7 @@
 //        node setup.mjs verify --target <dir>                                              exit 1 when a check fails
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +59,7 @@ export function inspect(target, { run, exists, globalSkillsDir }) {
     globalDiagramSkills: Object.fromEntries(DIAGRAM.map((s) => [s, exists(join(globalSkillsDir, s, 'SKILL.md'))])),
     codex: out('codex', ['--version']) !== null,
     existing: EXISTING.filter((p) => exists(join(target, p))),
-    migration: exists(join(target, OLD_ROSTER)) && !exists(join(target, 'docs/harness/agents.md')) ? {
+    migration: exists(join(target, OLD_ROSTER)) ? {
       roster: OLD_ROSTER,
       projectRoles: fileNames(join(target, '.claude/agents'), /^(.+)\.md(?:\.agent-toggle-off)?$/)
         .filter((n) => !existsSync(join(TEMPLATE, '.claude/agents', n + '.md')) && !RETIRED.includes(`.claude/agents/${n}.md`)),
@@ -265,6 +265,8 @@ export function applyInstall(plan, opts = { approve: [] }) {
   for (const { path, state } of plan.retire ?? []) {
     if (state !== 'unchanged' && !approve.includes(path)) { conflicts.push(path); continue; }
     unlinkSync(join(plan.target, path));
+    const dir = dirname(join(plan.target, path));
+    if (readdirSync(dir).length === 0) rmdirSync(dir); // only the now-empty folder, never recursive
     delete files[path];
     retired.push(path);
   }
