@@ -232,12 +232,13 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
     if (cur && !merged) {
-      // setup wrote this file and it changed since: the user's edit, not a conflict to approve (설계서 14.3절)
+      // setup wrote this file and it changed since: the user's edit, overwritten only when its path is approved, never a conflict (설계서 4.4)
       if (installed[to] && installed[to] !== sha(cur)) {
-        plan.skip.push({ to, reason: '사용자가 고침' });
-        if (rel === MODEL_TABLE && !hasPmRow(cur.toString('utf8'), pm)) {
-          plan.notices.push(`${MODEL_TABLE}는 사용자가 고친 파일이라 건너뛰었다. \`product-manager | 기획\` 행이 없거나 고른 값 ${pm.model}/${pm.effort}와 다르다. 0.5.1에서 올리는 중이면 agent-author의 "0.5.1 프로젝트 옮기기"대로 표를 직접 옮긴다.`);
-        }
+        const notice = rel === MODEL_TABLE && !hasPmRow(cur.toString('utf8'), pm)
+          ? `${MODEL_TABLE}는 사용자가 고친 파일이라 건너뛰었다. \`product-manager | 기획\` 행이 없거나 고른 값 ${pm.model}/${pm.effort}와 다르다. 0.5.1에서 올리는 중이면 agent-author의 "0.5.1 프로젝트 옮기기"대로 표를 직접 옮긴다.`
+          : undefined;
+        // listed only when the kit has something new since the record
+        plan.copy.push({ from, to, content, edited: true, listed: sha(content) !== installed[to], notice });
         continue;
       }
       plan.conflict.push(to);
@@ -251,17 +252,25 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
   return plan;
 }
 
-// plan.copy also holds conflicting files; they are written only when their path is in opts.approve.
+// plan.copy also holds conflicting and project-edited files; they are written only when their path is in opts.approve.
 // A retired file the project edited or setup never recorded is deleted only when approved, the same way.
 export function applyInstall(plan, opts = { approve: [] }) {
   const approve = (opts.approve ?? []).map((a) => a.replaceAll('\\', '/'));
   const written = [];
   const conflicts = [];
+  const edited = [];
+  const notices = [...(plan.notices ?? [])];
   const skipped = [...plan.skip];
   const files = readRecord(plan.target);
   for (const c of plan.copy) {
     if (agentOff(plan.target, c.to)) { skipped.push({ to: c.to, reason: '에이전트 OFF' }); continue; }
     if (plan.conflict.includes(c.to) && !approve.includes(c.to)) { conflicts.push(c.to); continue; }
+    if (c.edited && !approve.includes(c.to)) {
+      skipped.push({ to: c.to, reason: '사용자가 고침' });
+      if (c.listed) edited.push(c.to);
+      if (c.notice) notices.push(c.notice);
+      continue;
+    }
     const p = join(plan.target, c.to);
     mkdirSync(dirname(p), { recursive: true });
     try {
@@ -287,7 +296,7 @@ export function applyInstall(plan, opts = { approve: [] }) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped, conflicts, retired, notices: plan.notices ?? [] };
+  return { written, skipped, conflicts, edited, retired, notices };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.

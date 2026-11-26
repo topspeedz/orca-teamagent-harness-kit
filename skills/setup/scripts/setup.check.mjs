@@ -455,6 +455,58 @@ test('an edited model table without the answered PM row is named in notices', ()
   assert.deepEqual(install(other).notices, []);
 });
 
+// a file the project edited after an older install (the record holds what the older kit wrote)
+const editedOlder = (name) => {
+  const t = target(name);
+  install(t);
+  addRecord(t, 'AGENTS.md', '# 0.5.1 지침\n');
+  put(t, 'AGENTS.md', '# 0.5.1 지침\n프로젝트가 고친 줄\n');
+  return t;
+};
+
+test('an edited file whose kit content changed is listed in edited and left untouched', () => {
+  const t = editedOlder('edited listed');
+  const r = install(t);
+  assert.equal(read(t, 'AGENTS.md'), '# 0.5.1 지침\n프로젝트가 고친 줄\n');
+  assert.deepEqual(r.edited, ['AGENTS.md']);
+  assert.ok(r.skipped.some((s) => s.to === 'AGENTS.md' && s.reason === '사용자가 고침'));
+  assert.deepEqual(r.conflicts, []);
+  assert.deepEqual(r.written, []);
+});
+
+test('an approved edited file is overwritten with the kit content', () => {
+  const t = editedOlder('edited approved');
+  const r = install(t, {}, {}, ['AGENTS.md']);
+  assert.equal(read(t, 'AGENTS.md'), '# 공통 지침\n');
+  assert.deepEqual(r.written, ['AGENTS.md']);
+  assert.deepEqual(r.edited, []);
+  assert.equal(r.skipped.some((s) => s.to === 'AGENTS.md'), false);
+  assert.equal(record(t)['AGENTS.md'], hash('# 공통 지침\n'));
+  assert.ok(install(t).skipped.some((s) => s.to === 'AGENTS.md' && s.reason === '같은 내용'));
+});
+
+test('an approved edited model table takes the answered PM row and gives no notice', () => {
+  const t = target('edited table approved');
+  install(t);
+  put(t, tablePath, read(t, tablePath) + '| `my-agent` | 내 작업 | claude | sonnet | low | 고정 |\n');
+  const pm = { model: 'opus', effort: 'max' };
+  const held = install(t, { pm });
+  assert.deepEqual([held.edited, held.notices.length], [[tablePath], 1]);
+  const r = install(t, { pm }, {}, [tablePath]);
+  assert.deepEqual([r.written, r.edited, r.notices], [[tablePath], [], []]);
+  assert.ok(read(t, tablePath).split('\n').some((l) => l.startsWith('| `product-manager` | 기획 | claude | opus | max |')));
+});
+
+test('an edited file whose kit content is unchanged is not listed', () => {
+  const t = target('edited same kit');
+  install(t);
+  put(t, 'AGENTS.md', '# 공통 지침\n프로젝트가 고친 줄\n');
+  const r = install(t);
+  assert.deepEqual(r.edited, []);
+  assert.ok(r.skipped.some((s) => s.to === 'AGENTS.md' && s.reason === '사용자가 고침'));
+  assert.equal(read(t, 'AGENTS.md'), '# 공통 지침\n프로젝트가 고친 줄\n');
+});
+
 test('answers with planner.effort are refused', () => {
   put(root, 'old-answers.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'max' } }));
   const r = spawnSync(process.execPath, [SETUP, 'install', '--target', target('old answers'), '--answers', join(root, 'old-answers.json')], { encoding: 'utf8' });
