@@ -1,7 +1,7 @@
 // Self-test for session-digest.mjs — builds fake records in a temp folder. `node skills/setup/scripts/session-digest.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,6 +126,8 @@ test('pipelines: the roster, and the old one only while the migration is pending
   put('roster-proj/docs/harness/team-org.md', '# 옛 명단\n');
   assert.deepEqual(pipelineFiles(proj), ['docs/harness/team-org.md']);
   put('roster-proj/docs/harness/agents.md', '# 명단\n');
+  assert.deepEqual(pipelineFiles(proj), ['docs/harness/agents.md', 'docs/harness/team-org.md']);
+  unlinkSync(join(proj, 'docs/harness/team-org.md'));
   assert.deepEqual(pipelineFiles(proj), ['docs/harness/agents.md']);
 });
 
