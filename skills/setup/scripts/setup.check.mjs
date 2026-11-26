@@ -440,7 +440,7 @@ test('an edited model table without the answered PM row is named in notices', ()
   const t = target('pm notice');
   assert.deepEqual(install(t).notices, []);
   const mine = '| `my-agent` | 내 작업 | claude | sonnet | low | 고정 |\n';
-  put(t, tablePath, read(t, tablePath).replace(/^\| `product-manager` \| 기획 \|.*\n/m, '') + mine);
+  put(t, tablePath, read(t, tablePath).replace(/^\| `product-manager` \| 기획 \|.*\r?\n/m, '') + mine);
   const r = install(t, { pm: { model: 'opus', effort: 'max' } });
   assert.ok(r.skipped.some((s) => s.to === tablePath && s.reason === '사용자가 고침'));
   assert.equal(r.notices.length, 1);
@@ -581,7 +581,7 @@ test('verify runs the role checker for every agent on the installed roster', () 
   assert.equal(ok.status, 0, ok.stdout);
   assert.equal(ok.stdout.split('\n').filter((l) => l.includes('agent-definition.mjs --agent')).length, 7);
   for (const name of agents) assert.match(agentLine(ok.stdout, name), /✅ agent-definition: OK/);
-  put(t, tablePath, read(t, tablePath).replace(/^\| `research` \|.*\n/m, ''));
+  put(t, tablePath, read(t, tablePath).replace(/^\| `research` \|.*\r?\n/m, ''));
   const bad = verify();
   assert.equal(bad.status, 1, bad.stdout);
   assert.match(agentLine(bad.stdout, 'research'), /❌ .*research의 작업 단위/);
