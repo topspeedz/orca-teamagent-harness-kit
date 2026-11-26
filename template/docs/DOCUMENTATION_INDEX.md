@@ -38,16 +38,6 @@
 
 | 문서 | 범위 | 배정 상태 |
 | --- | --- | --- |
-| `docs/CODEBASE_MAP.md` | 전체 | 미배정 |
-| `docs/03-ui-ux/ui-spec.md` | 전체 | 미배정 |
-| `docs/04-architecture/architecture.md` | 전체 | 미배정 |
-| `docs/05-api/draft.md` | 전체 | 미배정 |
-| `docs/06-database/draft.md` | 전체 | 미배정 |
-| `docs/07-decisions/draft.md` | 전체 | 미배정 |
-| `docs/08-implementation/wbs.md` | 전체 | 미배정 |
-| `docs/09-testing/test-cases.md` | 전체 | 미배정 |
-| `docs/10-traceability/rtm.md` | 전체 | 미배정 |
-| `docs/11-operations/draft.md` | 전체 | 미배정 |
 | `docs/12-changelog/CHANGELOG.md` | 전체 | 미배정 |
 
 ## 이 폴더 밖의 문서

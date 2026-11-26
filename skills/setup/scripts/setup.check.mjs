@@ -1,7 +1,7 @@
 // Self-test for setup.mjs — builds a small template in a temp folder. `node skills/setup/scripts/setup.check.mjs`
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,6 +106,7 @@ test('product drafts use the installed forms and preserve project documents on r
   const skill = '.claude/skills/docs-management';
   const formRoot = 'docs/harness/templates/product-docs';
   const skillRows = read(t, skill + '/SKILL.md').split(/\r?\n/);
+  const roles = readdirSync(join(t, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => read(t, '.claude/agents/' + f)).join('\n');
   for (const path of drafts) {
     const body = read(t, path);
     const link = body.match(/> 설치 초안 · \[작성 양식\]\((.+?)\)/)[1];
@@ -121,7 +122,7 @@ test('product drafts use the installed forms and preserve project documents on r
       assert.match(body, /소유 에이전트: `product-manager`/);
       assert.ok(!pending.includes(path));
     } else {
-      assert.ok(pending.includes('| `' + path + '` | 전체 | 미배정 |'));
+      assert.equal(pending.includes('| `' + path + '` | 전체 | 미배정 |'), !roles.includes('`' + path + '`'), path);
     }
     assert.match(body, /^## /m);
     assert.doesNotMatch(body, /\b(?:FR|SCR|ADR|API|US)-\d+|통과 \(<phase 이름>\)/);
