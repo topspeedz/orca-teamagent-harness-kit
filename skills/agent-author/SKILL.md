@@ -71,7 +71,7 @@ setup 7단계가 1단계 `inspect` 출력의 `migration`이 비어 있지 않을
    - 옛 기본 역할의 꺼진 사본: `.claude/agents/planner.md.agent-toggle-off`, `code-reviewer.md.agent-toggle-off`, `qa-inspector.md.agent-toggle-off`와 같은 이름의 `.codex/agents/*.toml.agent-toggle-off`. setup은 이 사본을 지우지 않는다.
    - 옛 팀 스킬: `.claude/skills/<팀 스킬>/`, Codex를 쓰면 `.agents/skills/<팀 스킬>/`.
    - `docs/harness/team-org.md`.
-   - 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
+   - 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4단계대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
 6. 명단의 에이전트마다 `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, 이어 `node .claude/scripts/model-selection.mjs check`를 돌린다. Codex를 쓰면 고친 역할마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 돌린다. 실패하면 메시지를 보여 주고 고칠지 묻는다.
 7. 프로젝트 문서에 남은 옛 역할 이름을 찾아 목록으로 보여 준다. 고치는 것은 사용자가 고른 것만이다.
 
