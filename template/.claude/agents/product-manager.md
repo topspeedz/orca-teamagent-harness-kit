@@ -59,7 +59,7 @@ description: "기획을 한 세션으로 잇는다. 요청을 PRD·SRS와 백로
 
 - 요청 대조 표(R→US→FR/NFR), 항목화 표(FR/NFR→BL), 목표와 묶음 선정 사유
 - `docs/superpowers/specs/`의 기술 설계, `docs/superpowers/plans/`의 실행 계획과 BL↔Task 표, DAG와 T+ 워터폴 입력
-- `_workspace/product/`의 spec 지정 경로에 요구사항·요구사항 검토·설계·계획·계획 대조·완료 처리별 버전 리포트. 요구사항 검토 결과와 설계·계획 근거를 적는다
+- spec 지정 경로의 버전 리포트. 요구사항·요구사항 검토·계획 대조·완료 처리는 `_workspace/product/<phase>/`에, 설계와 계획은 `_workspace/_run/<phase>/`의 `03_product-manager_design_v<N>.md`와 `04_product-manager_plan_v<N>.md`에 쓴다. 요구사항 검토 결과와 설계·계획 근거를 적는다
 
 ## 문서 책임
 

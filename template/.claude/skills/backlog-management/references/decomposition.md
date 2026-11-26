@@ -2,7 +2,7 @@
 
 > 읽는 시점: `product-manager`가 작업 단위 `항목화`를 맡았을 때. phase의 2단계에서 요구사항 정리 다음에 돈다.
 
-- 바탕: revfactory/harness-100의 46-product-manager(Apache-2.0)에서 story-point-estimator와 story-writer의 방법을 가져와 이 틀의 규칙에 맞게 다시 썼다. 사람 시간과 팀 속도로 재는 부분은 빼고, 시간은 `planner`가 Task마다 분 단위로 잡는다.
+- 바탕: revfactory/harness-100의 46-product-manager(Apache-2.0)에서 story-point-estimator와 story-writer의 방법을 가져와 이 틀의 규칙에 맞게 다시 썼다. 사람 시간과 팀 속도로 재는 부분은 빼고, 시간은 계획을 쓰는 `product-manager`가 Task마다 분 단위로 잡는다.
 
 ## 입력
 
@@ -79,7 +79,7 @@ SRS의 `(계획됨` 표시가 붙은 줄, PRD의 `US`, `product-manager`의 리�
 
 - RICE 점수가 확정되면 우선순위 라벨 바로 뒤에 `RICE <점수>(R n · I n · C n%)`를 넣는다([prioritization.md](prioritization.md)).
 - 그 뒤에 근거와 막힌 이유를 적는다.
-- 역할 열: 명단 `docs/harness/team-org.md`에서 그 영역을 맡는 팀의 에이전트를 적는다. 알 수 없으면 `미정`으로 둔다. 6단계 완료 처리 때 계획서의 배정으로 맞춘다.
+- 역할 열: 명단 `docs/harness/agents.md`에서 그 영역을 맡는 에이전트를 적는다. 알 수 없으면 `미정`으로 둔다. 6단계 완료 처리 때 계획서의 배정으로 맞춘다.
 - 결정에 막힌 항목은 `blocked`, 진행할 수 있는 항목은 `todo`다.
 
 ## 리포트 절

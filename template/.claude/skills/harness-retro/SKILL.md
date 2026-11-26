@@ -1,6 +1,6 @@
 ---
 name: harness-retro
-description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase 흐름 7단계에서 이번 phase를 재고(병렬 지표, 코디네이터가 깬 횟수, 수정 루프, 재시도와 원인, 작업 폴더 크기), 근거가 있는 하네스 파일만 최소로 고친다. '하네스 회고', 'phase 회고', '하네스 개선', '병렬 효율 측정', '출발값 고치기'. 실행 팀 내부 배정(team-lead), 제품 결함 수정, 백로그 정리, 모델 표 직접 수정에는 쓰지 않는다."
+description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase 흐름 7단계에서 이번 phase를 재고(병렬 지표, 코디네이터가 깬 횟수, 수정 루프, 재시도와 원인, 작업 폴더 크기), 근거가 있는 하네스 파일만 최소로 고친다. '하네스 회고', 'phase 회고', '하네스 개선', '병렬 효율 측정', '출발값 고치기'. 워커 기동과 배정(coordinator), 제품 결함 수정, 백로그 정리, 모델 표 직접 수정에는 쓰지 않는다."
 ---
 
 # harness-retro
@@ -48,7 +48,7 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 
 - 출력은 리포트에 그대로 붙일 표다. 입력이 없거나 읽을 수 없는 지표는 `측정 불가`로 찍히고 끝에 사유가 붙는다. 0으로 세지 않는다.
 - 세션 기록은 기본으로 `~/.claude/projects/` 아래 현재 폴더 이름의 기록을 최근 7일만 읽는다. 다른 위치면 `--sessions <폴더>`, 기간은 `--days <일수>`.
-- 코디네이터 세션은 `orca-launch.mjs`의 `exec-run`이나 `register`를 쓴 세션으로 가르고, 세션마다 한 줄씩 찍는다(합치지 않는다). 워커와 팀장도 같은 알림을 받기 때문이다.
+- 코디네이터 세션은 `orca-launch.mjs`의 `exec-run`이나 `register`를 쓴 세션으로 가르고, 세션마다 한 줄씩 찍는다(합치지 않는다). 워커도 같은 알림을 받기 때문이다.
 - 셀프테스트: `node .claude/skills/harness-retro/scripts/retro-measure.check.mjs`.
 
 ### `actual.json` 만드는 법
@@ -59,7 +59,7 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
 node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-tasks.json > _workspace/_run/<phase>/actual.json
 ```
 
-`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(팀장에게 준 팀 Task, 6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
+`start`는 기동 스크립트가 그 Task를 띄운 시각이고, `end`와 `status`는 Orca의 기록이다. 재시도한 Task는 마지막 기동의 시각이 남는다. 계획(`waterfall.json`)에 없는 Task(6단계의 Task)는 병렬 지표에서 빠지고 그 개수가 출력 끝에 찍힌다. 이 파일이 없으면 실제값 열은 `측정 불가`다.
 
 ### heartbeat만 든 깸은 근사다
 
@@ -73,7 +73,7 @@ node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-t
 | --- | --- | --- |
 | 워커 기동 비용 3분 | 기동 영수증 시각에서 워커의 첫 보고까지 | 두 phase 연속으로 실측이 출발값과 크게 다를 때 |
 | 합치는 기준 두 배 | 기동 비용보다 짧았던 Task의 실제 소요 | 짧은 Task가 따로 서서 기동 비용이 작업보다 컸을 때 |
-| 팀 동시 4명 | 최대 동시 Task 수와 그때의 대기·재시도 | 동시 수를 늘려도 재시도가 늘지 않았거나, 4명에서 충돌이 났을 때 |
+| 같은 에이전트 동시 4명 | 최대 동시 Task 수와 그때의 대기·재시도 | 동시 수를 늘려도 재시도가 늘지 않았거나, 4명에서 충돌이 났을 때 |
 
 - 계획값과 실제값의 비율이 크게 다르면 먼저 원인을 장부에서 찾는다(재시도, 질문, 승인 대기). 원인이 출발값이 아니면 출발값을 고치지 않는다.
 - 고친 값은 그 한 곳에서만 고친다. 사본을 만들지 않는다.

@@ -43,8 +43,6 @@ put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default' };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
 const ALL = ['.claude/agents/backend.md', '.claude/hooks/approval-gate.config.json', '.claude/scripts/model-table.mjs', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', tablePath, 'docs/harness/templates/document-drafts.json', 'docs/harness/templates/model-survey.html'];
-// shortcut: RETIRED paths the template still ships; Task 6 removes this and its two filters when the template stops shipping them
-const SHIPPED_RETIRED = ['.claude/skills/team-lead/SKILL.md', '.claude/skills/team-qa/SKILL.md', 'docs/harness/templates/team-skill.md'];
 let n = 0;
 const target = (name) => { const t = join(root, name); mkdirSync(t, { recursive: true }); return t; };
 const install = (t, answers = {}, ins = {}, approve = []) =>
@@ -137,8 +135,7 @@ test('product drafts use the installed forms and preserve project documents on r
   assert.equal(read(t, prd), '# 우리 제품\n');
   const missing = 'docs/11-operations/draft.md';
   unlinkSync(join(t, missing));
-  // shortcut: the template still ships three retired files, so each reinstall retires and then restores them; drop the filter when it stops shipping them
-  assert.deepEqual(applyInstall(plan()).written.filter((p) => !SHIPPED_RETIRED.includes(p)), [missing]);
+  assert.deepEqual(applyInstall(plan()).written, [missing]);
 
   const existing = target('기존 정본');
   put(existing, 'CHANGELOG.md', '# Releases\n');
@@ -414,7 +411,7 @@ test('(Review Focus 4) a retired file the project edited stays until approved', 
   const held = cli();
   assert.equal(held.status, 2, held.stderr);
   assert.deepEqual(JSON.parse(held.stdout).conflicts.sort(), [planner, qa]);
-  assert.deepEqual(JSON.parse(held.stdout).retired.filter((p) => !SHIPPED_RETIRED.includes(p)), []);
+  assert.deepEqual(JSON.parse(held.stdout).retired, []);
   assert.equal(read(t, planner), '# 0.5.1 planner\n프로젝트가 고친 줄\n');
   assert.equal(read(t, qa), '# 기록에 없는 qa-inspector\n');
   const approved = cli('--approve', planner);
