@@ -92,7 +92,6 @@ try {
   writeFileSync(fixture, [
     '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |', '| --- | --- | --- | --- | --- | --- |',
     '| reviewer | inspect | claude | fable | xhigh | 고정(auth) |',
-    '| * | 리드 | claude | opus | high | 팀장으로 띄울 때 |',
     '| * | 기본 | claude | 복잡도 | | |',
   ].join('\n'));
   writeFileSync(axesFile, '\uFEFF' + JSON.stringify({ scores: baseline, evidence }));
@@ -100,7 +99,7 @@ try {
   const fixed = plan('reviewer', 'inspect');
   assert.equal(fixed.status, 0, fixed.stderr);
   assert.deepEqual(JSON.parse(fixed.stdout), { role: 'reviewer', unit: 'inspect', agent: 'claude', model: 'fable', effort: 'xhigh', fixed: true });
-  const dynamic = plan('developer', '리드', '--input', axesFile);
+  const dynamic = plan('developer', '기본', '--input', axesFile);
   assert.equal(dynamic.status, 0, dynamic.stderr);
   const node = JSON.parse(dynamic.stdout);
   assert.equal(node.base, 'sonnet/medium');

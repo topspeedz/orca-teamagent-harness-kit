@@ -3,7 +3,7 @@
 //   node .claude/scripts/orca-launch.mjs approve --version v1 --plan <plan.md> --dag <dag.json> --review <reviewed hash> --response <user's reply>
 //   node .claude/scripts/orca-launch.mjs reapprove --map <map> --approval <approved-plan.v2.json> --id <T01>
 //   node .claude/scripts/orca-launch.mjs assessment-context --approval <file> --id <Task> --spec-file <authored spec>
-//   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--override-reason <원문>]   (outside an execution Run)
+//   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--override-reason <원문>] [--assessment <json>]   (outside an execution Run; --assessment required on a formula row)
 //   node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <p> --does <요청> [--backlog BL-0001,BL-0002] --approval <file> --version v1 --plan <plan.md> --dag <dag.json>
 //   node .claude/scripts/orca-launch.mjs snapshot --run <id>
 //   node .claude/scripts/orca-launch.mjs codex-rules   (prints the six worker lines for a Codex Task spec)
@@ -29,7 +29,7 @@ import { tmpdir } from 'node:os';
 import { join, basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
-import { TABLE_PATH, parseTable, matchRow, lookup, choices } from './model-selection.mjs';
+import { TABLE_PATH, parseTable, matchRow, lookup, choices, isFixed } from './model-selection.mjs';
 import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH, unclassified, readInventory } from './coordinator-settings.mjs';
 import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mjs';
@@ -115,7 +115,7 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
     'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason',
-    'version', 'plan', 'dag', 'review', 'response', 'approval', 'legacy-map', 'complexity', 'assessment',
+    'version', 'plan', 'dag', 'review', 'response', 'approval', 'legacy-map', 'assessment',
     'inbox', 'state', 'timeout-ms', 'dispatch', 'report', 'ledger', 'expect', 'outcome', 'round-cap'].map((k) => [k, { type: 'string' }]),
   ...['retry', 'once', 'last'].map((k) => [k, { type: 'boolean' }]),
 ]);
@@ -236,29 +236,31 @@ async function execute(cmd, o, deps) {
     }
   }
 
-  const table = (agent, unit, complexity) => {
+  const table = (agent, unit) => {
     const rules = parseTable(deps.read(TABLE_PATH));
-    const row = lookup(rules.rows, agent, unit, { complexity, rules });
+    const row = lookup(rules.rows, agent, unit, { rules });
     if (!row) throw new Error(`모델 표에 (${agent}, ${unit}) 줄이 없음`);
     return row;
   };
 
   if (cmd === 'review' || cmd === 'approve') {
     const record = reviewPlan(o, io);
-    const routingRules = record.routingVersion === 2 && parseTable(deps.read(TABLE_PATH));
+    const rules = parseTable(deps.read(TABLE_PATH));
+    const routingRules = record.routingVersion === 2 && rules;
     const prevPath = join(dirname(o.dag), `approved-plan.v${Number(o.version.slice(1)) - 1}.json`);
     const previous = io.optional(prevPath) === null ? {} : loadApproval(prevPath, io).tasks;
     for (const [id, a] of Object.entries(record.tasks)) {
-      const project = routingRules && matchRow(routingRules.rows, a.agent, a.unit)?.row;
+      const project = matchRow(rules.rows, a.agent, a.unit)?.row;
       if (routingRules && !project) throw new Error(id + ' 모델 표에 역할·작업 단위가 없음');
+      if (project && !isFixed(project) && !a.routing) throw new Error(`산정 행은 점수가 필요함: ${id} (${a.agent}, ${a.unit})`);
       if (routingRules && !a.routing) throw new Error(id + ' Task에 v2 라우팅 평가 또는 표의 고정 표시 필요');
       const b = previous[id];
       const same = b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]) &&
         JSON.stringify(a.routing) === JSON.stringify(b.routing);
       if (record.legacyRun || (JSON.stringify(a.bl) === JSON.stringify(b?.bl) && a.complexity === b?.complexity && same)) continue;
-      const row = project || table(a.agent, a.unit, a.complexity);
+      const row = project || table(a.agent, a.unit);
       if (a.routing) {
-        const fixed = row.note.startsWith('고정');
+        const fixed = isFixed(row);
         if (fixed !== a.routing.fixed) throw new Error(id + ' 프로젝트 표의 고정 여부와 다름');
         if (a.routing.codexMap) {
           const current = choices(routingRules.codex).codex;
@@ -267,7 +269,7 @@ async function execute(cmd, o, deps) {
         }
         if (!fixed) continue;
       }
-      if ((!a.overrideReason || row.note.startsWith('고정')) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
+      if ((!a.overrideReason || isFixed(row)) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
     }
     if (cmd === 'approve') return { code: 0, out: approvePlan(o, record, io) };
     return { code: 0, out: { version: record.version, review: record.review } };
@@ -610,6 +612,10 @@ async function execute(cmd, o, deps) {
     }
     if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
     if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
+    if (!approved?.routing) {
+      const fixedRow = matchRow(parseTable(deps.read(TABLE_PATH)).rows, e.agent, e.unit)?.row;
+      if (!fixedRow || !isFixed(fixedRow)) return fail(`산정 행은 점수가 필요함: ${o.id} (${e.agent}, ${e.unit})`);
+    }
     const refusal = approved && launchRefusal(m, o.map, approval, approved,st[o.id]?.spec ?? '');
     if (refusal) return fail(refusal);
     const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
@@ -849,12 +855,22 @@ async function execute(cmd, o, deps) {
 
   if (cmd === 'worker') {
     if (!o.agent || !o.unit || !o['spec-file'] || !o.bracket || !o.does) {
-      return fail('사용법: worker --agent <a> --unit <u> --spec-file <p> --bracket <b> --does <d> [--run <id>] [--task <id>] [--override-reason <원문>]');
+      return fail('사용법: worker --agent <a> --unit <u> --spec-file <p> --bracket <b> --does <d> [--run <id>] [--task <id>] [--override-reason <원문>] [--assessment <JSON>]');
     }
     const spec = deps.read(o['spec-file']);
     const overrideReason = o['override-reason'] ?? null;
     if (o.approval || o.id || /^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run에서는 register한 Task를 worker --map --id로 띄운다');
-    const row = table(o.agent, o.unit, o.complexity);
+    const selection = parseTable(deps.read(TABLE_PATH));
+    let row = matchRow(selection.rows, o.agent, o.unit)?.row;
+    if (!row) return fail(`모델 표에 (${o.agent}, ${o.unit}) 줄이 없음`);
+    if (!isFixed(row)) {
+      // the scores come in the same shape as a registered Task's --assessment; a complexity value alone never launches
+      if (!o.assessment) return fail('산정 행은 점수가 필요함 — --assessment <JSON>을 지정한다');
+      const check = JSON.parse(deps.read(o.assessment));
+      if (typeof check.reason !== 'string' || !check.reason.trim()) return fail('기동 평가의 검토 근거 확인 필요');
+      const r = assessRouting(check.input, row.runtime, row.runtime === 'codex' ? choices(selection.codex).codex : {}, deps.classify);
+      row = { ...row, model: r.model, effort: r.effort };
+    }
     const errors = verifyAssignment({ spec, agent: o.agent, unit: o.unit, row, overrideReason });
     if (errors.length) return fail('배정 불일치 — 띄우지 않음', { errors });
     const a = parseAssignLine(spec);

@@ -4,7 +4,7 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
-import { choices, matchRow, parseTable, TABLE_PATH } from './model-selection.mjs';
+import { choices, isFixed, matchRow, parseTable, TABLE_PATH } from './model-selection.mjs';
 
 const rubric = {
   C: ['기계적 대조', '단일 기능', '여러 모듈의 계약', '시스템 전체 또는 복잡한 알고리즘'],
@@ -173,7 +173,7 @@ function main([command, ...args]) {
     requireValue(!table.errors.length, table.errors.join('\n'));
     const row = matchRow(table.rows, values.agent, values.unit)?.row;
     requireValue(row, '배정 표에 대응하는 행이 없습니다');
-    const fixed = row.note.startsWith('고정');
+    const fixed = isFixed(row);
     if (fixed && row.runtime === 'codex' && row.effort !== null) validateCodexPair(row.model, row.effort);
     result = { role: values.agent, unit: values.unit, agent: row.runtime, model: row.model, effort: row.effort, fixed };
     if (!fixed) {
