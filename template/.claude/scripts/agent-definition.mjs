@@ -78,8 +78,10 @@ function validate(name) {
     for (const id of codeSpans(list)) skill(id);
   }
   function roleTable(title, header, visit) {
+    // a project may add columns after the required ones; only the required ones are read
+    const need = header.split('|').length;
     const lines = section(body, '## ' + title).split('\n');
-    const start = lines.findIndex(l => l.startsWith('|') && cells(l).join('|') === header);
+    const start = lines.findIndex(l => l.startsWith('|') && cells(l).slice(0, need).join('|') === header);
     if (start < 0 || !/^\|\s*:?-{3,}/.test(lines[start + 1] ?? '')) {
       fail(path, title + ' 표 필요: ' + header);
       return;
@@ -87,8 +89,8 @@ function validate(name) {
     for (const line of lines.slice(start + 2)) {
       if (!line.startsWith('|')) break;
       const row = cells(line);
-      if (!line.trimEnd().endsWith('|') || row.length !== 3 || row.some(c => !c)) fail(path, title + ' 행 오류: ' + line);
-      else visit(...row);
+      if (!line.trimEnd().endsWith('|') || row.length < need || row.slice(0, need).some(c => !c)) fail(path, title + ' 행 오류: ' + line);
+      else visit(...row.slice(0, need));
     }
   }
   roleTable('문서 책임', '문서|범위|책임', (doc, scope, duty) => {
