@@ -121,6 +121,8 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 
 승인받지 못한 충돌은 그대로 두고 보고에 적는다. 재설치 중 충돌이 있으면 이미 복사한 경로와 보류된 경로를 구분해 알린다. Codex 역할 동기화가 보류되면 `skipped`에 `.codex/agents/`가 표시된다.
 
+출력의 `notices`는 그대로 보여 준다. 0.5.1 프로젝트에서 `skipped`에 사유 `사용자가 고침`으로 나온 파일(모델 표, `AGENTS.md`, 프로젝트가 고친 기본 역할 파일과 `docs/DOCUMENTATION_INDEX.md`)은 0.5.1 판으로 남는다. `--approve`로도 덮어쓰지 않으므로 7단계에서 부르는 agent-author의 "0.5.1 프로젝트 옮기기" 5단계대로 손으로 옮긴다고 알린다. 옮기기 전에는 5단계 검증이 그 파일 때문에 실패할 수 있다(예: 모델 표에 행이 없는 에이전트).
+
 ## 4. 생성
 
 `.claude/coordinator.keep.json`에서 2단계에서 남기기로 한 항목을 `"keep"`으로 바꾼다. 나머지는 `"off"`로 둔다. 그다음 코디네이터 설정을 만든다.
@@ -137,7 +139,7 @@ node .claude/scripts/coordinator-settings.mjs generate
 node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 ```
 
-`.claude/` 아래 셀프테스트 전부와 `node .claude/scripts/model-selection.mjs check`를 돌려 표로 찍는다. 하나라도 실패하면 코드 1이다. 실패를 고치려고 틀의 파일을 고치지 않는다. 실패한 줄을 그대로 보고에 옮긴다.
+`.claude/` 아래 셀프테스트 전부, `node .claude/scripts/model-selection.mjs check`, 명단 `docs/harness/agents.md`의 에이전트마다(꺼진 에이전트는 빼고) `node .claude/scripts/agent-definition.mjs --agent <이름>`을 돌려 표로 찍는다. 하나라도 실패하면 코드 1이다. 실패를 고치려고 틀의 파일을 고치지 않는다. 실패한 줄을 그대로 보고에 옮긴다.
 
 ## 6. 기반 설계
 
@@ -154,7 +156,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 [references/agent-units.md](references/agent-units.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 에이전트 단위 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(예: `/model opus`, `/effort max`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
 
-1. `inspect` 출력(1단계의 것이나 다시 돌린 것)의 `migration`이 비어 있지 않으면 agent-author의 "0.5.1 프로젝트 옮기기"를 먼저 따른다. 프로젝트가 추가한 역할을 단위로 합치거나 따로 남기고, 옛 역할 파일·옛 팀 스킬·`docs/harness/team-org.md`를 지운다.
+1. `inspect` 출력(1단계의 것이나 다시 돌린 것)의 `migration`이 비어 있지 않으면 agent-author의 "0.5.1 프로젝트 옮기기"를 먼저 따른다. 프로젝트가 추가한 역할을 단위로 합치거나 따로 남기고, 옛 역할 파일·옛 팀 스킬·`docs/harness/team-org.md`를 지운다. 3단계에서 `사용자가 고침`으로 건너뛴 키트 파일(모델 표, `AGENTS.md` 등)도 그 절차의 5단계에서 손으로 옮긴다.
 2. 지난 세션 기록과 기존 파이프라인을 모은다(`session-digest.mjs`).
 3. 근거와 함께 기존 에이전트에 더할 스킬, 기본 에이전트의 이름·스킬·편집 범위 바꾸기, 새 에이전트를 추천하고 설문으로 고르게 한다: 추천대로 / 골라서·고쳐서 / 직접 적기 / 지금은 만들지 않음. 새 에이전트는 agent-units.md 2절의 세 기준 가운데 하나가 사실일 때만 추천한다.
 4. 색인의 정본(없으면 설치 초안), 양식, 문서·절과 미배정 상태를 확인한다. 실제로 결정·구현·검증할 전문가와 근거를 제시해 역할 생성·나중에 배정·해당 없음 중 선택받는다. PRD·SRS는 `product-manager`, 색인은 `doc-steward`가 맡는다. 새 역할은 agent-author의 전문 판단 질문과 프로젝트의 `docs/harness/templates/agent.md`를 함께 사용한다. 수락된 역할·절만 역할 정의와 명단·모델 표에 등록하고, 추천을 거절한 범위는 미배정, 제외한 범위는 해당 없음으로 색인에 남긴다. 이미 지정되거나 제외된 범위는 추천에서 뺀다.

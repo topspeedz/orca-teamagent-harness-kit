@@ -436,6 +436,25 @@ test('pm.model and pm.effort land in the PM 기획 row', () => {
   assert.ok(read(t, tablePath).split('\n').some((l) => l.startsWith('| `product-manager` | 기획 | claude | opus | high |')));
 });
 
+test('an edited model table without the answered PM row is named in notices', () => {
+  const t = target('pm notice');
+  assert.deepEqual(install(t).notices, []);
+  const mine = '| `my-agent` | 내 작업 | claude | sonnet | low | 고정 |\n';
+  put(t, tablePath, read(t, tablePath).replace(/^\| `product-manager` \| 기획 \|.*\n/m, '') + mine);
+  const r = install(t, { pm: { model: 'opus', effort: 'max' } });
+  assert.ok(r.skipped.some((s) => s.to === tablePath && s.reason === '사용자가 고침'));
+  assert.equal(r.notices.length, 1);
+  assert.match(r.notices[0], /product-manager \| 기획/);
+  assert.match(r.notices[0], /opus\/max/);
+  // the row is there with other values: still named
+  const other = target('pm notice values');
+  install(other);
+  put(other, tablePath, read(other, tablePath) + mine);
+  assert.equal(install(other, { pm: { model: 'opus', effort: 'max' } }).notices.length, 1);
+  // an edited table that carries the answered row: no notice
+  assert.deepEqual(install(other).notices, []);
+});
+
 test('answers with planner.effort are refused', () => {
   put(root, 'old-answers.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'max' } }));
   const r = spawnSync(process.execPath, [SETUP, 'install', '--target', target('old answers'), '--answers', join(root, 'old-answers.json')], { encoding: 'utf8' });
@@ -497,6 +516,24 @@ test('inspect reports a pending migration and unfilled skills', () => {
   unlinkSync(join(t, 'docs/harness/team-org.md'));
   assert.equal(inspect(t, deps).migration, null);
   assert.equal(inspect(target('migration none'), deps).migration, null);
+});
+
+test('verify runs the role checker for every agent on the installed roster', () => {
+  const real = (dir) => fileURLToPath(new URL(`../../../${dir}`, import.meta.url));
+  const t = target('verify roster');
+  applyInstall(planInstall(real('template'), real('template-codex'), t, ANSWERS, INS));
+  const verify = () => spawnSync(process.execPath, [SETUP, 'verify', '--target', t], { encoding: 'utf8' });
+  const agentLine = (out, name) => out.split('\n').find((l) => l.includes('agent-definition.mjs --agent ' + name + '`')) ?? '';
+  const agents = ['product-manager', 'research', 'frontend', 'backend', 'verifier', 'doc-steward', 'harness-engineer'];
+  const ok = verify();
+  assert.equal(ok.status, 0, ok.stdout);
+  assert.equal(ok.stdout.split('\n').filter((l) => l.includes('agent-definition.mjs --agent')).length, 7);
+  for (const name of agents) assert.match(agentLine(ok.stdout, name), /✅ agent-definition: OK/);
+  put(t, tablePath, read(t, tablePath).replace(/^\| `research` \|.*\n/m, ''));
+  const bad = verify();
+  assert.equal(bad.status, 1, bad.stdout);
+  assert.match(agentLine(bad.stdout, 'research'), /❌ .*research의 작업 단위/);
+  assert.match(agentLine(bad.stdout, 'frontend'), /✅/);
 });
 
 console.log(`setup.check: ${n} passed`);

@@ -66,17 +66,22 @@ setup 7단계가 `inspect` 출력의 `migration`이 비어 있지 않을 때 부
    - 합치는 역할: 역할 파일의 지식(전문 판단, 절차, 완료 기준, 오류 처리)을 그 단위의 스킬로 옮긴다. 맞는 스킬이 있으면 그 본문에, 없으면 1절로 새 스킬을 만든다. 옛 팀 스킬의 내용은 [에이전트 단위 구성 8절](../setup/references/agent-units.md)의 "사라지는 것과 새 자리" 표대로 나눈다.
    - 남기는 역할: 3절로 새 양식에 다시 쓴다.
    - 명단 `docs/harness/agents.md`의 스킬 칸과 남긴 역할의 행을 고친다. 모델 표에서 옛 역할의 행은 합친 단위의 행으로 옮기거나 지운다. 행을 지우는 명령은 없으므로 표를 직접 고친다. 옛 역할 파일의 `## 문서 책임` 행은 받는 에이전트의 역할 파일로 옮긴다.
-5. 지울 목록을 보여 주고 승인받은 뒤 지운다.
+5. setup이 건너뛴 키트 파일을 옮긴다. setup 3단계 출력의 `skipped`에 사유 `사용자가 고침`으로 나온 파일은 설치 뒤 프로젝트가 고친 것이라 0.5.1 판 그대로 남아 있고, `--approve`로도 덮어쓰지 않는다. 모델 표의 `product-manager | 기획` 행이 고른 값과 다르면 출력의 `notices`에도 나온다. 그 파일마다 아래대로 손으로 옮긴다. 옛 내용은 1단계에서 커밋한 git에 있고, 프로젝트가 고친 줄은 `git log -p -- <경로>`로 찾는다. 바꾼 내용을 diff로 보여 주고 승인받은 뒤 쓴다.
+   - 모델 표 `docs/harness/model-selection.md`: `## 배정 표`의 행을 0.6.0 틀 `${CLAUDE_PLUGIN_ROOT}/template/docs/harness/model-selection.md`의 행으로 다시 짠다. `product-manager | 기획` 고정 행에는 setup 2단계에서 고른 model과 effort(`_workspace/setup/answers.json`의 `pm`)를 넣는다. 이어 `product-manager | 완료 처리`, `research`, `frontend`, `backend`, `verifier`의 네 행(`중간 변경 리뷰`, `끝 검증`, `재검`, `보안·돈이 걸린 변경 리뷰`)을 넣는다. `planner`, `code-reviewer`, `qa-inspector`의 행과 `* | 리드` 행은 메모와 관계없이 빼고, `code-reviewer | 보안·돈이 걸린 변경 리뷰` 행의 model과 effort는 같은 단위의 `verifier` 행에 옮긴다. 옛 `product-manager` 행(`요구사항 정리` 등)은 위의 두 행으로 바꾼다. 그 밖에 메모가 `고정`으로 시작하는 행(사용자가 고정한 행)은 그 값을 그대로 두고, 틀에 같은 에이전트·작업 단위의 행이 있으면 그 행 대신 둔다. 프로젝트 역할의 행은 3단계에서 고르고 4단계에서 옮긴 대로 새 표에 둔다. 메모가 `고정`으로 시작하는 행만 고정 행이다. 그 밖의 행은 model과 effort가 적혀 있어도 산정 행이라 점수가 있어야 뜬다. 표의 주인은 사용자이므로 diff를 보여 주고 승인받은 뒤 쓰고, `node .claude/scripts/model-selection.mjs check`를 돌린다.
+   - `AGENTS.md`: `## 하네스` 절(그 제목부터 `## Compact Instructions` 앞까지)을 틀 `${CLAUDE_PLUGIN_ROOT}/template/AGENTS.md`의 같은 절로 바꾼다. 프로젝트가 채운 다른 절(`## 명령`, `## 기술 스택` 등)은 그대로 둔다. 프로젝트가 `## 하네스` 절에 더한 줄이 있으면 보여 주고 다시 넣을지 묻는다.
+   - 프로젝트가 고친 기본 역할 파일(`product-manager.md`, `doc-steward.md`, `harness-engineer.md`): 틀 `${CLAUDE_PLUGIN_ROOT}/template/.claude/agents/<역할>.md`에서 시작해 프로젝트가 고친 줄을 새 양식의 맞는 절에 다시 넣는다.
+   - 프로젝트가 고친 `docs/DOCUMENTATION_INDEX.md`: `## 규칙`의 담당 문장과 `## 이 폴더 밖의 문서`의 소유 칸을 틀 `${CLAUDE_PLUGIN_ROOT}/template/docs/DOCUMENTATION_INDEX.md`대로 고친다. `## 작성자 배정 대기` 표에는 어느 역할 파일의 `## 문서 책임` 표에도 없는 문서만 남긴다.
+6. 지울 목록을 보여 주고 승인받은 뒤 지운다.
    - 옛 역할 파일: `.claude/agents/<역할>.md`와 `.md.agent-toggle-off`, Codex를 쓰면 `.codex/agents/<역할>.toml`과 `.toml.agent-toggle-off`.
    - 옛 기본 역할의 꺼진 사본: `.claude/agents/planner.md.agent-toggle-off`, `code-reviewer.md.agent-toggle-off`, `qa-inspector.md.agent-toggle-off`와 같은 이름의 `.codex/agents/*.toml.agent-toggle-off`. setup은 이 사본을 지우지 않는다.
    - 옛 팀 스킬: `.claude/skills/<팀 스킬>/`, Codex를 쓰면 `.agents/skills/<팀 스킬>/`.
    - `docs/harness/team-org.md`.
    - 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4단계대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
-6. 명단의 에이전트마다 `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, 이어 `node .claude/scripts/model-selection.mjs check`를 돌린다. Codex를 쓰면 고친 역할마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 돌린다. 실패하면 메시지를 보여 주고 고칠지 묻는다.
-7. 프로젝트 문서에 남은 옛 역할 이름을 찾아 목록으로 보여 준다. 고치는 것은 사용자가 고른 것만이다.
+7. 명단의 에이전트마다 `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, 이어 `node .claude/scripts/model-selection.mjs check`를 돌린다. Codex를 쓰면 고친 역할마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 돌린다. 실패하면 메시지를 보여 주고 고칠지 묻는다.
+8. 프로젝트 문서에 남은 옛 역할 이름을 찾아 목록으로 보여 준다. 고치는 것은 사용자가 고른 것만이다.
 
    ```sh
-   grep -rnE "planner|code-reviewer|qa-inspector|team-lead|team-qa|team-org|<옮긴 역할>|<옛 팀 스킬>" docs AGENTS.md CLAUDE.md .claude .agents
+   grep -rnE "planner|code-reviewer|qa-inspector|team-lead|team-qa|team-org|팀장|리드|팀 스킬|<옮긴 역할>|<옛 팀 스킬>" docs AGENTS.md CLAUDE.md .claude .agents
    ```
 
 ## 작성 원칙

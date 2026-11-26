@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { readRoster } from '../../../template/.claude/scripts/roster.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../../template', import.meta.url));
 const CODEX = fileURLToPath(new URL('../../../template-codex', import.meta.url));
@@ -103,13 +104,18 @@ export function mergeGitignore(text, lines) {
 }
 
 // Setup asks for the PM's model and effort; they go to the one 기획 row.
+const PM_ROW = /^\|[ \t]*`product-manager`[ \t]*\|[ \t]*기획[ \t]*\|.*$/m;
 export function setPmRow(tableText, pm) {
-  return tableText.replace(/^\|[ \t]*`product-manager`[ \t]*\|[ \t]*기획[ \t]*\|.*$/m, (line) => {
+  return tableText.replace(PM_ROW, (line) => {
     const cells = line.split('|');
     cells[4] = ` ${pm.model} `;
     cells[5] = ` ${pm.effort} `;
     return cells.join('|');
   });
+}
+function hasPmRow(tableText, pm) {
+  const cells = PM_ROW.exec(tableText)?.[0].split('|').map((c) => c.trim());
+  return cells?.[4] === pm.model && cells?.[5] === pm.effort;
 }
 
 const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
@@ -176,7 +182,8 @@ function planDocumentDrafts(plan, templateDir) {
 }
 
 export function planInstall(templateDir, codexDir, target, answers, ins) {
-  const plan = { target, copy: [], skip: [], conflict: [] };
+  const plan = { target, copy: [], skip: [], conflict: [], notices: [] };
+  const pm = { ...PM_DEFAULT, ...answers.pm };
   const installed = readRecord(target);
   const sources = walk(templateDir).map((rel) => [join(templateDir, rel), rel]);
   if (answers.codex) sources.push(...walk(codexDir).map((rel) => [join(codexDir, rel), rel]));
@@ -221,12 +228,18 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     } else if (rel === GATE_CONFIG) {
       content = json({ ...JSON.parse(src), prefixes: answers.approvalPrefixes });
     } else if (rel === MODEL_TABLE) {
-      content = setPmRow(src, { ...PM_DEFAULT, ...answers.pm });
+      content = setPmRow(src, pm);
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
     if (cur && !merged) {
       // setup wrote this file and it changed since: the user's edit, not a conflict to approve (설계서 14.3절)
-      if (installed[to] && installed[to] !== sha(cur)) { plan.skip.push({ to, reason: '사용자가 고침' }); continue; }
+      if (installed[to] && installed[to] !== sha(cur)) {
+        plan.skip.push({ to, reason: '사용자가 고침' });
+        if (rel === MODEL_TABLE && !hasPmRow(cur.toString('utf8'), pm)) {
+          plan.notices.push(`${MODEL_TABLE}는 사용자가 고친 파일이라 건너뛰었다. \`product-manager | 기획\` 행이 없거나 고른 값 ${pm.model}/${pm.effort}와 다르다. 0.5.1에서 올리는 중이면 agent-author의 "0.5.1 프로젝트 옮기기"대로 표를 직접 옮긴다.`);
+        }
+        continue;
+      }
       plan.conflict.push(to);
     }
     plan.copy.push({ from, to, content });
@@ -274,7 +287,7 @@ export function applyInstall(plan, opts = { approve: [] }) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped, conflicts, retired };
+  return { written, skipped, conflicts, retired, notices: plan.notices ?? [] };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.
@@ -328,15 +341,22 @@ function verify(target) {
   const claudeDir = join(target, '.claude');
   const checks = existsSync(claudeDir) ? walk(claudeDir).filter((f) => f.endsWith('.check.mjs')).map((f) => [`.claude/${f}`]) : [];
   checks.push(['.claude/scripts/model-selection.mjs', 'check']);
-  let failed = 0;
+  let failed = 0, passed = 0;
   console.log('| 명령 | 결과 |\n| --- | --- |');
+  // every agent on the installed roster passes the role checker (설계서 4.4의 4); a switched-off one has no role file to check
+  let agents = [];
+  try { agents = [...new Set(readRoster(target).map((r) => r.agent))]; } catch (error) { failed++; console.log(`| \`docs/harness/agents.md\` | ❌ ${error.message.replaceAll('|', '\\|')} |`); }
+  for (const name of agents) {
+    if (!existsSync(join(target, '.claude/agents', name + '.md')) && existsSync(join(target, '.claude/agents', name + '.md.agent-toggle-off'))) continue;
+    checks.push(['.claude/scripts/agent-definition.mjs', '--agent', name]);
+  }
   for (const args of checks) {
     const r = spawnSync(process.execPath, args, { cwd: target, encoding: 'utf8' });
     const last = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').pop()?.replaceAll('|', '\\|') ?? '';
-    if (r.status !== 0) failed++;
+    if (r.status !== 0) failed++; else passed++;
     console.log(`| \`node ${args.join(' ')}\` | ${r.status === 0 ? '✅' : '❌'} ${last} |`);
   }
-  console.log(`verify: ${checks.length - failed} passed, ${failed} failed`);
+  console.log(`verify: ${passed} passed, ${failed} failed`);
   return failed ? 1 : 0;
 }
 
