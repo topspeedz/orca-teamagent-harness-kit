@@ -1,6 +1,6 @@
 ---
 name: setup
-description: 이 프로젝트에 하네스를 세운다. "하네스 키트 세팅", "orca-teamagent 깔아줘", "이 저장소에 Orca 하네스 세팅", "CLAUDE.md 구조 잡아줘", "문서 라우팅 설계", "승인 게이트 설계", 새 저장소·모듈 부트스트랩, 세팅을 다시 돌려 빠진 것 채우기에 사용. Orca 멀티 에이전트 틀(공통 지침, 운영팀·QA팀과 직속 독립 역할, 절차·역할·팀 스킬, 훅 5개, 기동·검사 스크립트, 설정, 문서 기본 구조)을 깔고 검증하고, 기반(항상 로드되는 지침, 실제로 돌려 본 검증 명령, 금지·승인 게이트, 문서 라우팅, 토큰 기준선)을 설계한다. Orca를 쓰지 않으면 기반만 설계한다. 프로젝트의 지난 작업을 보고 팀과 팀원을 추천해 사용자가 고른 대로 만든다.
+description: 이 프로젝트에 하네스를 세운다. "하네스 키트 세팅", "orca-teamagent 깔아줘", "이 저장소에 Orca 하네스 세팅", "CLAUDE.md 구조 잡아줘", "문서 라우팅 설계", "승인 게이트 설계", 새 저장소·모듈 부트스트랩, 세팅을 다시 돌려 빠진 것 채우기에 사용. Orca 멀티 에이전트 틀(공통 지침, 지식 단위 에이전트 일곱 개와 그 스킬, 훅 5개, 기동·검사 스크립트, 설정, 문서 기본 구조)을 깔고 검증하고, 기반(항상 로드되는 지침, 실제로 돌려 본 검증 명령, 금지·승인 게이트, 문서 라우팅, 토큰 기준선)을 설계한다. Orca를 쓰지 않으면 기반만 설계한다. 프로젝트의 지난 작업을 보고 에이전트에 더할 스킬과 새 에이전트를 추천해 사용자가 고른 대로 만들고, 틀만 있는 스킬의 본문을 채우고, 0.5.1 프로젝트의 옛 역할을 새 구조로 옮긴다.
 ---
 
 # 하네스 세팅
@@ -50,6 +50,8 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .
 | `codex` | Codex를 함께 쓸 수 없다. 2단계의 Codex 질문에 이 사실을 붙인다 |
 | `existing` | 이미 있는 지침·설정 파일. 3단계에서 충돌로 올라올 수 있다고 알린다 |
 
+`migration`이 비어 있지 않으면 옛 명단(`docs/harness/team-org.md`)을 쓰던 0.5.1 프로젝트다. 3단계 깔기가 물러난 파일을 지우고 7단계가 옛 역할을 옮기므로, 작업 트리를 먼저 커밋해 달라고 하고 답을 기다린다. 되돌릴 때는 그 커밋으로 돌아간다. 이 출력은 7단계에서 다시 쓴다(깔기 뒤에는 `migration`이 `null`이 된다).
+
 `existing`에 `package.json`이나 `Makefile`이 있으면 읽어서 프로젝트의 검증 명령(테스트, 린트, 빌드)을 찾아 보고에 적는다. 없으면 없다고 적는다.
 
 ## 2. 질문 (다섯 개, 두 번에 나눠)
@@ -59,7 +61,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .
 1. Codex를 함께 쓰는가 (예 / 아니오).
 2. 사람 승인이 필요한 행위는 무엇인가. 명령의 접두어로 받는다(예: `git push`, `gh pr create`, 배포 명령). 여러 개를 고를 수 있게 하고 직접 적을 수 있게 한다.
 3. 코디네이터 터미널의 권한 모드: `default` / `acceptEdits` / `bypassPermissions`. `default`와 `acceptEdits`에서는 승인 목록에 없는 셸 명령마다 코디네이터가 승인 화면에서 멈추고, 사용자가 그 터미널에서 직접 승인해야 이어진다(멈추면 Orca가 창구에 `escalation`으로 알린다). 지켜보지 않고 돌릴 것이면 `bypassPermissions`를 고르라고 함께 알린다. 승인이 필요한 명령은 권한 질문이 실제로 뜨는 세션만 실행한다는 것을 함께 알린다. 승인 없이 도는 모드면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 넘긴다.
-4. planner의 effort: `max` (권장) / `high`. `max`는 설계와 계획에 1~2시간이 걸리지만 한 번에 완전한 워크플로와 검증이 되므로 권장한다고 함께 알린다. model은 묻지 않는다. 새 설치에서 설계와 계획 두 행은 각각 `fable`을 쓰고 이 답의 effort를 받는다. 별도 요구사항 검토 행은 `opus/high`다.
+4. PM의 model과 effort: `fable/xhigh` (권장) / 직접 적기. model은 `fable`·`opus`·`sonnet`, effort는 `medium`·`high`·`xhigh`·`max` 가운데서 고른다. 요구에서 계획까지 `product-manager` 한 세션이 이 값 하나로 뜬다고 함께 알린다. 답은 모델 표의 `product-manager | 기획` 행에 들어간다. 목록 밖의 값은 3단계가 거절한다.
 
 **두 번째 (코디네이터에 남길 플러그인과 스킬).** 이 기계의 목록을 읽는다.
 
@@ -80,7 +82,7 @@ node "${CLAUDE_PLUGIN_ROOT}/template/.claude/scripts/coordinator-settings.mjs" i
   "codex": false,
   "approvalPrefixes": ["git push"],
   "coordinatorPermissionMode": "default",
-  "planner": { "effort": "max" }
+  "pm": { "model": "fable", "effort": "xhigh" }
 }
 ```
 
@@ -99,7 +101,9 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 - Codex를 선택하면 프로젝트에 설치된 기본 에이전트 Markdown에서 `.codex/agents/<이름>.toml`을 생성한다. 기존 TOML이 생성 이후 수정됐거나 같은 이름의 다른 파일이면 충돌로 보고한다. 엔진별 `.agent-toggle-off` 원문과 상태를 보존한다.
 - `.claude/settings.json`은 훅, `permissions` 항목, 없는 `env` 키만 더한다. 프로젝트가 이미 정한 `env` 값은 바꾸지 않는다. `.gitignore`는 없는 줄만 덧붙인다. 둘은 충돌로 올리지 않는다.
 - 승인 접두어를 `permissions.ask`(`Bash(<접두어>:*)`, `PowerShell(<접두어>:*)`)와 `.claude/hooks/approval-gate.config.json`에 넣는다. 둘은 늘 같이 고친다. `permissions.ask`에만 있으면 무인 워커가 확인 화면에서 멈춘다.
-- 모델 표 `docs/harness/model-selection.md`의 Planner 설계·계획 두 행에만 고른 effort를 넣는다. 사용자 표·모델·기존 역할·진행 중인 phase의 기동 기록은 보존한다.
+- 모델 표 `docs/harness/model-selection.md`의 `product-manager | 기획` 행에만 고른 model과 effort를 넣는다. 사용자 표·모델·기존 역할·진행 중인 phase의 기동 기록은 보존한다. answers에 옛 키 `planner.effort`가 있으면 거절하므로 `pm`으로 바꾼다.
+- 옛 키트가 깔았던 물러난 파일(`team-lead`·`team-qa` 스킬, `team-skill.md` 양식, 옛 역할 `planner`·`code-reviewer`·`qa-inspector`의 `.claude/agents/`·`.codex/agents/` 파일)을 지운다. 설치 기록의 해시와 같은 파일만 바로 지우고 출력의 `retired`에 적는다. 프로젝트가 고쳤거나 기록에 없는 파일은 `conflicts`로 올리고 `--approve`에 그 경로가 있을 때만 지운다. 꺼진 사본(`.agent-toggle-off`)과 `docs/harness/team-org.md`는 지우지 않는다. 7단계의 옮기기가 지운다.
+- setup이 깔았다가 프로젝트가 지운 기본 에이전트의 역할 파일은 다시 깔지 않는다(`skipped`에 사유 `사용자가 지움`). 꺼 둔 에이전트는 지운 것으로 보지 않는다. 그 밖의 빠진 파일은 다시 깐다.
 - 전역에 있는 그림 스킬은 건너뛴다(사유 `전역에 있음`).
 - `.claude/coordinator.keep.json`이 없으면 `coordinator-settings.mjs init-keep`으로 만들고, `permissionMode`에 고른 권한 모드를 넣는다.
 
@@ -146,18 +150,20 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 파일을 쓰거나 설정을 바꾸기 전에 범위를 보여 주고 승인받는다. 다시 실행할 때는 이미 채워진 절을 건드리지 않고 빈 것만 묻는다.
 
-## 7. 팀 구성
+## 7. 에이전트 단위 구성
 
-[references/team-composition.md](references/team-composition.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 팀 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(예: `/model opus`, `/effort max`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
+[references/agent-units.md](references/agent-units.md)를 읽고 따른다. 시작하기 전에 사용자에게 권한다: 에이전트 단위 설계는 무거운 일이니 지금 세션의 모델이나 effort를 높여 달라(예: `/model opus`, `/effort max`). 권한 뒤 턴을 끝내고 답을 기다린다. 사용자가 높였다고 하거나 그대로 하라고 하면 이어 간다.
 
-1. 지난 세션 기록과 기존 파이프라인을 모은다(`session-digest.mjs`).
-2. 근거와 함께 팀과 팀원을 추천하고 설문으로 고르게 한다: 추천대로 / 골라서·고쳐서 / 직접 적기 / 지금은 만들지 않음.
-3. 색인의 정본(없으면 설치 초안), 양식, 문서·절과 미배정 상태를 확인한다. 실제로 결정·구현·검증할 전문가와 근거를 제시해 역할 생성·나중에 배정·해당 없음 중 선택받는다. PRD·SRS는 PM, 색인은 doc-steward가 맡는다. 팀·단일 역할 모두 agent-author의 전문 판단 질문과 프로젝트의 `docs/harness/templates/agent.md`를 함께 사용한다. 수락된 역할·절만 역할 정의와 명단·모델 표에 등록하고, 추천을 거절한 범위는 미배정, 제외한 범위는 해당 없음으로 색인에 남긴다. 이미 지정되거나 제외된 범위는 추천에서 뺀다.
-4. "더 필요한 팀이나 팀원이 있는지" 묻는다. 없다고 할 때까지 2~3을 되풀이한다.
+1. 1단계 `inspect` 출력의 `migration`이 비어 있지 않으면 agent-author의 "0.5.1 프로젝트 옮기기"를 먼저 따른다. 프로젝트가 추가한 역할을 단위로 합치거나 따로 남기고, 옛 역할 파일·옛 팀 스킬·`docs/harness/team-org.md`를 지운다.
+2. 지난 세션 기록과 기존 파이프라인을 모은다(`session-digest.mjs`).
+3. 근거와 함께 기존 에이전트에 더할 스킬, 기본 에이전트의 이름·스킬·편집 범위 바꾸기, 새 에이전트를 추천하고 설문으로 고르게 한다: 추천대로 / 골라서·고쳐서 / 직접 적기 / 지금은 만들지 않음. 새 에이전트는 agent-units.md 2절의 세 기준 가운데 하나가 사실일 때만 추천한다.
+4. 색인의 정본(없으면 설치 초안), 양식, 문서·절과 미배정 상태를 확인한다. 실제로 결정·구현·검증할 전문가와 근거를 제시해 역할 생성·나중에 배정·해당 없음 중 선택받는다. PRD·SRS는 `product-manager`, 색인은 `doc-steward`가 맡는다. 새 역할은 agent-author의 전문 판단 질문과 프로젝트의 `docs/harness/templates/agent.md`를 함께 사용한다. 수락된 역할·절만 역할 정의와 명단·모델 표에 등록하고, 추천을 거절한 범위는 미배정, 제외한 범위는 해당 없음으로 색인에 남긴다. 이미 지정되거나 제외된 범위는 추천에서 뺀다.
+5. `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .`를 다시 돌려 `unfilledSkills`를 받는다. 비어 있지 않으면 agent-author의 "스킬 본문 채우기"를 따른다.
+6. "더 필요한 스킬이나 에이전트가 있는지" 묻는다. 없다고 할 때까지 3~5를 되풀이한다.
 
 ## 8. 모델 표
 
-[references/team-composition.md](references/team-composition.md)의 "모델 표 설문"을 따른다. 표의 모든 줄을 Artifact 페이지로 띄운다. 복잡도별 여섯 기준값, 고정 역할, Codex 치환표(사용 시), 승인 DAG의 Task별 직접 지정 여부(기본 켬)도 함께 받는다. 새 팀의 줄은 추천값으로 채우고, 기존 줄은 지금 값을 두고 추천을 참고로만 보여 준다. 사용자가 저장했다고 알리면 그 값을 읽어 표에 반영하고 `node .claude/scripts/model-selection.mjs check`를 돌린다. 사용자가 저장하지 않은 값은 표에 쓰지 않는다. 구조도에서 같은 설문을 열면 현재 프로젝트 표를 읽고 저장 즉시 변경 행을 반영한다. 적용 중 충돌이 표시되면 다시 열어 외부 변경을 확인한다.
+[references/agent-units.md](references/agent-units.md)의 "모델 표 설문"을 따른다. 표의 모든 줄을 Artifact 페이지로 띄운다. 복잡도별 여섯 기준값, 고정 역할, Codex 치환표(사용 시), 승인 DAG의 Task별 직접 지정 여부(기본 켬)도 함께 받는다. 새 줄은 추천값으로 채우고, 기존 줄은 지금 값을 두고 추천을 참고로만 보여 준다. 사용자가 저장했다고 알리면 그 값을 읽어 표에 반영하고 `node .claude/scripts/model-selection.mjs check`를 돌린다. 사용자가 저장하지 않은 값은 표에 쓰지 않는다. 구조도에서 같은 설문을 열면 현재 프로젝트 표를 읽고 저장 즉시 변경 행을 반영한다. 적용 중 충돌이 표시되면 다시 열어 외부 변경을 확인한다.
 
 ## 9. 보고
 
@@ -168,11 +174,11 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 - 실패한 검증: 5단계 표의 ❌ 줄, 8단계 `node .claude/scripts/model-selection.mjs check`가 실패했으면 그 출력.
 - 8단계의 결과: 모델 표에서 바뀐 줄(없으면 없다고)과 `node .claude/scripts/model-selection.mjs check`의 결과.
 - 6단계의 산출물: V1 표(검증 명령이 없으면 없다고), 게이트 표(deny, ask, 훅), 라우팅 표, 토큰 기준선(또는 측정하지 못한 사유), 하지 않기로 한 것.
-- 다음 할 일: 만든 팀과 팀원, 건너뛴 추천. 팀이나 팀원을 나중에 더 넣으려면 `/orca-teamagent-harness-kit:agent-author`을 안내한다.
+- 다음 할 일: 더한 스킬과 만든 에이전트, 채운 스킬, 옮긴 역할(0.5.1 프로젝트), 건너뛴 추천. 스킬이나 에이전트를 나중에 더 넣으려면 `/orca-teamagent-harness-kit:agent-author`을 안내한다.
 - 요구사항이 흐릿하거나 많은 요청은 2단계 기획(요구사항 정리, 항목화, 검토, 묶음 승인)을 거친 뒤 설계와 계획으로 간다.
 - 제품 문서는 3단계에서 만들어진 초안 경로를 알려 준다. 기존 코드의 내용을 채우려면 '문서 초기화'를 요청할 수 있고, 이후에는 장부의 `## 라이브 문서 확인`에 행이 있는 phase마다 6단계에서 바뀐 내용을 반영한다.
 - 브라우저 설정: 이 프로젝트의 세션은 기본으로 Playwright 브라우저를 창 없이, 세션마다 따로 띄운다(QA를 병렬로 돌리기 위한 값이다). 직접 여는 세션에서 창이 보이고 로그인 상태가 유지되는 브라우저를 쓰려면 `claude --settings .claude/front-desk.settings.json`으로 열어야 한다고 전한다.
-- Orca 워커 세션 이름은 `[BL번호 - Agent명] 할 일 또는 백로그 제목 모델/effort` 형식이다. 예: `[BL-0012 - qa-inspector] 결제 흐름 검증 opus/medium`. BL번호가 없으면 phase 이름을 쓰고, effort가 없는 모델은 모델명만 표시한다.
-- 워커의 깊이: 이 틀은 워커를 세 단(코디네이터, 팀장, 팀원)까지 띄운다. Orca는 워커가 워커를 띄우는 깊이에 한도를 두므로, 팀장이 팀원을 띄우지 못하면 Orca 설정에서 그 한도를 확인해야 한다고 전한다.
+- Orca 워커 세션 이름은 `[BL번호 - Agent명] 할 일 또는 백로그 제목 모델/effort` 형식이다. 예: `[BL-0012 - verifier] 결제 흐름 검증 opus/medium`. BL번호가 없으면 phase 이름을 쓰고, effort가 없는 모델은 모델명만 표시한다.
+- 워커의 깊이: 이 틀은 워커를 두 단(코디네이터, 에이전트)까지 띄운다. Orca는 워커가 워커를 띄우는 깊이에 한도를 두므로, 코디네이터가 에이전트 워커를 띄우지 못하면 Orca 설정에서 그 한도를 확인해야 한다고 전한다.
 - force push: 막지 않고 항상 사용자 승인을 거친다. 대화형 세션은 확인 질문을 받고, 무인 워커는 승인 훅이 막은 뒤 `ask`로 올린다. 어느 세션에서도 막아야 하는 명령이 따로 있으면 `permissions.deny`에 넣으라고 전한다.
 - 워커의 권한 모드: `worker-start`로 뜨는 워커의 권한 모드는 명령 옵션으로 정할 수 없고 Orca의 "새 에이전트 탭" 설정을 따른다. 그 설정의 위치는 CLI에서 확인하지 못했으므로 Orca 설정 화면에서 직접 찾아야 한다고 전한다.

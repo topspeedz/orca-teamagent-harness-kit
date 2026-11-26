@@ -1,6 +1,6 @@
 ---
 name: agent-author
-description: Claude Code용 전문 서브에이전트를 신규 설계하거나 기존 Agent 개선, 하네스 팀 생성 또는 팀원 추가를 요청할 때 사용. 역할 분리, 스킬 구조, 워크플로우, 검증 게이트, 다중 Agent 인수인계 계약까지 작성한다.
+description: Claude Code용 전문 서브에이전트를 신규 설계하거나 기존 Agent 개선, 하네스 에이전트에 스킬 더하기, 틀만 있는 스킬 본문 채우기, 새 에이전트 만들기, 0.5.1 프로젝트의 옛 역할 옮기기를 요청할 때 사용. 역할 분리, 스킬 구조, 워크플로우, 검증 게이트, 다중 Agent 인수인계 계약까지 작성한다.
 ---
 
 # Agent Author — 에이전트 제작 워크플로우
@@ -17,17 +17,67 @@ description: Claude Code용 전문 서브에이전트를 신규 설계하거나 
 4. **전문 자료 조사·Agent 사례 비교**: [도메인별 설계 패턴](references/domain-patterns.md)은 질문의 출발점이다. **심화 설계**에서는 [6개 Agent/Prompt 컬렉션 조사](references/agent-corpus-research.md)를 통해 관련 역할·업무절차·판단·산출물 후보를 발굴한다(하네스 KO/EN, Claude MD, Codex TOML, 플러그인 원문, 접힌 프롬프트 포함). 후보는 공식 사실이 아닌 아이디어로 취급하고, 프로젝트 구현·제약 및 해당 버전 공식 문서/표준과 대조한다. 검색·접근 불가 시 검증했다고 주장하지 않는다.
 5. **전문 판단 추출**: 참고한 원본 Agent의 역할·워크플로우·검증·인계 **패턴을 비교·선별해 독자적으로 재작성**한다. 역할 고유의 아키텍처·도구·품질 트레이드오프, 실패 모드, 예외를 `조건 → 선택 기준 → 행동 → 증거 → 대안/중단` 규칙으로 바꾼다. 검증된 사실·프로젝트 정책·커뮤니티 가설·가정·미확인 사항을 구분한다.
 6. **지식 배치**: 상시 필요한 핵심 판단만 Agent 본문에, 반복 작업법은 Skill에, 긴 API/공식 명세·근거·사례는 Reference에 둔다. 이미 존재하는 자료를 재사용하고, 필요하지 않은 Skill·Reference 파일을 무조건 추가하지 않는다. Skill 전부를 프리로드하지 않는다.
-7. **정의 파일 작성**: 하네스가 설치되었으면 아래 공통 제작 절차를 따른다. 하네스 없는 프로젝트에서는 [Agent 정의 템플릿](references/agent-definition-template.md)을 참고해 `name`, `description`이 포함된 YAML + 실질적 Markdown 본문을 생성한다. 템플릿의 `[ ]`와 `TODO`를 남기지 않는다.
-8. **하네스 연동**: 명단과 실제 배정자를 확인한다. PM과 Planner는 운영팀 동료이며 독립 역할과 실행팀은 명단 구분을 따른다.
+7. **정의 파일 작성**: 하네스가 설치되었으면 아래 "하네스에서 하는 일"의 절차를 따른다. 하네스 없는 프로젝트에서는 [Agent 정의 템플릿](references/agent-definition-template.md)을 참고해 `name`, `description`이 포함된 YAML + 실질적 Markdown 본문을 생성한다. 템플릿의 `[ ]`와 `TODO`를 남기지 않는다.
+8. **하네스 연동**: 명단 `docs/harness/agents.md`와 실제 배정자를 확인한다. 팀은 없고, 코디네이터가 계획의 Task를 에이전트에 직접 배정한다.
 9. **검증 및 전달**: [품질 검사표](references/quality-checklist.md)를 적용하고, 심화 설계에서는 근거·버전·반례·실패 분기까지 점검한다. 산출물 위치, 검증 여부, 조사하지 못한 사항과 미해결 위험을 보고한다.
 
-## 하네스에 독립 역할·기존 팀원·팀 전체 추가
+## 하네스에서 하는 일
 
-1. 대상 프로젝트의 `docs/harness/templates/agent.md`를 출력 양식으로, [전문 판단 질문](references/agent-definition-template.md)을 함께 읽는다. setup으로 팀을 만드는 경우도 같다. 설치 프로젝트의 머리말은 `name`과 `description` 두 줄이다.
-2. `docs/harness/team-org.md`, 기존 역할(꺼진 역할 포함), 팀 스킬·모델 표, `docs/DOCUMENTATION_INDEX.md`의 정본·절과 `## 작성자 배정 대기`를 대조한다. 신규 전문 역할마다 [지정 저장소의 관련 원문](references/agent-corpus-research.md)을 실제로 비교하고 프로젝트의 구현·소비자·검증 방법으로 채택 근거를 확인한다.
-3. 단일·팀 전체·기존 팀 추가에 동일하게 [팀 구성 절차 3–6](../setup/references/team-composition.md)을 적용한다. 각 역할의 전문성과 미배정 문서·절이 맞을 때만 경로·절·추천 근거를 제시한다. 팀 구성 절차의 `document-choice.mjs`로 후보 상태와 수락·거절·해당 없음을 확인한다. 승인된 작성·검토·확인 책임, 소속·작업 단위·협의 상대와 상향 경로를 기록한다. 역할 이름만 근거로 분야 문서를 배정하지 않는다.
-4. **등록과 확인**. 팀 전원의 정의·명단·표·팀 스킬을 먼저 맞춘 뒤 프로젝트 루트에서 신규 역할마다 `node .claude/scripts/agent-definition.mjs --agent <name>`, 이어 `node .claude/scripts/model-selection.mjs check`를 실행한다. Codex 선택 시 팀 구성 절차의 포인터·`sync-agent`를 따른다. 기존 정의의 단순 읽기·재동기화에는 신규 양식을 요구하지 않는다.
-5. [품질 검사표](references/quality-checklist.md)로 같은 역할이 해결할 대표 성공·실패 사례를 실제로 따라간다. 판단 경로·증거·직접 협의·막힐 때 배정자를 찾은 결과를 형식 검사와 나누어 보고한다.
+하네스가 설치된 프로젝트에서 하는 일은 셋이고, 이 순서로 본다. 기본은 스킬을 더하는 것이다. 에이전트를 새로 만드는 것은 [에이전트 단위 구성 2절](../setup/references/agent-units.md)의 세 기준 가운데 하나가 사실일 때뿐이다. 직함이 다르다는 것은 이유가 아니다. 네 번째 절은 0.5.1 프로젝트를 옮길 때만 쓴다.
+
+모든 명령은 프로젝트 루트에서 돌린다. 공통으로 읽는 것: 명단 `docs/harness/agents.md`, 역할 파일 `.claude/agents/`(꺼진 `.agent-toggle-off` 포함), 스킬 `.claude/skills/`, 모델 표 `docs/harness/model-selection.md`, `docs/DOCUMENTATION_INDEX.md`의 정본·절과 `## 작성자 배정 대기`. 양식은 대상 프로젝트의 `docs/harness/templates/agent.md`(역할)와 `docs/harness/templates/skill.md`(스킬)다. 설치 프로젝트의 역할 머리말은 `name`과 `description` 두 줄이다. `docs/harness/agents.md`가 없고 옛 명단만 있으면 검사 스크립트가 "setup을 다시 돌려 새 구조로 옮기라"며 멈춘다. 그때는 사용자에게 setup을 다시 돌리라고 안내하고 멈춘다.
+
+### 1. 스킬 더하기
+
+1. 요청한 일을 명단의 `맡는 단위`, 역할 파일의 `## 작업 단위와 스킬`과 `## 경계`에 대조해 맡을 에이전트를 고른다. 서로의 출력에 이어 붙거나 같은 파일을 만지는 일이면 그 에이전트에 둔다. 맞는 에이전트가 없고 세 기준 가운데 하나가 사실이면 3절로 간다.
+2. 기존 스킬의 `description`을 읽는다. 같은 일을 다루는 스킬이 있으면 새로 만들지 않고 그 스킬을 쓴다. 스킬 하나는 한 가지 일만 다룬다.
+3. 없으면 `docs/harness/templates/skill.md`를 `.claude/skills/<스킬>/SKILL.md`로 채운다([에이전트 단위 구성 4절](../setup/references/agent-units.md)). 절차에는 프로젝트의 실제 명령을 넣는다. 대표 사례(정상 하나, 실패 하나)는 그 프로젝트의 실제 작업(세션 기록, Run 리포트, 커밋)에서 가져온다.
+4. 그 에이전트의 역할 파일 `- 로드할 스킬:` 줄과 `## 작업 단위와 스킬` 표, 명단의 스킬 칸에 같은 이름을 넣는다. 새 작업 단위가 생기면 [에이전트 단위 구성 5절](../setup/references/agent-units.md)의 1단계로 모델 표에 산정 행을 더한다. 이 스킬로 새로 맡는 문서가 있으면 같은 파일 3절 "문서 담당 추천과 선택"을 따른다.
+5. 같은 5절의 5·6단계를 따른다: `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, `node .claude/scripts/model-selection.mjs check`, Codex를 쓰면 `sync-agent`, 이어 [품질 검사표](references/quality-checklist.md)로 그 스킬의 대표 사례를 따라간다.
+
+### 2. 스킬 본문 채우기
+
+키트가 틀만 주는 `frontend`와 `backend`의 스킬 여덟 개가 첫 대상이다. setup 7단계가 이 절차를 부른다.
+
+1. `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" inspect --target .`의 `unfilledSkills`를 받는다. 틀 줄 `> 이 스킬은 틀이다. \`agent-author\`가 프로젝트에 맞게 채운다.`가 남은 스킬의 이름이다. 비었으면 할 일이 없다.
+2. 스킬마다 그 스킬을 `- 로드할 스킬:`에 둔 에이전트를 명단에서 찾는다. 명단에 없는 에이전트(사용자가 뺀 것)의 스킬은 채우지 않는다. 그 에이전트의 편집 범위와 프로젝트의 기술(패키지 파일, 빌드·테스트 명령, 그 편집 범위의 실제 코드)과 지난 작업을 읽는다. 편집 범위가 `프로젝트가 정한다`로 남아 있으면 실제 경로를 추천하고 사용자가 고른 뒤 명단에 적는다.
+3. `docs/harness/templates/skill.md`의 절(`## 절차`, `## 하지 않는 것`, `## 대표 사례`)에 맞춰 본문을 쓰고 틀 줄을 지운다. `description`이 정한 일의 범위를 넘기지 않는다. 대표 사례는 1절 3단계와 같이 실제 작업에서 가져온다.
+4. `node .claude/scripts/agent-definition.mjs --agent <에이전트>`를 돌리고, 1의 `inspect`를 다시 돌려 그 스킬이 `unfilledSkills`에서 빠졌는지 본다. [품질 검사표](references/quality-checklist.md)로 대표 사례를 따라간다.
+
+에이전트의 역할 파일을 지워도 setup을 다시 돌리면 그 에이전트의 스킬 틀은 다시 깔리고 `unfilledSkills`에 다시 나온다. 2단계에서 명단에 없는 에이전트의 것으로 걸러 낸다.
+
+### 3. 에이전트 만들기
+
+1. 세 기준 가운데 무엇이 사실인지, 이 프로젝트의 어떤 사실이 근거인지 적는다. 근거가 없으면 만들지 않고 1절로 간다.
+2. 대상 프로젝트의 `docs/harness/templates/agent.md`를 출력 양식으로, [전문 판단 질문](references/agent-definition-template.md)을 함께 읽어 `.claude/agents/<에이전트>.md`를 쓴다. `## 따로 두는 이유`의 `- 기준:`은 `컨텍스트 분리`, `병렬`, `도구·지시 충돌` 가운데 하나다. 신규 전문 역할마다 [지정 저장소의 관련 원문](references/agent-corpus-research.md)을 실제로 비교하고 프로젝트의 구현·소비자·검증 방법으로 채택 근거를 확인한다.
+3. 맡는 단위, 스킬 목록, 편집 범위, 모델 표의 산정 행을 함께 등록한다. 순서는 [에이전트 단위 구성 5절](../setup/references/agent-units.md)이다: 모델 표의 산정 행, 역할 파일, 스킬(1절), 명단 한 행, 검사. 편집 범위는 다른 에이전트와 겹치지 않게 한다.
+4. 문서 담당은 같은 파일 3절 "문서 담당 추천과 선택"을 따른다. 각 역할의 전문성과 미배정 문서·절이 맞을 때만 경로·절·추천 근거를 제시한다. `document-choice.mjs`로 후보 상태와 수락·거절·해당 없음을 확인한다. 승인된 작성·검토·확인 책임, 작업 단위·협의 상대와 상향 경로를 기록한다. 역할 이름만 근거로 분야 문서를 배정하지 않는다.
+5. **등록과 확인**. 정의·명단·모델 표·스킬을 먼저 맞춘 뒤 신규 역할마다 `node .claude/scripts/agent-definition.mjs --agent <name>`, 이어 `node .claude/scripts/model-selection.mjs check`를 실행한다. Codex 선택 시 같은 5절의 포인터·`sync-agent`를 따른다. 기존 정의의 단순 읽기·재동기화에는 신규 양식을 요구하지 않는다.
+6. [품질 검사표](references/quality-checklist.md)로 이 에이전트 스킬의 대표 성공·실패 사례를 실제로 따라간다. 판단 경로·증거·직접 협의·막힐 때 배정자를 찾은 결과를 형식 검사와 나누어 보고한다.
+
+### 4. 0.5.1 프로젝트 옮기기
+
+setup 7단계가 1단계 `inspect` 출력의 `migration`이 비어 있지 않을 때 부른다. 3단계 깔기로 새 명단 `docs/harness/agents.md`가 생기면 `inspect`는 `migration: null`을 돌려주므로, 1단계에서 받은 출력을 쓴다. 이 절차는 프로젝트 파일을 지우므로 옮기기 전 커밋이 되돌릴 자리다.
+
+1. `git status --short`로 작업 트리가 커밋돼 있는지 본다. 커밋하지 않은 변경이 있으면 커밋해 달라고 하고 멈춘다.
+2. `migration.projectRoles`(프로젝트가 추가한 역할, 꺼진 것 포함)를 받는다. 옛 명단 `docs/harness/team-org.md`, 그 역할들의 파일(`.claude/agents/<역할>.md`, 꺼졌으면 `.md.agent-toggle-off`), 옛 명단에 적힌 팀 스킬(`.claude/skills/<팀 스킬>/`)을 읽는다.
+3. 역할마다 "어느 단위에 합친다" 또는 "따로 남긴다"를 표로 추천한다: `| 역할 | 추천 | 합칠 단위 또는 남길 기준 | 근거 |`. 따로 남기는 것은 세 기준 가운데 하나가 이 프로젝트의 사실로 참일 때뿐이다. 사용자가 고르기 전에는 파일을 바꾸지 않는다.
+4. 사용자가 고른 대로 옮긴다.
+   - 합치는 역할: 역할 파일의 지식(전문 판단, 절차, 완료 기준, 오류 처리)을 그 단위의 스킬로 옮긴다. 맞는 스킬이 있으면 그 본문에, 없으면 1절로 새 스킬을 만든다. 옛 팀 스킬의 내용은 [에이전트 단위 구성 8절](../setup/references/agent-units.md)의 "사라지는 것과 새 자리" 표대로 나눈다.
+   - 남기는 역할: 3절로 새 양식에 다시 쓴다.
+   - 명단 `docs/harness/agents.md`의 스킬 칸과 남긴 역할의 행을 고친다. 모델 표에서 옛 역할의 행은 합친 단위의 행으로 옮기거나 지운다. 행을 지우는 명령은 없으므로 표를 직접 고친다. 옛 역할 파일의 `## 문서 책임` 행은 받는 에이전트의 역할 파일로 옮긴다.
+5. 지울 목록을 보여 주고 승인받은 뒤 지운다.
+   - 옛 역할 파일: `.claude/agents/<역할>.md`와 `.md.agent-toggle-off`, Codex를 쓰면 `.codex/agents/<역할>.toml`과 `.toml.agent-toggle-off`.
+   - 옛 기본 역할의 꺼진 사본: `.claude/agents/planner.md.agent-toggle-off`, `code-reviewer.md.agent-toggle-off`, `qa-inspector.md.agent-toggle-off`와 같은 이름의 `.codex/agents/*.toml.agent-toggle-off`. setup은 이 사본을 지우지 않는다.
+   - 옛 팀 스킬: `.claude/skills/<팀 스킬>/`, Codex를 쓰면 `.agents/skills/<팀 스킬>/`.
+   - `docs/harness/team-org.md`.
+   - 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
+6. 명단의 에이전트마다 `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, 이어 `node .claude/scripts/model-selection.mjs check`를 돌린다. Codex를 쓰면 고친 역할마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 돌린다. 실패하면 메시지를 보여 주고 고칠지 묻는다.
+7. 프로젝트 문서에 남은 옛 역할 이름을 찾아 목록으로 보여 준다. 고치는 것은 사용자가 고른 것만이다.
+
+   ```sh
+   grep -rnE "planner|code-reviewer|qa-inspector|team-lead|team-qa|team-org|<옮긴 역할>|<옛 팀 스킬>" docs AGENTS.md CLAUDE.md .claude .agents
+   ```
 
 ## 작성 원칙
 

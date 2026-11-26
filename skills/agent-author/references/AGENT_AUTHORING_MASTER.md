@@ -1,7 +1,7 @@
 # Claude Code Agent Authoring Master — v1.2
 
 > 목적: 새로운 Claude Code 서브에이전트를 요청할 때마다 동일한 **설계 원칙, 내용 템플릿, 검증 규칙**을 적용한다.
-> 대상: 단일 전문 Agent / 팀장 Agent / PM·Planner / QA / 문서화 Agent / 기존 Agent 개선.
+> 대상: 단일 전문 Agent / PM / QA / 문서화 Agent / 기존 Agent 개선.
 > 구분: 이 문서는 **Agent를 만드는 제작 지침(meta-prompt)**이다. 이 문서 자체를 `.claude/agents/`에 넣어 실행 Agent로 쓰지 않는다.
 > 상태: **사용자 정의 하네스 표준**이며 Anthropic의 공식·필수 본문 템플릿을 주장하지 않는다.
 
@@ -23,13 +23,13 @@
 | 권한 경계 | 어떤 파일·도구에 접근할 수 있고, 무엇은 다른 Agent 책임인가? |
 | 산출물 | 구체적인 파일·표·코드·보고서와 저장 위치는 무엇인가? |
 | 성공 기준 | 결과를 어떤 **관찰 가능한 증거**로 PASS/FAIL 판정하는가? |
-| 연동 | PM/Planner/Orchestrator/팀장/QA와 무엇을 주고받는가? |
+| 연동 | PM/Orchestrator/QA와 무엇을 주고받는가? |
 | 지식 변화 | 자주 변하는 기술/API/시장 정보인가? 그렇다면 본문에 고정할 내용인가? |
 
 ### 단일 Agent / 팀 / Skill 선택
 
 - **단일 Agent**: 책임·산출물·판단권이 일관된 전문 작업이다.
-- **팀 분할**: 산출물 소유권·전문 분야·승인권이 명확히 다른 독립 작업이 2개 이상이다. 팀장 Agent가 상세 실무까지 모두 수행하도록 몰아넣지 않는다.
+- **팀 분할**: 산출물 소유권·전문 분야·승인권이 명확히 다른 독립 작업이 2개 이상이다. 배정하는 Agent(Orchestrator)가 상세 실무까지 모두 수행하도록 몰아넣지 않는다.
 - **Skill**: 여러 Agent가 재사용할 수 있는 *작업 방법*, 단계별 기술 절차, 외부 도구 활용법, 검증 루틴이다.
 - **Reference**: 공식 명세, 버전별 API, 표준 양식, 분야별 규칙집, 사례, 긴 코드·데이터다.
 - **CLAUDE.md**: 프로젝트 전체에 일관되게 적용되는 짧고 안정적인 규약이다. 개별 Agent의 작업법을 중복 저장하지 않는다.
@@ -94,9 +94,8 @@
 
 팀 구조가 있는 경우 다음을 적용한다. 프로젝트에 기존 계약이 있으면 **그것을 우선**하고 불일치는 보고한다.
 
-- **Planner**: 목표·제약·DAG 의존성·마일스톤·인수 기준을 정의한다.
-- **PM**: 계획을 백로그와 Task 계약으로 세분화, 우선순위·소유권·블로커 관리.
-- **Orchestrator**: 준비된 Task를 팀장/전문 Agent에 배정하고 충돌 없는 병렬 작업을 조정한다.
+- **PM**: 목표·제약·DAG 의존성·마일스톤·인수 기준을 정의하고, 계획을 백로그와 Task 계약으로 세분화해 우선순위·소유권·블로커를 관리한다.
+- **Orchestrator**: 준비된 Task를 전문 Agent에 배정하고 충돌 없는 병렬 작업을 조정한다.
 - **전문 Agent**: 배정된 범위만 수행하고 산출물·검증 결과를 반환한다.
 - **QA/Reviewer**: 다른 역할의 산출물에 독립적 검증 증거를 남기며 재작업 조건을 구체화한다.
 
@@ -135,7 +134,7 @@ unresolved:
   - "미결 이슈 또는 none"
 dependencies_unblocked:
   - "후속 Task ID 또는 none"
-next_owner: "팀장/PM/QA/Orchestrator"
+next_owner: "PM/QA/Orchestrator"
 ```
 
 ### 병렬 작업 원칙
@@ -167,6 +166,7 @@ next_owner: "팀장/PM/QA/Orchestrator"
 - 프로젝트 파일 위치: `.claude/agents/<unique-name>.md`; 개인 공용 위치: `~/.claude/agents/<unique-name>.md`.
 - YAML 필수 필드: `name`, `description`.
 - 하네스 설치 프로젝트의 출력 양식은 대상 `docs/harness/templates/agent.md`다. 머리말에는 `name`, `description`만 넣고 모델은 작업 단위별 모델 표를 따른다.
+- 하네스에 설치하는 역할은 머리말에 `tools`, `model`, `skills`를 쓰지 않는다. 같은 파일에서 Codex 정의를 만들고, 모델과 effort는 모델 표가 정한다.
 - 하네스 없는 독립 설치에서 고려할 선택 필드: `model: inherit`, `tools`는 실제 필요 권한만 명시. `skills`, `memory`, `isolation`, `permissionMode`, `maxTurns` 등은 **필요한 경우에만** 추가.
 - `description`에는 이 Agent를 호출해야 할 조건과 배정하면 안 되는 조건을 짧고 정확하게 표현한다. Agent가 많을수록 짧은 구분 설명이 중요하다.
 - Agent 본문에서 전체 스킬 내용을 복사하지 않는다. `CLAUDE.md`를 매번 되풀이하지 않는다.

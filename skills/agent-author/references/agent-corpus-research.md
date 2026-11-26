@@ -6,7 +6,7 @@
 
 | 출처 | 개별 후보를 찾는 위치 | 특히 가져올 수 있는 설계 관점 |
 | --- | --- | --- |
-| [harness-100](https://github.com/revfactory/harness-100/blob/main/README_ko.md) | `ko/` 및 `en/`의 각 `{번호}-{하네스}/.claude/agents/*.md`와 `CLAUDE.md`/팀 스킬·절차. **한국어와 영어의 같은 역할은 하나의 후보군으로 묶되, 어느 한 언어에만 있는 역할은 제외하지 않는다.** | 역할 분리, 팀 내 선후행 관계, 산출물·팀 간 인계 |
+| [harness-100](https://github.com/revfactory/harness-100/blob/main/README_ko.md) | `ko/` 및 `en/`의 각 `{번호}-{하네스}/.claude/agents/*.md`와 `CLAUDE.md`/스킬·절차. **한국어와 영어의 같은 역할은 하나의 후보군으로 묶되, 어느 한 언어에만 있는 역할은 제외하지 않는다.** | 역할 분리, 팀 내 선후행 관계, 산출물·팀 간 인계 |
 | [agency-agents](https://github.com/msitarzewski/agency-agents) | `design/`, `engineering/`, `game-development/`, `product/`, `testing/` 등 **모든 부문 디렉터리와 하위 전문 폴더의 개별 Markdown 정의**. | 직무 깊이·산출물·분야별 실무 관점 |
 | [awesome-codex-subagents](https://github.com/VoltAgent/awesome-codex-subagents) | `categories/`의 **모든 카테고리 및 하위 디렉터리**에 있는 `.toml` 정의. | 명시적 범위·의사결정·검증 프레임(Claude 형식으로 의미만 변환) |
 | [wshobson/agents](https://github.com/wshobson/agents/blob/main/docs/agents.md) | `docs/agents.md` 목록의 모든 관련 항목을 확인하고 각 링크의 `plugins/<plugin>/agents/*.md` **원문과 대조**. 목록에서 빠진 연관 역할은 플러그인 정의도 탐색. | 세분화된 직무, 플러그인별 역할 경계·호출 맥락 |
