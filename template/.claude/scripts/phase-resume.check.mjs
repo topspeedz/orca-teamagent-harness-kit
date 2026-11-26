@@ -89,6 +89,8 @@ try {
   assert.deepEqual(state.reports.plan.map(r => r.revision), [2, 3]);
   report(run, '03_product-manager_design_v2', '설계 v2 (PM 한 세션)');
   assert.deepEqual(inspect().reports.design.map(r => r.revision), [1, 2]);
+  report(product, '03_product-manager_review_v3', '검토 대상 PRD·SRS v3 / BL-0001 / 열린 High 없음 (PM 한 세션)');
+  assert.match(inspect().reports.review.at(-1).text, /PM 한 세션/);
   console.log('phase-resume: old and new reports, changed plan, open issues, original approval and existing Run/Dispatch passed');
 } finally {
   rmSync(cwd, { recursive: true, force: true });

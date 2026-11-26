@@ -6,7 +6,7 @@ import { check } from './report-check.mjs';
 const stages = {
   '01_prd-writer_requirements': 'requirements', '01_product-manager_requirements': 'requirements',
   '02_product-manager_backlog': 'backlog',
-  '03_pm-reviewer_review': 'review', '03_planner_review': 'review',
+  '03_pm-reviewer_review': 'review', '03_planner_review': 'review', '03_product-manager_review': 'review',
   '06_pm-reviewer_plan-check': 'planCheck', '06_product-manager_plan-check': 'planCheck',
 };
 const planner = { '03_planner_design': 'design', '04_planner_plan': 'plan', '03_product-manager_design': 'design', '04_product-manager_plan': 'plan' };
