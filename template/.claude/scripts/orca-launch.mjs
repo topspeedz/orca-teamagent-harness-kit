@@ -269,7 +269,7 @@ async function execute(cmd, o, deps) {
         }
         if (!fixed) continue;
       }
-      if ((!a.overrideReason || isFixed(row)) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
+      if (['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
     }
     if (cmd === 'approve') return { code: 0, out: approvePlan(o, record, io) };
     return { code: 0, out: { version: record.version, review: record.review } };
