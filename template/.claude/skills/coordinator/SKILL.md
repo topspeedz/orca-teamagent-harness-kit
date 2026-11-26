@@ -66,7 +66,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
    node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <브리프의 승인 파일>
    ```
 
-2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. 수정 Task와 재검 Task는 예외다. 등록된 spec은 바꿀 수 없고 `결함 ID:` 줄은 결함이 정해져야 쓸 수 있으므로, 이 둘의 spec은 끝 검증이 정산된 뒤에 쓰고 그때 등록한다. 시험 갱신 Task와 그 뒤의 끝 검증 Task도 예외다. 실패 목록은 전체 테스트를 돌려야 알 수 있으므로 시험 갱신 Task의 spec은 그 Task가 준비되면 쓰고, 전체 테스트 결과 파일의 경로와 이미 열린 결함 ID는 시험 갱신 Task를 정산하거나 `skip`한 뒤에야 알 수 있으므로 끝 검증 Task의 spec은 그때 쓰고 등록한다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 등록 시 검토·승인된 Task ID의 배정과 spec을 대조한다. 실시간 모델 표 저장은 다음 계획에 적용한다. 현재 Run을 바꾸라는 사용자 요청이 있으면 해당 배정과 DAG를 갱신해 검토(PM의 계획 대조와 `review` 해시)와 재승인 뒤 `reapprove --map <map> --approval <새 승인 파일> --id <변경 Task ID>`로 반영한다. 이미 진행한 Dispatch의 기록은 보존한다.
+2. **등록.** 띄울 Task의 spec을 양식 `docs/harness/templates/spec.md`로 `_workspace/_run/<phase>/spec/`에 먼저 모두 쓴다. 수정 Task와 재검 Task는 예외다. 등록된 spec은 바꿀 수 없고 `결함 ID:` 줄은 결함이 정해져야 쓸 수 있으므로, 이 둘의 spec은 끝 검증이 정산된 뒤에 쓰고 그때 등록한다. 시험 갱신 Task와 그 뒤의 끝 검증 Task도 예외다. 실패 목록은 전체 테스트를 돌려야 알 수 있으므로 시험 갱신 Task의 spec은 그 Task가 준비되면 쓰고, 전체 테스트 결과 파일의 경로와 이미 열린 결함 ID는 시험 갱신 Task를 정산하거나 `skip`한 뒤에야 알 수 있으므로 끝 검증 Task의 spec은 그때 쓰고 등록한다. `배정:` 줄은 계획서의 배정을 그대로 옮긴다. 그다음 의존 순서대로 등록한다. 등록 시 검토·승인된 Task ID의 배정과 spec을 대조한다. 실시간 모델 표 저장은 다음 계획에 적용한다. 현재 Run을 바꾸라는 사용자 요청이 있으면 해당 배정과 DAG를 갱신해 창구의 검토(`review` 해시)와 재승인 뒤 `reapprove --map <map> --approval <새 승인 파일> --id <변경 Task ID>`로 반영한다. 이미 진행한 Dispatch의 기록은 보존한다.
 
    ```text
    node .claude/scripts/orca-launch.mjs register --map <map> --id <Task ID> --spec-file <spec> [--deps <앞 Task ID>,<앞 Task ID>] [--edits <경로>,<경로>] [--resource <gpu>,<blender>]
@@ -166,7 +166,7 @@ node .claude/scripts/orca-launch.mjs settle --map <map> --id <Task ID> --dispatc
 - 브라우저를 쓰는 검증도 영역별 워커로 동시에 돌린다. 브라우저는 워커마다 따로 뜬다(`.claude/settings.json`의 `PLAYWRIGHT_MCP_ISOLATED`). 한 워커 안에서 서브에이전트로 나누면 브라우저 하나를 두고 막히므로, 나눌 때는 워커를 늘린다. 세부는 `qa-verification`의 `references/browser.md`다.
 - 검증이 혼자 써야 하는 자원(GPU, Blender MCP 등)을 쓰면 그 검증은 나누지 않는다. 브라우저로 보는 화면이 그 자원을 쓸 때(예: 3D 화면)도 같다. 구현 Task와 시험 갱신 Task가 모두 정산된 뒤에 Task 하나로 한 번 돌리고, 등록할 때 `--resource`를 붙인다. 여러 워커가 같이 쓰면 그 자원 하나를 두고 서로 막힌다. 구현 Task는 그 자원 없이 도는 간단한 코드 테스트로 끝낸다(spec 양식의 `완료 기준`). 그 자원을 쓰는 테스트도 이 Task가 돌린다.
 - 성능 측정 Task는 다른 검증 Task가 모두 끝난 뒤에 띄운다. 병렬로 도는 동안 잰 수치는 판정에 쓰지 않는다. 화면을 여러 장 찍는 캡처와 3D·WebGL 실측은 spec에 `launch.cjs`로 하라고 적는다.
-- 시험 갱신 Task가 준비되면 코디네이터가 전체 테스트를 한 번 돌린다. 통과하면 그 Task를 `skip`으로 닫고, 실패하면 실패 목록을 spec에 넣어 띄운다. 그 Task를 정산하면 리포트의 `## 결함` 표의 행이 모두 원장에 오른다. 워커가 고친 옛 기대값은 결함이 아니므로 그 표에 적지 않고, 그래서 원장에 오르지 않고 수정 라운드에 세지 않는다.
+- 시험 갱신 Task가 준비되면 코디네이터가 전체 테스트를 한 번 돌린다. 통과하면 그 Task를 `skip`으로 닫고, 실패하면 실패 목록을 spec에 넣어 띄운다. 그 Task는 실패한 코드를 만든 에이전트에 배정한다. 그 Task를 정산하면 리포트의 `## 결함` 표의 행이 모두 원장에 오른다. 워커가 고친 옛 기대값은 결함이 아니므로 그 표에 적지 않고, 그래서 원장에 오르지 않고 수정 라운드에 세지 않는다.
 - 끝 검증의 spec에는 전체 테스트가 이미 돌았다는 것과 그 결과 파일의 경로를 넣고, 이미 열린 결함 ID는 `이미 아는 것:` 줄에 넣는다. 끝 검증은 전체 테스트를 다시 돌리지 않는다.
 - 끝 검증의 spec에는 계획서 `## DAG`의 의존 줄 가운데 그 Task가 맡은 영역에 걸친 것을 "대조할 경계면"으로 옮겨 적는다. 해당하는 것이 없으면 `없음`이라고 적는다. 대조하는 법과 점검표는 `qa-verification`에 있다.
 - 같은 파일을 고치는 Task가 진행 중이면 그 파일의 리뷰는 편집이 끝난 뒤 한 번만 한다.

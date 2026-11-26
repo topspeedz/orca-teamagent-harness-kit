@@ -24,7 +24,7 @@
 
 1. 실행 승인을 받기 전 창구는 `review --version v1 --plan <계획.md> --dag <dag.json>` 결과의 `version`과 `review`(SHA-256)를 검토 리포트와 승인 질문에 함께 싣는다. 질문에 연결된 사용자의 명시적 승인 응답을 받으면 같은 입력으로 `approve --version v1 --plan <계획.md> --dag <dag.json> --review <그 해시> --response <응답 원문>`을 실행한다. 응답이 다른 버전을 지칭하거나 쟁점이 열려 있으면 새로 검토·확인한다. 명령은 DAG 옆 `approved-plan.v1.json`을 한 번 기록한다. 브리프에는 이 경로와 해시를 남긴다. 명령 앞에는 모두 `node .claude/scripts/orca-launch.mjs`를 붙인다.
 2. 새 실행은 `exec-run --phase <phase> --map <map> --approval <승인파일>`로 연결한다. 재개는 동일 map으로 이어 간다. 같은 Run의 미등록 Task도 승인 파일의 의존·모델로 등록한다. 사용자가 다음 계획용 모델 표를 저장해도 현재 Run의 승인 파일은 그대로다.
-3. 사용자가 현재 Run의 배정을 바꾸라고 하면 해당 Task는 기동 대기한다. 검토자(PM. `plan-orchestrate`의 계획 대조)가 수정 계획·DAG에 새 버전으로 review하고 창구가 그 질문의 응답으로 approve한다. 등록된 Task라면 변경 spec을 기존 등록 경로에 준비한다. `reapprove --map <map> --approval <새 승인파일> --id <변경 Task>`로 해당 Task만 전환한다. 미등록이면 이후 최초 등록에 새 버전이 쓰인다. 이미 기동한 Task와 다른 Task의 배정은 이 명령으로 바뀌지 않는다.
+3. 사용자가 현재 Run의 배정을 바꾸라고 하면 해당 Task는 기동 대기한다. 창구가 수정 계획·DAG에 새 버전으로 review하고, 그 질문의 응답으로 approve한다. 등록된 Task라면 변경 spec을 기존 등록 경로에 준비한다. `reapprove --map <map> --approval <새 승인파일> --id <변경 Task>`로 해당 Task만 전환한다. 미등록이면 이후 최초 등록에 새 버전이 쓰인다. 이미 기동한 Task와 다른 Task의 배정은 이 명령으로 바뀌지 않는다.
 4. 등록한 미기동 Task에 열린 게이트가 있으면 전환이 `transition`에 남는다. 실제 응답을 원래 게이트에 `resolve`한 뒤 같은 재승인 명령을 다시 실행한다. 옛 Task를 기동 불가 상태로 만든 다음 새 spec으로 등록한다. `tasks[ID].previous`의 옛 Orca ID·의존·게이트와 새 Orca ID를 장부에 함께 기록한다. 후속 Task는 원래 ID·spec을 유지하며 런처가 새 선행 ID의 완료를 확인한 뒤 풀어 준다. 전환 중 압축·등록 응답 유실 때도 같은 명령으로 재개한다. 승인 표식이 같은 새 Task가 이미 있으면 기존 ID를 회수한다.
 5. 대응표에 옛 직접 기동 기록(`direct`)이 있으면 기동 스크립트가 그 Run을 거부한다. 새 Run에서 계획을 다시 승인받는다. 프로세스가 비정상 종료되어 `orca-tasks.json.lock`이 남았으면 파일에 적힌 PID의 런처 종료와 Orca의 마지막 동작을 먼저 확인한 뒤 해당 잠금 파일만 해제한다.
 
