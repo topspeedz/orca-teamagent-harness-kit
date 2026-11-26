@@ -17,24 +17,24 @@ const test = (name, fn) => { try { fn(); n++; } catch (e) { console.error(`FAIL 
 const T = [
   '# 모델 선택 표', '',
   '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |', '| --- | --- | --- | --- | --- | --- |',
-  '| `planner` | 설계, 계획 | claude | opus | max | 사용자 메모   |',
-  '| `qa-inspector` | 재검 | claude | sonnet | medium | |',
-  '| `*` | 리드 | claude | opus | high | |', '| `*` | 기본 | claude | opus | medium | |', '',
+  '| `product-manager` | 기획 | claude | opus | max | 사용자 메모   |',
+  '| `verifier` | 재검 | claude | sonnet | medium | |',
+  '| `*` | 기본 | claude | opus | medium | |', '',
 ].join('\n');
-const QA = '| `qa-inspector` | 재검 | claude | sonnet | medium | |';
+const QA = '| `verifier` | 재검 | claude | sonnet | medium | |';
 
 test('only the chosen row changes, only its two cells', () => {
-  const out = applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' }]);
-  assert.equal(out, T.replace(QA, '| `qa-inspector` | 재검 | claude | opus | high | |'));
+  const out = applyChoices(T, [{ agent: 'verifier', unit: '재검', model: 'opus', effort: 'high' }]);
+  assert.equal(out, T.replace(QA, '| `verifier` | 재검 | claude | opus | high | |'));
   // a CRLF table with a BOM keeps both
   const crlf = `﻿${T.replaceAll('\n', '\r\n')}`;
-  const out2 = applyChoices(crlf, [{ agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' }]);
-  assert.equal(out2, crlf.replace(QA, '| `qa-inspector` | 재검 | claude | opus | high | |'));
+  const out2 = applyChoices(crlf, [{ agent: 'verifier', unit: '재검', model: 'opus', effort: 'high' }]);
+  assert.equal(out2, crlf.replace(QA, '| `verifier` | 재검 | claude | opus | high | |'));
   // a choice without an effort key keeps the current effort
-  assert.ok(applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', model: 'opus' }]).includes('| `qa-inspector` | 재검 | claude | opus | medium | |'));
+  assert.ok(applyChoices(T, [{ agent: 'verifier', unit: '재검', model: 'opus' }]).includes('| `verifier` | 재검 | claude | opus | medium | |'));
   // padded cells: only the model cell changes, the rest of the row stays byte for byte
-  const spaced = T.replace(QA, '| `qa-inspector` |  재검  |  claude  | sonnet |  medium  |  메모  |');
-  assert.equal(applyChoices(spaced, [{ agent: 'qa-inspector', unit: '재검', model: 'opus' }]), spaced.replace('| sonnet |', '| opus |'));
+  const spaced = T.replace(QA, '| `verifier` |  재검  |  claude  | sonnet |  medium  |  메모  |');
+  assert.equal(applyChoices(spaced, [{ agent: 'verifier', unit: '재검', model: 'opus' }]), spaced.replace('| sonnet |', '| opus |'));
 });
 
 test('a row missing from the table is an error', () => {
@@ -42,31 +42,31 @@ test('a row missing from the table is an error', () => {
 });
 
 test('values outside the lists are errors, unchanged cells are left alone', () => {
-  assert.throws(() => applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', model: 'gpt-4', effort: 'max' }]), /gpt-4/);
-  assert.throws(() => applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', model: 'opus', effort: 'ultra' }]), /ultra/);
+  assert.throws(() => applyChoices(T, [{ agent: 'product-manager', unit: '기획', model: 'gpt-4', effort: 'max' }]), /gpt-4/);
+  assert.throws(() => applyChoices(T, [{ agent: 'product-manager', unit: '기획', model: 'opus', effort: 'ultra' }]), /ultra/);
   const pinned = T.replace('| sonnet | medium |', '| claude-sonnet-5-5 | medium |');
-  assert.ok(applyChoices(pinned, [{ agent: 'qa-inspector', unit: '재검', model: 'claude-sonnet-5-5', effort: 'high' }]).includes('| claude-sonnet-5-5 | high |'));
+  assert.ok(applyChoices(pinned, [{ agent: 'verifier', unit: '재검', model: 'claude-sonnet-5-5', effort: 'high' }]).includes('| claude-sonnet-5-5 | high |'));
 });
 
 test('haiku takes no effort', () => {
   assert.equal(validate({ model: 'haiku', effort: 'low' }, 'claude') !== null, true);
-  assert.ok(applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', model: 'haiku', effort: '' }]).includes('| `qa-inspector` | 재검 | claude | haiku | | |'));
+  assert.ok(applyChoices(T, [{ agent: 'verifier', unit: '재검', model: 'haiku', effort: '' }]).includes('| `verifier` | 재검 | claude | haiku | | |'));
 });
 
 test('codex rows take any model; runtime changes are checked against the new runtime', () => {
   assert.equal(validate({ model: 'gpt-5.2-codex', effort: 'high' }, 'codex'), null);
-  assert.ok(applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', runtime: 'codex', model: 'gpt-5.2-codex', effort: 'high' }]).includes('| `qa-inspector` | 재검 | codex | gpt-5.2-codex | high | |'));
-  assert.throws(() => applyChoices(T, [{ agent: 'qa-inspector', unit: '재검', runtime: 'gemini', model: 'x', effort: '' }]), /gemini/);
-  assert.equal(applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', runtime: 'claude', model: 'opus', effort: 'max' }]), T);
+  assert.ok(applyChoices(T, [{ agent: 'verifier', unit: '재검', runtime: 'codex', model: 'gpt-5.2-codex', effort: 'high' }]).includes('| `verifier` | 재검 | codex | gpt-5.2-codex | high | |'));
+  assert.throws(() => applyChoices(T, [{ agent: 'verifier', unit: '재검', runtime: 'gemini', model: 'x', effort: '' }]), /gemini/);
+  assert.equal(applyChoices(T, [{ agent: 'product-manager', unit: '기획', runtime: 'claude', model: 'opus', effort: 'max' }]), T);
   for (const model of ['one|two', 'row\nanother', 12, ['one']]) {
-    assert.throws(() => applyChoices(T, [{ agent: 'planner', unit: '설계, 계획', runtime: 'codex', model }]));
+    assert.throws(() => applyChoices(T, [{ agent: 'product-manager', unit: '기획', runtime: 'codex', model }]));
   }
   assert.throws(() => applyChoices(T, {}), /choices/);
 });
 
 test('new rows go before the first `*` row, duplicates are errors', () => {
   const added = addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]);
-  assert.ok(added.indexOf('`developer`') < added.indexOf('`*`') && added.indexOf('`developer`') > added.indexOf('`qa-inspector`'));
+  assert.ok(added.indexOf('`developer`') < added.indexOf('`*`') && added.indexOf('`developer`') > added.indexOf('`verifier`'));
   assert.throws(() => addRows(added, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]), /developer/);
   assert.throws(() => addRows(T, [{ agent: '', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]));
   assert.throws(() => addRows(T, [{ agent: 'developer', unit: '', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]));
@@ -84,16 +84,16 @@ test('CLI apply and add: a failure leaves the table as it was and exits 1', () =
   const choices = join(root, 'choices.json');
   writeFileSync(table, T, 'utf8');
   writeFileSync(choices, JSON.stringify([
-    { agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' },
+    { agent: 'verifier', unit: '재검', model: 'opus', effort: 'high' },
     { agent: 'ghost', unit: '재검', model: 'opus', effort: 'high' },
   ]), 'utf8');
   const r = cli('apply', '--table', table, '--choices', choices);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /ghost/);
   assert.equal(readFileSync(table, 'utf8'), T);
-  writeFileSync(choices, JSON.stringify([{ agent: 'qa-inspector', unit: '재검', model: 'opus', effort: 'high' }]), 'utf8');
+  writeFileSync(choices, JSON.stringify([{ agent: 'verifier', unit: '재검', model: 'opus', effort: 'high' }]), 'utf8');
   assert.equal(cli('apply', '--table', table, '--choices', choices).status, 0);
-  assert.ok(readFileSync(table, 'utf8').includes('| `qa-inspector` | 재검 | claude | opus | high | |'));
+  assert.ok(readFileSync(table, 'utf8').includes('| `verifier` | 재검 | claude | opus | high | |'));
   const rows = join(root, 'rows.json');
   writeFileSync(table, T, 'utf8');
   writeFileSync(rows, JSON.stringify([{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'gpt-4', effort: 'medium', note: '' }]), 'utf8');
@@ -109,9 +109,8 @@ test('CLI rows prints the six cells as they are', () => {
   const r = cli('rows', '--table', table);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout), [
-    { agent: 'planner', unit: '설계, 계획', runtime: 'claude', model: 'opus', effort: 'max', note: '사용자 메모' },
-    { agent: 'qa-inspector', unit: '재검', runtime: 'claude', model: 'sonnet', effort: 'medium', note: '' },
-    { agent: '*', unit: '리드', runtime: 'claude', model: 'opus', effort: 'high', note: '' },
+    { agent: 'product-manager', unit: '기획', runtime: 'claude', model: 'opus', effort: 'max', note: '사용자 메모' },
+    { agent: 'verifier', unit: '재검', runtime: 'claude', model: 'sonnet', effort: 'medium', note: '' },
     { agent: '*', unit: '기본', runtime: 'claude', model: 'opus', effort: 'medium', note: '' },
   ]);
 });
@@ -139,18 +138,18 @@ test('CLI page: new rows start at the recommendation, existing rows at the table
   writeFileSync(table, addRows(T, [{ agent: 'developer', unit: '구현', runtime: 'claude', model: 'opus', effort: 'medium', note: '' }]), 'utf8');
   writeFileSync(rec, JSON.stringify([
     { agent: 'developer', unit: '구현', isNew: true, model: 'sonnet', effort: 'high', reason: 'r' },
-    { agent: 'planner', unit: '설계, 계획', isNew: false, model: 'fable', effort: 'max', reason: 'r' },
+    { agent: 'product-manager', unit: '기획', isNew: false, model: 'fable', effort: 'max', reason: 'r' },
   ]), 'utf8');
   const r = cli('page', '--table', table, '--recommend', rec, '--out', out, '--codex');
   assert.equal(r.status, 0, r.stderr);
   const data = JSON.parse(readFileSync(out, 'utf8').match(/const DATA = (.*);/)[1]);
   const dev = data.rows.find((x) => x.agent === 'developer');
-  const planner = data.rows.find((x) => x.agent === 'planner');
+  const pm = data.rows.find((x) => x.agent === 'product-manager');
   assert.equal(dev.model, 'sonnet');
   assert.equal(dev.isNew, true);
-  assert.equal(planner.model, 'opus');
-  assert.equal(planner.recommend.model, 'fable');
-  assert.equal(data.rows.find((x) => x.agent === 'qa-inspector').recommend, null);
+  assert.equal(pm.model, 'opus');
+  assert.equal(pm.recommend.model, 'fable');
+  assert.equal(data.rows.find((x) => x.agent === 'verifier').recommend, null);
   assert.deepEqual([data.models, data.efforts, data.codex], [MODELS, EFFORTS, true]);
   // a recommendation for a row the table does not have is an error
   writeFileSync(rec, JSON.stringify([{ agent: 'ghost', unit: '구현', isNew: true, model: 'opus', effort: 'high', reason: 'r' }]), 'utf8');
@@ -190,11 +189,11 @@ test('setup rules and fixed assignments round-trip through the same choices arra
   assert.equal(applyChoices(table, settings), table);
   const edits = [{rule:'complexity',unit:'3',model:'sonnet',effort:'max'},
     {rule:'codex',unit:'sonnet/max',model:'local-sol',effort:'high'},
-    {rule:'approval',model:'끔'}, {agent:'planner',unit:'설계',fixed:true}];
+    {rule:'approval',model:'끔'}, {agent:'research',unit:'조사',model:'opus',effort:'high',fixed:true}];
   const next = pageData(applyChoices(table, edits), [], true);
   assert.equal(next.settings.find(x => x.unit === '3').model, 'sonnet');
   assert.equal(next.settings.find(x => x.unit === 'sonnet/max').model, 'local-sol');
   assert.equal(next.settings.find(x => x.rule === 'approval').model, '끔');
-  assert.match(next.rows.find(x => x.unit === '설계').note, /^고정/);
+  assert.match(next.rows.find(x => x.unit === '조사').note, /^고정/);
 });
 console.log(`model-table.check: ${n} cases passed`);

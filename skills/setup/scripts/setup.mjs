@@ -5,7 +5,7 @@
 //        node setup.mjs verify --target <dir>                                              exit 1 when a check fails
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,8 +25,20 @@ const INSTALL_RECORD = '.claude/harness-install.json';
 const DIAGRAM = ['dag-swimlane', 'waterfall-timeline'];
 const EXISTING = ['AGENTS.md', 'CLAUDE.md', '.claude', '.gitignore', '.agents', '.codex', 'package.json', 'Makefile'];
 const MODES = ['default', 'acceptEdits', 'bypassPermissions'];
-const PLANNER_EFFORTS = ['high', 'max'];
+const PM_MODELS = ['sonnet', 'opus', 'fable'];
+const PM_EFFORTS = ['medium', 'high', 'xhigh', 'max'];
+const PM_DEFAULT = { model: 'fable', effort: 'xhigh' };
+// Files earlier kit versions installed. Listed by name: the install record also holds merged and generated files.
+const RETIRED = [
+  '.claude/skills/team-lead/SKILL.md', '.claude/skills/team-qa/SKILL.md',
+  '.agents/skills/team-lead/SKILL.md', 'docs/harness/templates/team-skill.md',
+  '.claude/agents/planner.md', '.claude/agents/code-reviewer.md', '.claude/agents/qa-inspector.md',
+  '.codex/agents/planner.toml', '.codex/agents/code-reviewer.toml', '.codex/agents/qa-inspector.toml',
+];
+const OLD_ROSTER = 'docs/harness/team-org.md';
+const SKELETON = '> 이 스킬은 틀이다. `agent-author`가 프로젝트에 맞게 채운다.';
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'worktrees']);
+const fileNames = (dir, re) => (existsSync(dir) ? readdirSync(dir).map((f) => re.exec(f)?.[1]).filter(Boolean).sort() : []);
 
 function walk(dir, base = dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -47,6 +59,15 @@ export function inspect(target, { run, exists, globalSkillsDir }) {
     globalDiagramSkills: Object.fromEntries(DIAGRAM.map((s) => [s, exists(join(globalSkillsDir, s, 'SKILL.md'))])),
     codex: out('codex', ['--version']) !== null,
     existing: EXISTING.filter((p) => exists(join(target, p))),
+    migration: exists(join(target, OLD_ROSTER)) && !exists(join(target, 'docs/harness/agents.md')) ? {
+      roster: OLD_ROSTER,
+      projectRoles: fileNames(join(target, '.claude/agents'), /^(.+)\.md(?:\.agent-toggle-off)?$/)
+        .filter((n) => !existsSync(join(TEMPLATE, '.claude/agents', n + '.md')) && !RETIRED.includes(`.claude/agents/${n}.md`)),
+    } : null,
+    unfilledSkills: fileNames(join(target, '.claude/skills'), /^(.+)$/).filter((n) => {
+      const skill = join(target, '.claude/skills', n, 'SKILL.md');
+      return existsSync(skill) && readFileSync(skill, 'utf8').split(/\r?\n/).includes(SKELETON);
+    }),
   };
 }
 
@@ -81,11 +102,12 @@ export function mergeGitignore(text, lines) {
   return (text && !text.endsWith('\n') ? text + eol : text) + add.map((l) => l + eol).join('');
 }
 
-// Setup asks only for the planner's effort; the model stays what the table says.
-export function setPlannerRow(tableText, effort) {
-  return tableText.replace(/^\|[ \t]*`planner`[ \t]*\|[ \t]*(?:설계|계획)[ \t]*\|.*$/gm, (line) => {
+// Setup asks for the PM's model and effort; they go to the one 기획 row.
+export function setPmRow(tableText, pm) {
+  return tableText.replace(/^\|[ \t]*`product-manager`[ \t]*\|[ \t]*기획[ \t]*\|.*$/m, (line) => {
     const cells = line.split('|');
-    cells[5] = ` ${effort} `;
+    cells[4] = ` ${pm.model} `;
+    cells[5] = ` ${pm.effort} `;
     return cells.join('|');
   });
 }
@@ -179,6 +201,9 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
       plan.skip.push({ to, reason: '에이전트 OFF' });
       continue;
     }
+    // a default agent setup wrote and the project renamed or dropped in step 7 stays gone (설계서 4.4); other missing files are refilled.
+    // An agent switched OFF was handled above.
+    if (/^\.claude\/agents\/[^/]+\.md$/.test(to) && installed[to] && !existsSync(curPath)) { plan.skip.push({ to, reason: '사용자가 지움' }); continue; }
     const cur = existsSync(curPath) ? readFileSync(curPath) : null;
     const src = readFileSync(from, 'utf8');
     let content = readFileSync(from);
@@ -196,7 +221,7 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     } else if (rel === GATE_CONFIG) {
       content = json({ ...JSON.parse(src), prefixes: answers.approvalPrefixes });
     } else if (rel === MODEL_TABLE) {
-      content = setPlannerRow(src, answers.planner.effort);
+      content = setPmRow(src, { ...PM_DEFAULT, ...answers.pm });
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
     if (cur && !merged) {
@@ -206,10 +231,15 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     }
     plan.copy.push({ from, to, content });
   }
+  plan.retire = RETIRED.filter((p) => existsSync(join(target, p))).map((path) => {
+    const recorded = installed[path];
+    return { path, state: !recorded ? 'untracked' : recorded === sha(readFileSync(join(target, path))) ? 'unchanged' : 'modified' };
+  });
   return plan;
 }
 
 // plan.copy also holds conflicting files; they are written only when their path is in opts.approve.
+// A retired file the project edited or setup never recorded is deleted only when approved, the same way.
 export function applyInstall(plan, opts = { approve: [] }) {
   const approve = (opts.approve ?? []).map((a) => a.replaceAll('\\', '/'));
   const written = [];
@@ -231,11 +261,18 @@ export function applyInstall(plan, opts = { approve: [] }) {
     written.push(c.to);
     files[c.to] = sha(c.content);
   }
-  if (written.length) {
+  const retired = [];
+  for (const { path, state } of plan.retire ?? []) {
+    if (state !== 'unchanged' && !approve.includes(path)) { conflicts.push(path); continue; }
+    unlinkSync(join(plan.target, path));
+    delete files[path];
+    retired.push(path);
+  }
+  if (written.length || retired.length) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped, conflicts };
+  return { written, skipped, conflicts, retired };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.
@@ -326,13 +363,18 @@ function main(argv) {
     const answers = JSON.parse(readFileSync(opt('--answers'), 'utf8'));
     if (!MODES.includes(answers.coordinatorPermissionMode)) throw new Error(`coordinatorPermissionMode는 ${MODES.join(', ')} 중 하나다`);
     if (!Array.isArray(answers.approvalPrefixes)) throw new Error('answers에 approvalPrefixes 배열이 있어야 한다');
-    if (!PLANNER_EFFORTS.includes(answers.planner?.effort)) throw new Error(`planner.effort는 ${PLANNER_EFFORTS.join(', ')} 중 하나다`);
+    if (answers.planner) throw new Error('planner.effort는 pm.model과 pm.effort로 바뀌었다. answers에서 planner를 지우고 pm을 쓴다');
+    const pm = { ...PM_DEFAULT, ...answers.pm };
+    if (!PM_MODELS.includes(pm.model)) throw new Error(`pm.model은 ${PM_MODELS.join(', ')} 중 하나다`);
+    if (!PM_EFFORTS.includes(pm.effort)) throw new Error(`pm.effort는 ${PM_EFFORTS.join(', ')} 중 하나다`);
     const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
     if (answers.codex && r.conflicts.length) {
       r.skipped.push({ to: '.codex/agents/', reason: '설치 충돌 해결 뒤 역할 동기화' });
     } else if (answers.codex) {
-      const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3));
+      // a default agent the project removed has no Markdown to sync from
+      const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3))
+        .filter((n) => ['', '.agent-toggle-off'].some((off) => existsSync(join(target, '.claude/agents', n + '.md' + off))));
       const agents = syncAgents(target, names, approve);
       r.written.push(...agents.written);
       r.skipped.push(...agents.skipped);

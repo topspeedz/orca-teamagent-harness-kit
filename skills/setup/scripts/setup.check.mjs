@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, unlinkSyn
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyInstall, mergeGitignore, planInstall } from './setup.mjs';
+import { createHash } from 'node:crypto';
+import { applyInstall, inspect, mergeGitignore, planInstall } from './setup.mjs';
 import { lookup, parseTable } from '../../../template/.claude/scripts/model-selection.mjs';
 import { applyChoices } from './model-table.mjs';
 
@@ -33,14 +34,16 @@ put(tpl, '.claude/hooks/approval-gate.config.json', '{ "prefixes": [] }\n');
 const realTemplate = fileURLToPath(new URL('../../../template', import.meta.url));
 const tablePath = 'docs/harness/model-selection.md';
 put(tpl, tablePath, read(realTemplate, tablePath));
+put(tpl, '.claude/agents/backend.md', '---\nname: backend\ndescription: 백엔드\n---\n# backend\n');
 put(tpl, '.claude/skills/dag-swimlane/SKILL.md', '---\nname: dag-swimlane\n---\n');
 put(tpl, '.claude/skills/waterfall-timeline/SKILL.md', '---\nname: waterfall-timeline\n---\n');
 put(codex, '.codex/hooks.json', '{}\n');
 put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 
-const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'max' } };
+const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default' };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
-const ALL = ['.claude/hooks/approval-gate.config.json', '.claude/scripts/model-table.mjs', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', tablePath, 'docs/harness/templates/document-drafts.json', 'docs/harness/templates/model-survey.html'];
+const ALL = ['.claude/agents/backend.md', '.claude/hooks/approval-gate.config.json', '.claude/scripts/model-table.mjs', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', tablePath, 'docs/harness/templates/document-drafts.json', 'docs/harness/templates/model-survey.html'];
+const SHIPPED_RETIRED = ['.claude/skills/team-lead/SKILL.md', '.claude/skills/team-qa/SKILL.md', 'docs/harness/templates/team-skill.md'];
 let n = 0;
 const target = (name) => { const t = join(root, name); mkdirSync(t, { recursive: true }); return t; };
 const install = (t, answers = {}, ins = {}, approve = []) =>
@@ -96,7 +99,7 @@ test('product drafts use the installed forms and preserve project documents on r
   const page = spawnSync(process.execPath, ['.claude/scripts/model-table.mjs', 'page', '--table', tablePath, '--recommend', 'recommend.json', '--out', 'page.html'], { cwd: t, encoding: 'utf8' });
   assert.equal(page.status, 0, page.stderr);
   const data = JSON.parse(read(t, 'page.html').match(/const DATA = (.*);/)[1]);
-  assert.deepEqual(data.rows.filter(r => r.agent === 'planner').map(r => r.unit), ['요구사항 검토', '설계', '계획']);
+  assert.deepEqual(data.rows.filter(r => r.agent === 'product-manager').map(r => r.unit), ['기획', '완료 처리']);
   assert.equal(new Set(Object.values(forms)).size, 12);
   assert.equal(forms['docs/05-api/draft.md'], 'contract.md');
   assert.equal(forms['docs/06-database/draft.md'], 'contract.md');
@@ -133,7 +136,8 @@ test('product drafts use the installed forms and preserve project documents on r
   assert.equal(read(t, prd), '# 우리 제품\n');
   const missing = 'docs/11-operations/draft.md';
   unlinkSync(join(t, missing));
-  assert.deepEqual(applyInstall(plan()).written, [missing]);
+  // shortcut: the template still ships three retired files, so each reinstall retires and then restores them; drop the filter when it stops shipping them
+  assert.deepEqual(applyInstall(plan()).written.filter((p) => !SHIPPED_RETIRED.includes(p)), [missing]);
 
   const existing = target('기존 정본');
   put(existing, 'CHANGELOG.md', '# Releases\n');
@@ -179,7 +183,7 @@ test('legacy links, OFF engines, custom owners and in-progress records survive t
   const draft = 'docs/01-product/prd.md';
   const index = 'docs/DOCUMENTATION_INDEX.md';
   const contract = 'docs/contracts/team-api.md';
-  const md = '.claude/agents/planner.md', toml = '.codex/agents/doc-steward.toml';
+  const md = '.claude/agents/backend.md', toml = '.codex/agents/doc-steward.toml';
   for (const file of [md, toml]) renameSync(join(t, file), join(t, file + '.agent-toggle-off'));
   const apiDraft = 'docs/05-api/draft.md';
   unlinkSync(join(t, apiDraft));
@@ -188,7 +192,7 @@ test('legacy links, OFF engines, custom owners and in-progress records survive t
     [draft]: '# 배포된 PRD\n[작성 양식](../../' + oldForm + ')\n',
     [contract]: '# API 계약\n응답 절 작성자: api-editor\n오류 절 작성자: api-errors\n',
     [index]: '| `docs/05-api/` | API | `' + contract + '` | | 이전 phase | 최신 |\n',
-    [tablePath]: '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |\n| --- | --- | --- | --- | --- | --- |\n| `planner` | 설계, 계획 | codex | custom-id | high | 보존 |\n| `prd-writer` | 요구사항 정리 | claude | custom-claude | high | 유지 |\n| `*` | 기본 | claude | pinned-default | medium | 사용자 기본값 |\n',
+    [tablePath]: '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |\n| --- | --- | --- | --- | --- | --- |\n| `product-manager` | 기획 | codex | custom-id | high | 보존 |\n| `prd-writer` | 요구사항 정리 | claude | custom-claude | high | 유지 |\n| `*` | 기본 | claude | pinned-default | medium | 사용자 기본값 |\n',
     'docs/harness/team-org.md': '# 옛 명단\n| harness | harness-engineer | 단독 |\n',
     '.claude/agents/prd-writer.md': '# 옛 역할의 편집본\n',
     '.agents/skills/product-planning/SKILL.md': '# 옛 사용자 포인터\n',
@@ -223,8 +227,8 @@ test('legacy links, OFF engines, custom owners and in-progress records survive t
     for (const path of [md, toml, apiDraft]) assert.equal(existsSync(join(t, path)), false);
   }
   // Claude and Codex toggle independently, including an explicit sync.
-  assert.equal(cli('sync-agent', '--agent', 'planner').status, 0);
-  assert.match(read(t, '.codex/agents/planner.toml'), /꺼진 원문의 편집/);
+  assert.equal(cli('sync-agent', '--agent', 'backend').status, 0);
+  assert.match(read(t, '.codex/agents/backend.toml'), /꺼진 원문의 편집/);
   const syncOff = cli('sync-agent', '--agent', 'doc-steward');
   assert.equal(syncOff.status, 0, syncOff.stderr);
   assert.equal(JSON.parse(syncOff.stdout).skipped[0].to, toml);
@@ -236,7 +240,7 @@ test('legacy links, OFF engines, custom owners and in-progress records survive t
 
 test('a role switched off after planning stays off when the plan is applied', () => {
   const t = target('toggle during install');
-  const path = '.claude/agents/planner.md';
+  const path = '.claude/agents/backend.md';
   const plan = planInstall(realTemplate, codex, t, ANSWERS, INS);
   assert.ok(plan.copy.some(c => c.to === path));
   put(t, path + '.agent-toggle-off', '기존 비활성 정의');
@@ -308,35 +312,30 @@ test('codex false installs no codex files', () => {
   assert.ok(existsSync(join(root, 'codex', '.codex/hooks.json')));
 });
 
-test('fresh PM and Planner rows resolve exactly for both effort answers', () => {
+test('the PM 기획 row resolves exactly, fable/xhigh unless answers.pm says otherwise', () => {
   for (const template of [tpl, realTemplate]) {
-    for (const effort of ['max', 'high']) {
-      const t = mkdtempSync(join(root, 'planner-'));
-      applyInstall(planInstall(template, codex, t, { ...ANSWERS, planner: { model: 'opus', effort } }, INS));
+    for (const [pm, model, effort] of [[undefined, 'fable', 'xhigh'], [{ model: 'opus' }, 'opus', 'xhigh'], [{ model: 'sonnet', effort: 'max' }, 'sonnet', 'max']]) {
+      const t = mkdtempSync(join(root, 'pm-'));
+      applyInstall(planInstall(template, codex, t, { ...ANSWERS, pm }, INS));
       const table = read(t, tablePath);
       const { rows } = parseTable(table);
-      for (const [agent, unit, model, expected] of [
-        ['product-manager', '요구사항 정리', 'opus', 'max'], ['product-manager', '항목화', 'opus', 'high'],
-        ['product-manager', '계획 대조', 'opus', 'medium'], ['product-manager', '완료 처리', 'opus', 'medium'],
-        ['planner', '요구사항 검토', 'opus', 'high'], ['planner', '설계', 'fable', effort], ['planner', '계획', 'fable', effort],
-      ]) {
-        const r = lookup(rows, agent, unit);
-        assert.deepEqual([r.matched, r.runtime, r.model, r.effort], ['exact', 'claude', model, expected]);
-      }
-      assert.equal(rows.filter(r => r.agent === 'planner').length, 3);
-      assert.equal(rows.filter(r => r.agent === 'product-manager').length, 4);
-      const changed = applyChoices(table, [{ agent: 'planner', unit: '설계', model: 'opus', effort: 'high' }]);
-      assert.equal(changed, table.replace(`| 설계 | claude | fable | ${effort} |`, '| 설계 | claude | opus | high |'));
+      const r = lookup(rows, 'product-manager', '기획');
+      assert.deepEqual([r.matched, r.runtime, r.model, r.effort], ['exact', 'claude', model, effort]);
+      assert.equal(rows.filter(r => r.agent === 'product-manager').length, 2);
+      const changed = applyChoices(table, [{ agent: 'product-manager', unit: '기획', model: 'opus', effort: 'high' }]);
+      assert.equal(changed, table.replace(`| 기획 | claude | ${model} | ${effort} |`, '| 기획 | claude | opus | high |'));
     }
   }
 });
 
-test('install refuses a planner effort other than high or max', () => {
-  put(root, 'bad-effort.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'medium' } }));
+test('install refuses a pm model or effort outside the lists', () => {
   const setup = fileURLToPath(new URL('./setup.mjs', import.meta.url));
-  const r = spawnSync(process.execPath, [setup, 'install', '--target', target('bad effort'), '--answers', join(root, 'bad-effort.json')], { encoding: 'utf8' });
-  assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /planner\.effort/);
+  for (const [pm, field] of [[{ model: 'haiku' }, /pm\.model/], [{ effort: 'low' }, /pm\.effort/]]) {
+    put(root, 'bad-pm.json', JSON.stringify({ ...ANSWERS, pm }));
+    const r = spawnSync(process.execPath, [setup, 'install', '--target', target('bad pm'), '--answers', join(root, 'bad-pm.json')], { encoding: 'utf8' });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, field);
+  }
 });
 
 test('approval prefixes go to permissions.ask and the gate config', () => {
@@ -366,7 +365,7 @@ test('Codex install and team edits preserve the role and protect local TOML edit
   const cli = (...args) => spawnSync(process.execPath, [setup, ...args, '--target', t], { encoding: 'utf8' });
   const result = cli('install', '--answers', join(root, 'codex-answers.json'));
   assert.equal(result.status, 0, result.stderr);
-  const rel = '.codex/agents/planner.toml';
+  const rel = '.codex/agents/backend.toml';
   assert.match(read(t, rel), /developer_instructions = .*## 핵심 역할/u);
   const body = '# custom\n\n## 입력과 출력\n\n"결과" C:\\tmp\n';
   put(t, '.claude/agents/custom.md', '---\nname: custom\ndescription: "설명"\n---\n' + body);
@@ -380,6 +379,111 @@ test('Codex install and team edits preserve the role and protect local TOML edit
   put(t, custom, '# local\n');
   assert.equal(sync().status, 2);
   assert.equal(read(t, custom), '# local\n');
+});
+
+const SETUP = fileURLToPath(new URL('./setup.mjs', import.meta.url));
+const hash = (body) => createHash('sha256').update(body).digest('hex');
+const record = (t) => JSON.parse(read(t, '.claude/harness-install.json')).files;
+const addRecord = (t, rel, body) => put(t, '.claude/harness-install.json', JSON.stringify({ files: { ...record(t), [rel]: hash(body) } }));
+
+// Ruling 4: a retired path the template no longer ships, so this holds before and after the template drops the team skills.
+test('retired file with the recorded hash is deleted and leaves the record', () => {
+  const t = target('retire unchanged');
+  install(t);
+  const rel = '.claude/agents/code-reviewer.md';
+  put(t, rel, '# 0.5.1 code-reviewer\n');
+  addRecord(t, rel, '# 0.5.1 code-reviewer\n');
+  const r = install(t);
+  assert.equal(existsSync(join(t, rel)), false);
+  assert.equal(rel in record(t), false);
+  assert.deepEqual(r.retired, [rel]);
+  assert.deepEqual(r.conflicts, []);
+});
+
+test('(Review Focus 4) a retired file the project edited stays until approved', () => {
+  const t = target('retire edited');
+  put(t, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
+  put(t, 'answers.json', JSON.stringify(ANSWERS));
+  const cli = (...more) => spawnSync(process.execPath, [SETUP, 'install', '--target', t, '--answers', join(t, 'answers.json'), ...more], { encoding: 'utf8' });
+  assert.equal(cli().status, 0);
+  const planner = '.claude/agents/planner.md', qa = '.claude/agents/qa-inspector.md';
+  addRecord(t, planner, '# 0.5.1 planner\n');
+  put(t, planner, '# 0.5.1 planner\n프로젝트가 고친 줄\n');
+  put(t, qa, '# 기록에 없는 qa-inspector\n');
+  const held = cli();
+  assert.equal(held.status, 2, held.stderr);
+  assert.deepEqual(JSON.parse(held.stdout).conflicts.sort(), [planner, qa]);
+  assert.deepEqual(JSON.parse(held.stdout).retired.filter((p) => !SHIPPED_RETIRED.includes(p)), []);
+  assert.equal(read(t, planner), '# 0.5.1 planner\n프로젝트가 고친 줄\n');
+  assert.equal(read(t, qa), '# 기록에 없는 qa-inspector\n');
+  const approved = cli('--approve', planner);
+  assert.equal(approved.status, 2, approved.stderr);
+  assert.deepEqual(JSON.parse(approved.stdout).conflicts, [qa]);
+  assert.equal(existsSync(join(t, planner)), false);
+  assert.equal(planner in record(t), false);
+  assert.equal(read(t, qa), '# 기록에 없는 qa-inspector\n');
+  const both = cli('--approve', qa);
+  assert.equal(both.status, 0, both.stderr);
+  assert.equal(existsSync(join(t, qa)), false);
+});
+
+test('pm.model and pm.effort land in the PM 기획 row', () => {
+  const t = target('pm row');
+  install(t, { pm: { model: 'opus', effort: 'high' } });
+  assert.ok(read(t, tablePath).split('\n').some((l) => l.startsWith('| `product-manager` | 기획 | claude | opus | high |')));
+});
+
+test('answers with planner.effort are refused', () => {
+  put(root, 'old-answers.json', JSON.stringify({ ...ANSWERS, planner: { effort: 'max' } }));
+  const r = spawnSync(process.execPath, [SETUP, 'install', '--target', target('old answers'), '--answers', join(root, 'old-answers.json')], { encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /planner\.effort는 pm\.model과 pm\.effort로 바뀌었다/);
+});
+
+test('a default agent the project removed is not installed again', () => {
+  const t = target('removed agent');
+  install(t);
+  const rel = '.claude/agents/backend.md';
+  unlinkSync(join(t, rel));
+  const r = install(t);
+  assert.equal(existsSync(join(t, rel)), false);
+  assert.ok(r.skipped.some((s) => s.to === rel && s.reason === '사용자가 지움'));
+  assert.ok(rel in record(t));
+  assert.deepEqual(r.written, []);
+  // the boundary from the other side: a recorded file that is not an agent is refilled
+  const other = '.claude/hooks/approval-gate.config.json';
+  unlinkSync(join(t, other));
+  assert.deepEqual(install(t).written, [other]);
+  assert.equal(existsSync(join(t, rel)), false);
+  // through the CLI with Codex: the role sync skips the removed agent instead of failing on it
+  const c = target('removed agent codex');
+  put(c, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
+  put(c, 'answers.json', JSON.stringify({ ...ANSWERS, codex: true }));
+  const cli = () => spawnSync(process.execPath, [SETUP, 'install', '--target', c, '--answers', join(c, 'answers.json')], { encoding: 'utf8' });
+  assert.equal(cli().status, 0);
+  unlinkSync(join(c, rel));
+  const again = cli();
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(existsSync(join(c, rel)), false);
+});
+
+test('inspect reports a pending migration and unfilled skills', () => {
+  const deps = { run: () => { throw new Error('no'); }, exists: existsSync, globalSkillsDir: join(root, 'no-global') };
+  const t = target('migration');
+  put(t, 'docs/harness/team-org.md', '# 옛 명단\n| harness | harness-engineer | 단독 |\n');
+  put(t, '.claude/agents/prd-writer.md', '# 옛 역할\n');
+  put(t, '.claude/agents/api-editor.md.agent-toggle-off', '# 꺼진 옛 역할\n');
+  put(t, '.claude/agents/backend.md', '# 틀의 역할\n');
+  put(t, '.claude/agents/planner.md', '# 물러난 역할\n');
+  put(t, '.claude/skills/frontend-ux/SKILL.md', '# frontend-ux\n\n> 이 스킬은 틀이다. `agent-author`가 프로젝트에 맞게 채운다.\n');
+  put(t, '.claude/skills/backend-db/SKILL.md', '# backend-db\n\n채운 스킬\n');
+  const r = inspect(t, deps);
+  assert.equal(r.migration.roster, 'docs/harness/team-org.md');
+  assert.deepEqual(r.migration.projectRoles, ['api-editor', 'prd-writer']);
+  assert.deepEqual(r.unfilledSkills, ['frontend-ux']);
+  put(t, 'docs/harness/agents.md', '# 명단\n');
+  assert.equal(inspect(t, deps).migration, null);
+  assert.equal(inspect(target('migration none'), deps).migration, null);
 });
 
 console.log(`setup.check: ${n} passed`);

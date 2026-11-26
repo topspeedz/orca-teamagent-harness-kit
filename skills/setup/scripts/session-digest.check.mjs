@@ -121,4 +121,12 @@ test('pipelines: existing ones only', () => {
   assert.deepEqual(pipelineFiles(runProj), ['_workspace/_run/phase-1']);
 });
 
+test('pipelines: the roster, and the old one only while the migration is pending', () => {
+  const proj = join(root, 'roster-proj');
+  put('roster-proj/docs/harness/team-org.md', '# 옛 명단\n');
+  assert.deepEqual(pipelineFiles(proj), ['docs/harness/team-org.md']);
+  put('roster-proj/docs/harness/agents.md', '# 명단\n');
+  assert.deepEqual(pipelineFiles(proj), ['docs/harness/agents.md']);
+});
+
 console.log(`session-digest.check: ${n} cases passed`);

@@ -59,7 +59,7 @@ function definition(root, author, direct) {
 
 function project(scenario) {
   const root = join(folder, scenario);
-  put(root, 'answers.json', JSON.stringify({ codex: true, approvalPrefixes: [], coordinatorPermissionMode: 'default', planner: { effort: 'high' } }));
+  put(root, 'answers.json', JSON.stringify({ codex: true, approvalPrefixes: [], coordinatorPermissionMode: 'default', pm: { model: 'fable', effort: 'xhigh' } }));
   run(root, setup, 'install', '--target', '.', '--answers', 'answers.json');
   for (const name of ['requirements-write', 'product-review', 'backlog-management']) {
     const pointer = read(root, '.agents/skills/' + name + '/SKILL.md');
