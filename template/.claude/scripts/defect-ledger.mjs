@@ -99,6 +99,22 @@ export function addDefects(ledgerText, { source, round, defects }) {
   return lines.join(eol);
 }
 
+// One `- <Task ID> | <tree>` line at the end of `## 스냅샷`, in the order the Tasks were settled.
+export function addSnapshot(ledgerText, id, tree) {
+  const eol = ledgerText.includes('\r\n') ? '\r\n' : '\n';
+  const lines = ledgerText.split(/\r?\n/);
+  const row = `- ${id} | ${tree}`;
+  const sec = section(lines, '스냅샷');
+  if (!sec) {
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    return [...lines, '', '## 스냅샷', '', row, ''].join(eol);
+  }
+  let last = sec.start;
+  for (let i = sec.start; i < sec.end; i++) if (lines[i].trim()) last = i + 1;
+  lines.splice(last, 0, row);
+  return lines.join(eol);
+}
+
 // fix rounds already launched (a fix Task with a dispatch) + 1
 export function currentRound(map) {
   const rounds = new Set();

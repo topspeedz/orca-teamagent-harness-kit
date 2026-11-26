@@ -19,7 +19,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 | --- | --- |
 | 단순 질문, BL 지정이 없는 한 파일의 작은 수정 | 창구가 직접 한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. |
 | 새 요구사항, 지정 BL ID, 한 phase 위임 | 창구가 `plan-orchestrate`의 세 접수 경로와 승인 절차를 따른다. |
-| 승인된 실행 팀의 Task | 팀장이 ON이고 단순한 1개면 팀원에게 직접 배정할 수 있다. 2개 이상 또는 전문 분해 1개는 팀장 경유, 팀장 OFF는 팀 배정 대기다. |
+| 승인된 실행 팀의 Task | 코디네이터가 팀원에게 직접 배정한다. 계획이 팀 내부 분해를 맡긴 Task만 팀장을 거친다. 팀장 에이전트가 OFF인 팀은 배정 대기다. |
 
 ## 하는 일과 하지 않는 일
 
@@ -51,8 +51,7 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
 
 - 워커와 코디네이터는 사용자에게 직접 묻지 않는다. 코디네이터는 사용자에게 물을 것을 창구에 올리고, 창구가 사용자에게 묻는다. 로컬 질문 창은 창구가 볼 수 없으므로 쓰지 않는다.
 - **코디네이터가 창구에 묻는 방법.** 실행 Run을 가진 코디네이터에게는 일반 `ask`의 답이 오지 않는다. 그래서 답을 기다리는 형태로 백그라운드에 건다: `orca orchestration ask --from <내 핸들> --question "<질문>" --wait --timeout-ms 1800000 --json`. 답은 이 명령의 출력(`answer`)으로 온다. 시간이 다 되면 질문은 살아 있으므로 `--question` 대신 `--resume <message id>`로 다시 건다. 그동안 워커의 보고는 평소대로 정산한다.
-- **대기에는 `--run <실행 Run>`을 붙인다.** 워커의 보고와 창구의 지시가 실행 Run으로 들어온다.
-- **대기 명령은 단독으로 건다.** 다른 명령과 한 줄에 묶지 않는다. 대기 작업이 끝났다는 알림을 받으면 그 출력을 끝까지 읽고, 들어 있는 메시지를 정산한 뒤에만 다시 건다. 대기가 가져간 메시지는 다시 오지 않는다. 올 보고가 안 오면 `orca orchestration inbox --terminal run:<실행 Run> --limit 20`으로 이미 가져간 메시지가 있는지 본다.
+- **코디네이터의 수신함은 `run:<실행 Run>`이다.** 워커의 보고와 창구의 지시가 실행 Run으로 들어온다. 거는 법은 아래 대기 절이다.
 - 긴 본문은 파일에 쓰고 `"$(cat <파일>)"`로 넘긴다. 한글 인자를 파이프로 넘기면 깨질 수 있다.
 - 범위 추가와 재작업은 `send`로 보태지 않고 새로 띄운다. 모델과 effort는 새 터미널을 띄울 때만 정해지므로, 보탠 일은 적용값을 입증할 수 없다.
 - 코디네이터는 시작할 때 실행 Run을 따로 만든다(아래 워커 기동 1). 코디네이터가 띄우는 Task는 그 Run에 등록되고, 팀장과 팀원도 그 Run에 들어간다. 같은 Run 안에서도 보고는 띄운 쪽에게만 간다. 팀장은 `run-create`를 하지 않는다.
@@ -84,12 +83,12 @@ description: "phase 하나의 실행을 감독하는 코디네이터의 절차. 
    ```
 
 - **워커 생성 직전 평가.** 사용자 위임(`routing.mode=auto`)이면 최종 역할 지침·실제 spec·선행 산출물·재시도 메모와 승인된 축별 근거를 대조한다. `node .claude/scripts/orca-launch.mjs assessment-context --approval <승인 파일> --id <실행 Task ID> --spec-file <작성한 원본 spec>`의 출력으로 평가 JSON을 시작한다. 여기에 `reason`으로 대조 결과를 적는다. 근거가 달라진 Opus 세션은 계획 때와 같은 형식의 `input`에 갱신한 전체 점수·근거를 담는다. 다른 모델이거나 근거가 부족하면 사유만 남겨 승인 추천을 사용한다. 직접 지정·표 고정·구 승인에는 평가 파일을 붙이지 않는다. 기동 뒤 영수증의 요청·적용값을 기록한다.
-- **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 시간 초과로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
+- **`launchable`은 깰 때마다 돌린다.** `worker_done`을 정산한 뒤, 질문에 답한 뒤, 대기가 `idle`로 끝난 뒤에도 돌린다. 긴 Task 하나만 도는 동안에도 빈 슬롯이 메워진다. 웨이브를 기다리지 않는다.
 - **`worker_done`을 정산할 때마다 대기 중인 Task를 당길 수 있는지 본다.** `held`의 사유(편집 겹침, 자원, 슬롯)는 장부의 `## 결정`에 적는다. `launchable`의 `candidates`는 대기 중인 Task마다 아직 안 끝난 앞 Task(`waitingOn`)와 spec의 `먼저 읽을 것`(`reads`)을 보여 준다. 빈 슬롯이 있고, `reads`가 `waitingOn` Task의 산출물(그 Task의 편집 범위나 리포트)을 하나도 읽지 않으면, 실제 입력만 의존으로 남겨 당긴다: `node .claude/scripts/orca-launch.mjs pull --map <map> --id <Task ID> --deps <실제 입력 Task,…> --reason "<이유>"`. 실제 입력이 모두 끝났을 때만 준비 상태가 되고, 아니면 `waitingOn`을 돌려주고 아무것도 바꾸지 않는다. 당긴 뒤 `launchable`을 다시 돌린다(편집 겹침과 자원은 거기서 걸러진다). 검증·리뷰 Task는 바로 당기고(혼자 써야 하는 자원을 쓰는 검증 Task와 시험 갱신 Task를 기다리는 끝 검증 Task는 당기지 않는다), 구현 Task를 계획과 다른 순서로 당길 때는 창구에 `ask`로 올린다. 당긴 것은 장부에 적는다. 판단은 `candidates`의 줄만으로 하고 spec 전체를 다시 읽지 않는다.
 - **준비된 Task를 남긴 채 대기를 걸지 않는다.** 대기를 걸기 직전에 `launchable`을 돌려 `launch`가 비었는지 본다.
 - **Orca가 기동을 거부하면 그대로 둔다.** 앞 Task가 안 끝났거나 결정을 기다리는 Task는 `기동 거부`가 나온다. `task-update`로 상태를 바꿔서 띄우지 않고, `orca orchestration worker-start`를 직접 부르지 않는다.
 - **폭은 계획과 `launchable`이 정한다.** 계획에 없는 Task를 즉석에서 만들지 않는다. 계획에 있는 Task의 순서는 위 규칙대로 실제 입력에 맞춰 당길 수 있다. 동시 워커 수는 브리프의 슬롯 수를, 한 팀의 동시 워커는 4명 이하를 지킨다.
-- **실행 팀 배정.** 등록 전과 기동 직전에 `node .claude/scripts/phase-routing.mjs team --team <명단의 팀> --count <이 팀에 배정된 전체 Task 수> [--complex]`를 실행한다. `wait`이면 원소속으로 배정 대기하고 창구에 알린다. `direct`면 단순 1개를 팀원에게 직접 배정하고 보고받을 수 있다. `lead`면 팀 Task를 `--lead`로 등록하고 팀장에게 통합 보고를 받는다. 해당 엔진의 워커 정의가 OFF여도 기동을 보류한다. 팀장·팀원 모두 승인 당시의 역할·작업 단위별 배정을 사용한다. 내부 분해로 범위나 소속 팀이 바뀌면 새 배정 전에 창구로 올린다.
+- **실행 팀 배정.** 등록 전과 기동 직전에 `node .claude/scripts/phase-routing.mjs team --team <명단의 팀> [--complex]`를 실행한다. `--complex`는 계획이 그 Task의 팀 내부 분해를 팀장에게 맡겼을 때(승인 노드에 `members`가 있을 때)만 붙인다. `direct`면 Task 수와 관계없이 팀원에게 직접 배정하고 보고받는다. `lead`면 팀 Task를 `--lead`로 등록하고 팀장에게 통합 보고를 받는다. `wait`이면 원소속으로 배정 대기하고 창구에 알린다. 해당 엔진의 워커 정의가 OFF여도 기동을 보류한다. 팀장·팀원 모두 승인 당시의 역할·작업 단위별 배정을 사용한다. 내부 분해로 범위나 소속 팀이 바뀌면 새 배정 전에 창구로 올린다.
 - **그림.** 상태 변화 때 같은 실행 Run의 `ready` 상태로 DAG를 갱신한다. 워터폴은 설치된 번들의 `scripts/from-orca.mjs --map <map> --run <실행 Run> --ledger <ledger.md> --plan <waterfall.plan.json> --out <진행.json>`과 `scripts/progress.mjs <진행.json> <진행.html>`로 같은 주소를 갱신한다. 완료·진행 막대의 시작은 Task 생성 시각이며 사전 등록 대기가 포함된다. 여러 Run은 각 진행 JSON을 `merge.mjs`로 합친다. setup이 전역 그림 스킬을 선택했으면 그 스킬의 설치 위치에서 실행한다. 그 버전에 `--map` 지원이 없으면 설치한 하네스 키트의 `template/.claude/skills/waterfall-timeline/scripts/`에서 같은 명령을 실행하고 입력·출력은 프로젝트 경로로 지정한다.
 - 기동 영수증의 적용값을 장부에 적는다. 요청한 값만 보고 적지 않는다([settle.md](references/settle.md)).
 
@@ -130,11 +129,20 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 ## 정산
 
-`worker_done`마다 네 가지를 본다. 기대한 Dispatch인가, 리포트 파일이 있는가, 계획서가 적은 그 Task의 산출물이 실제로 있는가, 리포트의 검증 절이 통과하는가. 뒤의 둘은 한 명령으로 본다: `node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`. 하나라도 아니면 본문이 성공이어도 실패로 처리한다. 워커의 검사를 다시 돌리지 않고 리포트 전문을 읽지 않는다.
+`worker_done`마다 한 명령을 돌린다. `--dispatch`, `--report`, `--outcome`은 받은 메시지의 `payload`에서, `--expect`는 계획서가 적은 그 Task의 산출물에서 옮긴다.
 
-- **실패로 처리할 때는 `fail` 명령을 돌린다.** `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`. Orca는 워커의 성공 보고만으로 그 Task를 끝난 것으로 치고 뒤 Task를 준비 상태로 올린다. 이 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
-- **검증 리포트를 정산할 때는 원장에 올린다.** `node .claude/scripts/defect-ledger.mjs add --ledger <ledger.md> --map <map> --report <리포트> --source <Task ID>`. 리포트의 `## 결함` 표에서 장부의 `## 결함 원장`에 행을 만든다. 코디네이터가 고치는 것은 상태 칸뿐이다. 출력의 `existing`에 ID가 있고 그 리포트가 그 ID를 제기한 Task의 재검이 아니면, 두 리포트가 같은 ID를 쓴 것이고 원장에는 먼저 올린 결함만 있다. 팀장의 통합 보고면 통합 보고의 Task 표에 적힌 팀원 리포트 경로마다 한 번씩, `--source`에 그 팀원의 Task ID를 넣어 돌린다.
-- **Task와 수정을 정산할 때는 스냅샷을 찍는다.** `node .claude/scripts/tree-snapshot.mjs take`가 돌려준 `tree` 값을 장부의 `## 스냅샷` 절에 적는다. 두 시점의 차이는 `node .claude/scripts/tree-snapshot.mjs diff --from <tree> --to <tree> --path <편집 범위>`로 그 Task의 편집 범위로 좁혀 바뀐 파일을 본다. 병렬로 도는 동안의 차이에는 다른 Task의 편집이 섞이기 때문이다.
+```text
+node .claude/scripts/orca-launch.mjs settle --map <map> --id <Task ID> --dispatch <dispatchId> --report <리포트 경로> --ledger <ledger.md> [--expect <산출물 경로>,<산출물 경로>] [--outcome failed]
+```
+
+이 명령이 네 가지를 본다. 기대한 Dispatch인가, 리포트 파일이 있는가, 산출물이 실제로 있는가, 리포트의 검증 절이 통과하는가. 워커의 검사를 다시 돌리지 않고 리포트 전문을 읽지 않는다.
+
+- **`ok: true`면 정산이 끝났다.** 리포트의 `## 결함` 표는 장부의 `## 결함 원장`에, 그때의 작업 트리는 `## 스냅샷`에 이미 적혔다. 코디네이터가 원장에서 고치는 것은 상태 칸뿐이다. `defects.existing`에 ID가 있고 그 리포트가 그 ID를 제기한 Task의 재검이 아니면, 두 리포트가 같은 ID를 쓴 것이고 원장에는 먼저 올린 결함만 있다.
+- **`ok: false`면 본문이 성공이어도 실패다.** Orca는 워커의 성공 보고만으로 뒤 Task를 준비 상태로 올리므로, 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶었다(`demoted`). `cause`를 장부의 재시도 열에 적고 [settle.md](references/settle.md)의 실패 처리로 간다. 그래서 정산을 끝낸 뒤에 `ready`를 본다.
+- **`기대한 Dispatch가 아님`은 앞선 시도나 재전송의 보고다.** 아무것도 바뀌지 않았으니 넘어간다.
+- `worker_done` 없이 실패로 닫아야 할 때(워커가 죽었다 등)만 `node .claude/scripts/orca-launch.mjs fail --map <map> --id <Task ID> --cause "<원인>"`을 직접 돌린다.
+- 팀장의 통합 보고는 팀 Task를 같은 명령으로 정산한 뒤, 통합 보고의 Task 표에 적힌 팀원 리포트마다 `node .claude/scripts/defect-ledger.mjs add --ledger <ledger.md> --map <map> --report <리포트> --source <팀원 Task ID>`를 돌린다.
+- 두 시점의 차이는 `node .claude/scripts/tree-snapshot.mjs diff --from <tree> --to <tree> --path <편집 범위>`로 그 Task의 편집 범위로 좁혀 본다. 병렬로 도는 동안의 차이에는 다른 Task의 편집이 섞이기 때문이다.
 - 질문을 올린 워커에게는 `send`가 아니라 `reply`로 먼저 답한다.
 - `stopReason: "finished"`인 `escalation`("Worker stopped without reporting")은 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다.
 - 기동 스크립트가 턴 시작을 확인하지 못해도 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 확인한 뒤에만 복구한다.
@@ -150,7 +158,7 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 - 끝 리뷰는 합쳐진 코드에서 브라우저와 혼자 써야 하는 자원 없이 도는 검사(문법, 타입, 린트, 단위 테스트)를 먼저 한 번 돌린다(`change-review` 4단계). 이 확인에 따로 Task를 두지 않는다.
 - 끝 검증이 서로 독립인 영역 둘 이상을 덮으면 QA를 처음부터 2~3명으로 나눈다. 바뀐 영역 묶음마다 한 명, 그리고 영역에 속하지 않는 항목을 보는 횡단 한 명이다. 결함 ID 접두어는 나눈 QA만이 아니라 이 phase의 모든 검증 Task(중간 리뷰, 끝 리뷰, 끝 QA)와 시험 갱신 Task의 spec에 Task마다 다르게 미리 배정한다.
 - QA가 혼자 써야 하는 자원(GPU, Blender MCP 등)을 쓰면 그 QA는 나누지 않는다. 구현 Task와 시험 갱신 Task가 모두 정산된 뒤에 Task 하나로 한 번 돌리고, 등록할 때 `--resource`를 붙인다. 여러 워커가 같이 쓰면 그 자원 하나를 두고 서로 막힌다. 구현 Task는 그 자원 없이 도는 간단한 코드 테스트로 끝낸다(spec 양식의 `완료 기준`).
-- 시험 갱신 Task가 준비되면 코디네이터가 전체 테스트를 한 번 돌린다. 통과하면 그 Task를 `skip`으로 닫고, 실패하면 실패 목록을 spec에 넣어 띄운다. 그 리포트의 `## 결함` 표를 `defect-ledger.mjs add`로 원장에 올린다(`add`는 표의 행을 모두 쓴다). 워커가 고친 옛 기대값은 결함이 아니므로 그 표에 적지 않고, 그래서 원장에 오르지 않고 수정 라운드에 세지 않는다.
+- 시험 갱신 Task가 준비되면 코디네이터가 전체 테스트를 한 번 돌린다. 통과하면 그 Task를 `skip`으로 닫고, 실패하면 실패 목록을 spec에 넣어 띄운다. 그 Task를 정산하면 리포트의 `## 결함` 표의 행이 모두 원장에 오른다. 워커가 고친 옛 기대값은 결함이 아니므로 그 표에 적지 않고, 그래서 원장에 오르지 않고 수정 라운드에 세지 않는다.
 - 끝 QA의 spec에는 전체 테스트가 이미 돌았다는 것과 그 결과 파일의 경로를 넣고, 이미 열린 결함 ID는 `이미 아는 것:` 줄에 넣는다. QA는 전체 테스트를 다시 돌리지 않는다.
 - 끝 QA의 spec에는 계획서 `## DAG`의 의존 줄을 "대조할 경계면"으로 옮겨 적는다. 해당하는 것이 없으면 `없음`이라고 적는다. 팀장에게 맡길 때는 팀 spec에 적는다.
 - 같은 파일을 고치는 Task가 진행 중이면 그 파일의 리뷰는 편집이 끝난 뒤 한 번만 한다.
@@ -177,27 +185,17 @@ node .claude/scripts/orca-launch.mjs resolve --map <map> --id <Task ID> --resolu
 
 **승인이 필요한 명령(push, PR 등)의 실행 주체.** 권한 질문이 실제로 뜨는 세션만 실행한다. 코디네이터가 그런 모드로 떠 있으면 코디네이터가 실행하고 사용자가 그 터미널에서 승인한다. 아니면 코디네이터는 커밋까지만 하고 push와 PR은 창구에 `ask --wait`로 넘긴다. 훅이 명령을 거부하며 `ask`로 올리라고 하면 같은 방법으로 올린다.
 
-## 대기 계약 (생략·요약 금지)
-대기 명령의 세부 인자는 `orca skills get orchestration`을 따른다. 아래 1~5는 그와 별개로 항상 지킨다. Codex는 1~5 대신 6을 지킨다.
-1. 대기는 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 포그라운드 대기는
-   도구 한도(최대 10분)에 끊기고, `Start-Process`·`nohup` 분리 실행은 끝나도 아무도 못 깨운다. stderr keepalive를 Monitor로 보지 않는다.
-   결과는 stdout의 JSON만 읽고 `| head -c`로 자르지 않는다(keepalive 줄이 자를 몫을 다 먹어 본문이 사라진다 — 거르려면 `| grep -v _keepalive`).
-   **한 세션에 `check --wait`는 동시에 하나** — 앞 대기의 깨우기를 받은 뒤에만 다시 걸고, 추적을 잃은 앞 대기는 먼저 멈춘다.
-2. 깨우는 조건에서 heartbeat를 뺀다: `orca orchestration check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000 --json`.
-   heartbeat를 빼도 타임아웃마다 1회는 깨므로 짧게 잡으면 빈 깨움만 는다.
-   `status`는 빼지 않는다 — 사용자 지시가 대기 중인 코디네이터에게 전달되는 통로다(빼면 사용자 지시를 놓친다).
-3. 깨면 돌려받은 묶음 전체를 처리한다. `--types`는 깨우는 조건일 뿐 묶음에는 heartbeat도 섞여 온다. 소비하는 `check`가
-   묶음을 처리됨으로 표시하므로 `--ack`는 붙이지 않는다(그 표시를 하지 않는 구버전 Orca 전용 옵션이다).
-   이미 처리한 message id는 다시 정산하지 않는다 — `"replayed": true` 묶음(heartbeat뿐인 묶음의 재배달, 또는 겹쳐 건 대기가
-   거부 없이 받은 같은 `worker_done`)이 그 경우다. 같은 Dispatch의 `worker_done`이 id만 다르게 수 초 간격으로 두 번 오면 워커
-   재전송이다 — 첫 것으로만 정산한다. 소비하는 `check`는 대기를 건 쪽 본인만 실행한다(서브에이전트는 쓰지 않는다).
-4. 묶음에 heartbeat만 있으면 사용자에게 보고하지 않고 말없이 대기를 다시 건다.
-   "You have N orchestration messages" 알림도 같다 — 추적 중인 대기가 있으면 도구 호출 없이 턴을 끝낸다.
-5. 타임아웃은 실패가 아니다. 다시 걸기 전에 `orca orchestration inbox --terminal <내 수신함> --limit 5`로 최근 5개만 한 번 보고,
-   아직 정산하지 않은 message id가 있으면 정산한 뒤 다시 건다(가져갔는데 읽지 못한 메시지는 여기에만 남는다).
-   `<내 수신함>`은 Run을 가진 쪽은 `run:<Run ID>`, Run이 없는 팀장은 `dispatch:<자기 Dispatch ID>`다.
-   연속 3번 빈 대기면 `worker-list`로 워커 생존을 본다. 침묵·타임아웃·목록 부재만으로 종료로 판정하거나 재기동하지 않는다.
-   heartbeat는 워커가 보내는 것이지 코디네이터가 보내거나 답할 것이 아니다.
-6. Codex는 `check --wait`를 걸지 않는다. 끝난 백그라운드 명령은 Codex를 깨우지 못하고, 대기가 가져간 메시지에는 Orca 알림도 오지 않아
-   메시지가 묻힌다. 할 일을 마치면 턴을 끝낸다. "You have N orchestration message" 알림이 오면 알림이 적어 준 `check` 명령을 그대로 한 번 돌려
-   묶음 전체를 3대로 처리한다. 사용자 지시도 이 알림으로 온다. 그 `check`가 비어 있으면 5의 `inbox --limit 5`를 한 번 본다.
+## 대기
+
+대기는 이 명령 하나로 건다. heartbeat, 재배달, 워커의 재전송, 타임아웃은 명령이 거르고 처리할 메시지만 돌려준다.
+
+```text
+node .claude/scripts/orca-launch.mjs wait --inbox <내 수신함>
+```
+
+- `<내 수신함>`은 Run을 가진 쪽은 `run:<Run ID>`(코디네이터는 실행 Run, 창구는 창구 Run), Run이 없는 팀장은 `dispatch:<자기 Dispatch ID>`다.
+- 하네스가 추적하는 백그라운드 작업으로 건다(Claude Code: Bash `run_in_background: true`). 다른 명령과 한 줄에 묶지 않고, 한 세션에 하나만 건다.
+- 끝났다는 알림을 받으면 출력의 `messages`를 모두 처리한 뒤에만 다시 건다. 대기가 가져간 메시지는 다시 오지 않는다. 출력을 잃었으면 `--last`를 붙여 마지막 묶음을 다시 본다.
+- 대기가 걸려 있는 동안 "You have N orchestration messages" 알림이 오면 도구 호출 없이 턴을 끝낸다.
+- `idle: true`는 빈 대기가 세 번 이어졌다는 뜻이다. `orca orchestration worker-list`로 워커 생존을 본다. 침묵만으로 종료로 판정하거나 다시 띄우지 않는다. 올 보고가 오지 않으면 `orca orchestration inbox --terminal <내 수신함> --limit 20`으로 읽기만 한다.
+- Codex는 대기를 걸지 않는다. 끝난 백그라운드 명령이 Codex를 깨우지 못한다. 할 일을 마치면 턴을 끝내고, "You have N orchestration message" 알림이 오면 같은 명령에 `--once`를 붙여 한 번 돌린다.

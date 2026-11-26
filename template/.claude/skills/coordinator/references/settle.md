@@ -4,24 +4,25 @@
 
 ## 1. 묶음 처리
 
-깨면 받은 묶음 전체를 메시지 유형별로 처리한다. 이미 처리한 message id는 다시 정산하지 않는다.
+대기가 돌려준 `messages`를 유형별로 모두 처리한다. heartbeat와 이미 넘겨준 메시지는 대기 명령이 걸러서 오지 않는다.
 
 | 유형 | 처리 |
 | --- | --- |
 | `question` | `send`가 아니라 `reply --id <message id>`로 먼저 답한다. 코디네이터가 모르는 것은 `ask --wait`로 창구에 올리고(`SKILL.md`의 통신), 그 답으로 `reply`한다. 장부의 질문 열을 1 올린다. |
-| `worker_done` | 2절의 네 가지를 확인한다. |
+| `worker_done` | 2절의 `settle` 한 명령으로 정산한다. |
 | `escalation` | `stopReason: "finished"`("Worker stopped without reporting")이면 워커가 답을 기다리는 중일 수 있다. 화면을 확인하기 전에는 재기동하지 않는다. 그 밖은 코디네이터가 풀 수 있는 것(경로, 환경 안내)은 풀어 `send --to dispatch:<id>`로 알리고, 아니면 `ask --wait`로 올린다. |
 | `status` | 창구가 전한 사용자 지시다. 실행 Run으로 온다. 장부의 `## 결정`에 원문을 적고 따른다. |
-| heartbeat만 | 보고 없이 다시 대기를 건다. |
 
 ## 2. worker_done의 네 가지 확인
 
-1. **기대한 Dispatch인가.** 장부에 적은 그 Task의 Dispatch ID와 같아야 한다. 같은 Dispatch의 `worker_done`이 id만 다르게 두 번 오면 첫 것으로만 정산한다.
-2. **리포트 파일이 있는가.** `worker_done`에 실린 리포트 경로의 파일이 실제로 있어야 한다.
-3. **계획서가 적은 산출물이 있는가.** 리포트의 ✅는 워커가 스스로 적은 것이고, 만들지 않은 파일은 git에도 흔적이 남지 않는다. 아래 명령에 `--expect <산출물 경로>`를 붙여 함께 본다. 산출물이 여럿이면 `--expect`를 그만큼 붙인다. 팀장에게 준 팀 Task는 통합 보고가 산출물이므로 붙이지 않는다.
-4. **`node .claude/scripts/report-check.mjs <리포트 경로> --expect <산출물 경로>`가 코드 0인가.** 표준 출력의 JSON 한 줄만 읽는다. `failed` 줄은 장부의 재시도(원인) 열로, `notes`(`(참고)` 줄)는 최종 보고의 남은 것으로 옮긴다.
+`node .claude/scripts/orca-launch.mjs settle …`(`SKILL.md`의 정산)이 네 가지를 보고 표준 출력에 JSON 한 줄을 낸다. 그 줄만 읽는다.
 
-하나라도 아니면 본문이 성공이어도 실패로 처리한다. 코디네이터는 리포트 전문을 읽지 않고, 워커의 검사를 다시 돌리지 않는다.
+1. **기대한 Dispatch인가.** Task 대응표에 적힌 그 Task의 Dispatch ID와 같아야 한다. 다르면 아무것도 바꾸지 않고 `기대한 Dispatch가 아님`으로 끝난다.
+2. **리포트 파일이 있는가.** `worker_done`에 실린 리포트 경로의 파일이 실제로 있어야 한다.
+3. **계획서가 적은 산출물이 있는가.** 리포트의 ✅는 워커가 스스로 적은 것이고, 만들지 않은 파일은 git에도 흔적이 남지 않는다. 산출물이 여럿이면 `--expect`에 쉼표로 잇는다. 팀장에게 준 팀 Task는 통합 보고가 산출물이므로 붙이지 않는다.
+4. **리포트의 검증 절이 통과하는가.** `failed` 줄은 장부의 재시도(원인) 열로, `notes`(`(참고)` 줄)는 최종 보고의 남은 것으로 옮긴다.
+
+하나라도 아니면 본문이 성공이어도 실패다. 명령이 그 Task를 실패로 되돌리고 뒤 Task를 다시 묶는다. 코디네이터는 리포트 전문을 읽지 않고, 워커의 검사를 다시 돌리지 않는다.
 
 ## 3. 장부
 
@@ -49,7 +50,7 @@ phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/t
 
 | 상황 | 처리 |
 | --- | --- |
-| 네 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `fail` 명령을 돌리고 원인을 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
+| 네 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `settle`이 이미 그 Task를 실패로 되돌렸다. 출력의 `cause`를 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
 | 팀장의 통합 보고가 실패 | 위와 같은 방법으로 처리한다. 메모에는 통합 보고의 미달 Task만 적는다. 다시 뜬 팀장은 그것만 한다. |
 | 기동 영수증의 `turnStarted: false` | 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 턴이 시작되지 않은 것을 확인한 뒤에만 사람이 복구한다. 장부에 그 상태를 적는다. |
 | 등록이 배정 불일치로 거부 | 계획 Task ID와 승인 버전, 역할·단위·실제 spec을 대조한다. 승인값을 쓸 수 없으면 창구에 올린다. 현재 표를 소급 적용하지 않는다. |

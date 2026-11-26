@@ -13,12 +13,12 @@
 // so `--body "a & b"` or `--spec "$(cat f)"` never count. Always exit 0.
 const ORCA = /(?:^|[\s;&|(){}])(?:[\w.:~/\\-]*[/\\])?(?:orca(?:-ide|-dev)?(?:\.exe|\.cmd)?|\$\{?ORCA_CLI_COMMAND\}?)\s+orchestration\s+check(?=\s|$)/;
 const WAIT = /(?:^|\s)--wait(?=[\s=)]|$)/;
-const REASON = 'orca-wait-gate: 셸 `&`로 띄운 `orca orchestration check --wait`는 추적·정지할 수 없는 고아 waiter가 되어 다음 대기가 waiter_exists로 막힌다. `&`를 빼고 Bash run_in_background로 띄워라(대기 계약).';
-const missingReason = (flags) => `orca-wait-gate: \`orca orchestration check --wait\`에 대기 옵션이 없으면 빈 깨움으로 턴을 쓴다. 빠진 옵션: ${flags.join(', ')}. 올바른 형태: \`check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000\` (대기 계약).`;
+const REASON = 'orca-wait-gate: 셸 `&`로 띄운 `orca orchestration check --wait`는 추적·정지할 수 없는 고아 waiter가 되어 다음 대기가 waiter_exists로 막힌다. `&`를 빼고 Bash run_in_background로 띄워라(대기는 `node .claude/scripts/orca-launch.mjs wait --inbox <내 수신함>` 하나로 건다).';
+const missingReason = (flags) => `orca-wait-gate: \`orca orchestration check --wait\`에 대기 옵션이 없으면 빈 깨움으로 턴을 쓴다. 빠진 옵션: ${flags.join(', ')}. 올바른 형태: \`check --wait --types "worker_done,escalation,question,status" --timeout-ms 1800000\` (대기는 \`node .claude/scripts/orca-launch.mjs wait --inbox <내 수신함>\` 하나로 건다).`;
 // One command per piece; the `&` of `2>&1`, `>&`, `<&`, `&>` stays inside (same lone-`&` test as backgroundedJobs).
 const COMMAND_SEPARATOR = /&&|\|\||\|&|[;\n|]|(?<![<>|])&(?!>)/;
 const isWait = (text) => ORCA.test(text) && WAIT.test(text);
-const CHAIN_REASON = 'orca-wait-gate: `orca orchestration check --wait`를 다른 명령과 한 줄에 묶어 백그라운드로 걸었다. 묶으면 대기가 끝나기 전에 출력을 읽게 되고, 대기가 가져간 메시지는 다시 오지 않는다. 앞의 일을 먼저 따로 실행하고, 대기 명령만 단독으로 건다(앞의 `cd <폴더>`와 뒤의 `| grep -v _keepalive`는 된다). 한 줄에 대기는 하나다(대기 계약).';
+const CHAIN_REASON = 'orca-wait-gate: `orca orchestration check --wait`를 다른 명령과 한 줄에 묶어 백그라운드로 걸었다. 묶으면 대기가 끝나기 전에 출력을 읽게 되고, 대기가 가져간 메시지는 다시 오지 않는다. 앞의 일을 먼저 따로 실행하고, 대기 명령만 단독으로 건다(앞의 `cd <폴더>`와 뒤의 `| grep -v _keepalive`는 된다). 한 줄에 대기는 하나다(대기는 `node .claude/scripts/orca-launch.mjs wait --inbox <내 수신함>` 하나로 건다).';
 // Sequencing only: a pipe keeps one command. Same lone-`&` test as COMMAND_SEPARATOR.
 const SEQUENCE = /&&|\|\||[;\n]|(?<![<>|])&(?!>)/;
 const LEADING_CD = /^cd(?:\s+\S+)?$/;

@@ -133,7 +133,7 @@ node .claude/scripts/coordinator-settings.mjs generate
 node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 ```
 
-`.claude/` 아래 셀프테스트 전부, `node .claude/scripts/model-selection.mjs check`, `node .claude/scripts/wait-contract-check.mjs`를 돌려 표로 찍는다. 하나라도 실패하면 코드 1이다. 실패를 고치려고 틀의 파일을 고치지 않는다. 실패한 줄을 그대로 보고에 옮긴다.
+`.claude/` 아래 셀프테스트 전부와 `node .claude/scripts/model-selection.mjs check`를 돌려 표로 찍는다. 하나라도 실패하면 코드 1이다. 실패를 고치려고 틀의 파일을 고치지 않는다. 실패한 줄을 그대로 보고에 옮긴다.
 
 ## 6. 기반 설계
 

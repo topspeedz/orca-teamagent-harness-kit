@@ -63,7 +63,7 @@ node .claude/scripts/orca-launch.mjs actual --map _workspace/_run/<phase>/orca-t
 
 ### heartbeat만 든 깸은 근사다
 
-세션 기록에는 깬 묶음에 무엇이 들었는지 남지 않는다. 그래서 스크립트는 Orca 알림("You have N orchestration message")이나 백그라운드 `check --wait`의 완료 알림으로 깬 턴 가운데 **도구 호출 없이 끝난 깸 수**를 세고, 이것을 heartbeat만 든 깸의 근사로 쓴다. 리포트에도 "근사"라고 적는다. 대기 계약대로라면 heartbeat만 든 묶음에는 도구 없이 턴을 끝내므로 근사가 맞지만, 다른 이유로 도구 없이 끝난 깸도 함께 세어진다.
+세션 기록에는 깬 묶음에 무엇이 들었는지 남지 않는다. 그래서 스크립트는 Orca 알림("You have N orchestration message")이나 백그라운드 대기(`orca-launch.mjs wait`)의 완료 알림으로 깬 턴 가운데 **도구 호출 없이 끝난 깸 수**를 세고, 이것을 heartbeat만 든 깸의 근사로 쓴다. 리포트에도 "근사"라고 적는다. 대기 명령이 heartbeat만 든 묶음을 걸러 주므로 이 수는 0에 가까워야 한다. 0이 아니면 대기 밖에서 온 알림이거나 다른 이유로 도구 없이 끝난 깸이다.
 
 ## 2. 출발값 고치기
 
