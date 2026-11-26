@@ -43,6 +43,7 @@ put(codex, '.agents/skills/coordinator/SKILL.md', 'pointer\n');
 const ANSWERS = { codex: false, approvalPrefixes: [], coordinatorPermissionMode: 'default' };
 const INS = { git: true, orca: '1.4.255', node: process.version, superpowers: true, globalDiagramSkills: { 'dag-swimlane': false, 'waterfall-timeline': false }, codex: false, existing: [] };
 const ALL = ['.claude/agents/backend.md', '.claude/hooks/approval-gate.config.json', '.claude/scripts/model-table.mjs', '.claude/settings.json', '.claude/skills/dag-swimlane/SKILL.md', '.claude/skills/waterfall-timeline/SKILL.md', '.gitignore', 'AGENTS.md', 'CLAUDE.md', tablePath, 'docs/harness/templates/document-drafts.json', 'docs/harness/templates/model-survey.html'];
+// shortcut: RETIRED paths the template still ships; Task 6 removes this and its two filters when the template stops shipping them
 const SHIPPED_RETIRED = ['.claude/skills/team-lead/SKILL.md', '.claude/skills/team-qa/SKILL.md', 'docs/harness/templates/team-skill.md'];
 let n = 0;
 const target = (name) => { const t = join(root, name); mkdirSync(t, { recursive: true }); return t; };
@@ -455,6 +456,13 @@ test('a default agent the project removed is not installed again', () => {
   unlinkSync(join(t, other));
   assert.deepEqual(install(t).written, [other]);
   assert.equal(existsSync(join(t, rel)), false);
+  // a toggled-off agent is not a removed one
+  const off = target('toggled agent');
+  install(off);
+  renameSync(join(off, rel), join(off, rel + '.agent-toggle-off'));
+  const offRun = install(off);
+  assert.ok(offRun.skipped.some((s) => s.to === rel && s.reason === '에이전트 OFF'));
+  assert.ok(!offRun.skipped.some((s) => s.reason === '사용자가 지움'));
   // through the CLI with Codex: the role sync skips the removed agent instead of failing on it
   const c = target('removed agent codex');
   put(c, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
