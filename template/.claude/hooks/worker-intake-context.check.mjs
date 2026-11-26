@@ -17,6 +17,8 @@ assert.doesNotMatch(ctx, /heartbeat/, 'Orca 프리앰블이 heartbeat를 요구�
 assert.match(ctx, /⑤ .*가장 최근 프리앰블의 Task\/Dispatch ID로만/);
 assert.match(ctx, /⑥ .*알림이 적어 준 `check` 명령을 그대로 한 번/);
 assert.doesNotMatch(ctx, /check --terminal/, '핸들을 넣은 check를 시키지 않는다 — 워커가 부모의 핸들을 넣어 부모의 메일을 가져간다');
+assert.doesNotMatch(ctx, /팀장/, '팀장 구조가 없다');
+assert.match(ctx, /일을 나눠 맡기는 팬아웃은 research만 한다/);
 assert.match(ctx, /다시 보내지 말고 `orca orchestration inbox/);
 assert.doesNotMatch(ctx, /60턴/, '턴 상한 줄은 두지 않는다(templates.md §7)');
 {
@@ -24,4 +26,4 @@ assert.doesNotMatch(ctx, /60턴/, '턴 상한 줄은 두지 않는다(templates.
   assert.equal(r.status, 0); assert.equal(r.stdout, '');
 }
 
-console.log('worker-intake-context: 9 cases passed');
+console.log('worker-intake-context: 11 cases passed');

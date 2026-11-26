@@ -9,7 +9,7 @@ const stages = {
   '03_pm-reviewer_review': 'review', '03_planner_review': 'review',
   '06_pm-reviewer_plan-check': 'planCheck', '06_product-manager_plan-check': 'planCheck',
 };
-const planner = { '03_planner_design': 'design', '04_planner_plan': 'plan' };
+const planner = { '03_planner_design': 'design', '04_planner_plan': 'plan', '03_product-manager_design': 'design', '04_product-manager_plan': 'plan' };
 
 function optional(path, read) {
   try { return read(path); } catch (error) {

@@ -82,6 +82,13 @@ try {
   }
   assert.equal(readFileSync(join(cwd, mapFile), 'utf8'), JSON.stringify(map));
   assert.equal(readFileSync(join(cwd, product, '06_pm-reviewer_plan-check_v1.md'), 'utf8'), review + verify);
+  report(run, '03_planner_design_v1', '설계 v1');
+  report(run, '04_product-manager_plan_v3', '계획 v3 (PM 한 세션)');
+  state = inspect();
+  assert.deepEqual(state.reports.design.map(r => r.revision), [1]);
+  assert.deepEqual(state.reports.plan.map(r => r.revision), [2, 3]);
+  report(run, '03_product-manager_design_v2', '설계 v2 (PM 한 세션)');
+  assert.deepEqual(inspect().reports.design.map(r => r.revision), [1, 2]);
   console.log('phase-resume: old and new reports, changed plan, open issues, original approval and existing Run/Dispatch passed');
 } finally {
   rmSync(cwd, { recursive: true, force: true });

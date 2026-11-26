@@ -203,6 +203,15 @@ t('CLI: prints all sections, approximation note, missing inputs as 측정 불가
   assert.doesNotMatch(bySession.stdout, /세션 99999999/);
 });
 
+t('CLI: worker counts from the map; no bl → 측정 불가', () => {
+  const script = fileURLToPath(new URL('./retro-measure.mjs', import.meta.url));
+  const run = (m) => { writeFileSync(join(root, 'wm.json'), JSON.stringify(m)); return spawnSync(process.execPath, [script, '--map', join(root, 'wm.json')], { encoding: 'utf8' }).stdout; };
+  const out = run({ tasks: { T1: { bl: 'BL-1', dispatch: 'd1', previous: ['p1'] }, T2: { bl: 'BL-1', dispatch: 'd2' }, T3: { bl: 'BL-2', dispatch: 'd3' }, T4: { bl: 'BL-2' } } });
+  assert.match(out, /\| 워커 기동 수 \| 4 \|/);
+  assert.match(out, /\| 항목당 워커 수 \| 2\.0 \|/);
+  assert.match(run({ tasks: { T1: { dispatch: 'd1' } } }), /\| 항목당 워커 수 \| 측정 불가 \|/);
+});
+
 t('CLI: defect rows with --map, without --map, and with an unreadable severity', () => {
   const script = fileURLToPath(new URL('./retro-measure.mjs', import.meta.url));
   writeFileSync(join(root, 'dl.md'), DEFECT_LEDGER);

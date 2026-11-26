@@ -188,7 +188,11 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     out.push(`| ${label} | ${pv(plan, k)} | ${pv(act.v, k)} |`);
   out.push(`| 슬롯 수 | ${pv(plan, 'slots')} | - |`, '', '| 지표 | 값 |', '| --- | --- |');
   const l = led.v;
-  out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`,
+  const mt = Object.values(mp.v?.tasks ?? {});
+  const started = mt.filter((x) => x.dispatch).length + mt.reduce((n, x) => n + (x.previous?.length ?? 0), 0);
+  const items = new Set(mt.flatMap((x) => x.bl ?? []));
+  out.push(`| 워커 기동 수 | ${mp.v ? started : NA} |`, `| 항목당 워커 수 | ${items.size ? (started / items.size).toFixed(1) : NA} |`,
+    `| 수정 루프 | ${l?.fixLoops ?? NA} |`,
     `| 수정 라운드(결함 원장) | ${df?.rounds ?? NA} |`, `| 제기된 High | ${df ? df.high : NA} |`,
     `| 확정 · 인용 · 기각 · 열림 | ${df ? [df.confirmed, df.cited, df.dismissed, df.open].join(' · ') : NA} |`,
     `| High가 아닌데 수정에 든 결함 | ${df ? df.lowerFixed : NA} |`, `| 건너뛴 Task | ${df?.skipped ?? NA} |`,
