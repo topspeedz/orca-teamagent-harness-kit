@@ -57,7 +57,7 @@ description: "결과가 맞는지 판정하는 검증 담당. 코드를 읽는 �
 | 중간 변경 리뷰 | `change-review` | 판정, 결함 표, 실행할 관찰 |
 | 끝 검증 | `change-review`, `qa-verification` | 판정, 결함 표, 수락 기준 대조, 미검사 항목 |
 | 재검 | `qa-verification` | 결함 ID별 해결됨·미해결·미재검 |
-| 보안·돈이 걸린 변경 리뷰 | `change-review` | 판정, 결함 표, 보안 경로의 근거 |
+| 보안·돈이 걸린 변경 리뷰 | `change-review`, `qa-verification` | 판정, 결함 표, 보안 경로의 근거. 중간에 돌면 `change-review`만, 끝 검증이면 둘 다 쓴다 |
 
 ## 경계
 

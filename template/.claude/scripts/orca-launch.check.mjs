@@ -1310,6 +1310,35 @@ await ta(async () => {
   assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: [] });
   assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
 });
+// 61b. one conditional 시험 갱신 Task per building agent: the one that received failures launches, the other is skipped,
+// and end verification waits on both under the existing rules
+await ta(async () => {
+  const f = fakeDag({ fileOver: {
+    [TABLE_PATH]: `${TABLE}\n| \`frontend\` | 시험 갱신 | claude | opus | medium | 고정 |\n| \`backend\` | 구현, 시험 갱신 | claude | opus | medium | 고정 |`,
+    [ROSTER_FILES[0]]: `${ROSTER}\n| \`backend\` | 서버 | \`backend\` | api/ |`,
+    'fe.md': built('T01', '화면'), 'be.md': planSpec('T02', '서버', 'backend', '구현'),
+    'u1.md': planSpec('U1', '시험 갱신', 'frontend', '시험 갱신'), 'u2.md': planSpec('U2', '시험 갱신', 'backend', '시험 갱신'),
+    'q.md': planSpec('Q1', '끝 검증'),
+  } });
+  const update = { unit: '시험 갱신', conditional: true };
+  await approve(f, [T('T01', BUILD), T('T02', { role: 'backend', unit: '구현' }), T('U1', { ...update, role: 'frontend' }), T('U2', { ...update, role: 'backend' }), T('Q1')],
+    [E('T01', 'U1'), E('T02', 'U2'), E('U1', 'Q1'), E('U2', 'Q1')]);
+  assert.equal((await main([...runArgs, '--approval', approval], f.deps)).code, 0);
+  for (const [id, file] of [['T01', 'fe.md'], ['T02', 'be.md'], ['U1', 'u1.md'], ['U2', 'u2.md'], ['Q1', 'q.md']]) {
+    const r = await main(reg(id, file), f.deps);
+    assert.equal(r.code, 0, JSON.stringify(r.out));
+  }
+  const status = (id, s) => { f.tasks.get(f.map().tasks[id].orca).status = s; };
+  status('T01', 'completed'); status('T02', 'completed'); status('U1', 'ready');
+  const launched = await main(go('U1'), f.deps);
+  assert.equal(launched.code, 0, JSON.stringify(launched.out));
+  const skipped = await main(skip('U2', '실패 없음'), f.deps);
+  assert.equal(skipped.code, 0, JSON.stringify(skipped.out));
+  assert.deepEqual(skipped.out.promoted, []);
+  status('U1', 'completed'); status('Q1', 'ready');
+  assert.equal((await main(go('Q1'), f.deps)).code, 0);
+  assert.equal(f.count('worker-start'), 2);
+});
 // 62. 8. a map with no approval record is refused before Orca is touched
 await ta(async () => {
   const f = fakeDag();
