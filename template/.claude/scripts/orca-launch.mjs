@@ -3,15 +3,14 @@
 //   node .claude/scripts/orca-launch.mjs approve --version v1 --plan <plan.md> --dag <dag.json> --review <reviewed hash> --response <user's reply>
 //   node .claude/scripts/orca-launch.mjs reapprove --map <map> --approval <approved-plan.v2.json> --id <T01>
 //   node .claude/scripts/orca-launch.mjs assessment-context --approval <file> --id <Task> --spec-file <authored spec>
-// Direct team launches add --approval <file> --id <Task> and, for internal work, --parent <Task>.
-//   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--lead] [--override-reason <원문>]
+//   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--override-reason <원문>]   (outside an execution Run)
 //   node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <p> --does <요청> [--backlog BL-0001,BL-0002] --approval <file> --version v1 --plan <plan.md> --dag <dag.json>
 //   node .claude/scripts/orca-launch.mjs snapshot --run <id>
 //   node .claude/scripts/orca-launch.mjs codex-rules   (prints the six worker lines for a Codex Task spec)
 //   node .claude/scripts/orca-launch.mjs wait --inbox run:<Run ID>|dispatch:<Dispatch ID> [--once] [--last]   (background; returns only mail to act on)
 // Tasks registered in Orca (the coordinator's execution Run; <map> is _workspace/_run/<phase>/orca-tasks.json):
 //   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <approved-plan.v1.json>
-//   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]
+//   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]
 //   node .claude/scripts/orca-launch.mjs worker --map <map> --id <T01> --bracket <b> --does <d> [--assessment <json>] [--retry]
 //   node .claude/scripts/orca-launch.mjs ready --map <map>
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
@@ -37,6 +36,7 @@ import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mj
 import { readLedger, fixAllowed, currentRound, parseDefects, addDefects, addSnapshot } from './defect-ledger.mjs';
 import { judge } from './report-check.mjs';
 import { take as takeTree, defaultGit } from './tree-snapshot.mjs';
+import { readRoster } from './roster.mjs';
 
 // P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's six lines in the spec instead.
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
@@ -66,15 +66,10 @@ export function parseOverrideLine(spec) {
   return m ? m[1] : null;
 }
 
-export function verifyAssignment({ spec, agent, unit, row, overrideReason, lead }) {
+export function verifyAssignment({ spec, agent, unit, row, overrideReason }) {
   const errors = [];
-  if (lead) {
-    const first = spec.replace(/^﻿/, '').split(/\r?\n/)[0].trim();
-    const want = `[역할: ${agent} · 리드]`;
-    if (first !== want) errors.push(`리드: spec 첫 줄이 \`${want}\`가 아님(\`${first}\`)`);
-  }
   const a = parseAssignLine(spec);
-  if (!a) return [...errors, 'spec에 `배정:` 줄이 없음'];
+  if (!a) return ['spec에 `배정:` 줄이 없음'];
   if (a.agent !== agent) errors.push(`배정 에이전트 \`${a.agent}\` ≠ 인자 \`${agent}\``);
   if (a.unit !== unit) errors.push(`배정 작업 단위 \`${a.unit}\` ≠ 인자 \`${unit}\``);
   const override = parseOverrideLine(spec);
@@ -120,9 +115,9 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
     'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason',
-    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity', 'assessment',
+    'version', 'plan', 'dag', 'review', 'response', 'approval', 'legacy-map', 'complexity', 'assessment',
     'inbox', 'state', 'timeout-ms', 'dispatch', 'report', 'ledger', 'expect', 'outcome', 'round-cap'].map((k) => [k, { type: 'string' }]),
-  ...['lead', 'retry', 'once', 'last'].map((k) => [k, { type: 'boolean' }]),
+  ...['retry', 'once', 'last'].map((k) => [k, { type: 'boolean' }]),
 ]);
 // What wakes a wait. heartbeat is left out; status stays, since it carries the user's instruction to a waiting coordinator.
 const WAKE_TYPES = 'worker_done,escalation,question,status';
@@ -150,18 +145,15 @@ export async function main(argv, deps) {
   const [cmd, ...rest] = argv;
   let o;
   try { o = parseArgs({ args: rest, options: OPTIONS }).values; } catch (e) { return fail(e.message); }
-  // Serialize the owner's changes to a Run, including direct team launches sharing its approval.
-  const mapPath = o.map ?? (cmd === 'worker' && o.approval && join(dirname(o.approval), 'orca-tasks.json'));
+  // Serialize the owner's changes to a Run.
   let release;
-  const lock = async () => { if (mapPath && deps.lock) release = await deps.lock(mapPath); };
-  const unlock = () => { release?.(); release = null; };
   try {
-    await lock();
-    return await execute(cmd, o, deps, { lock, unlock });
-  } catch (e) { return fail(e.message); } finally { unlock(); }
+    if (o.map && deps.lock) release = await deps.lock(o.map);
+    return await execute(cmd, o, deps);
+  } catch (e) { return fail(e.message); } finally { release?.(); }
 }
 
-async function execute(cmd, o, deps, locks) {
+async function execute(cmd, o, deps) {
   const io = {
     read: deps.read,
     optional: path => {
@@ -205,7 +197,7 @@ async function execute(cmd, o, deps, locks) {
     return { code: inbox.ok === false || workers.ok === false ? 1 : 0, out: { run: o.run, inbox, workers } };
   }
 
-  // The one wait a coordinator, team lead or front desk keeps, run as a tracked background command. It waits through
+  // The one wait a coordinator or front desk keeps, run as a tracked background command. It waits through
   // heartbeats, redeliveries and timeouts and returns only mail to act on, so the model is not woken to re-arm a wait.
   if (cmd === 'wait') {
     if (!/^(run|dispatch):\S+$/.test(o.inbox ?? '')) return fail('사용법: wait --inbox run:<Run ID>|dispatch:<Dispatch ID> [--once] [--last]');
@@ -256,28 +248,26 @@ async function execute(cmd, o, deps, locks) {
     const routingRules = record.routingVersion === 2 && parseTable(deps.read(TABLE_PATH));
     const prevPath = join(dirname(o.dag), `approved-plan.v${Number(o.version.slice(1)) - 1}.json`);
     const previous = io.optional(prevPath) === null ? {} : loadApproval(prevPath, io).tasks;
-    for (const [id, t] of Object.entries(record.tasks)) {
-      for (const a of [t, ...t.members]) {
-        const project = routingRules && matchRow(routingRules.rows, a.agent, a.unit)?.row;
-        if (routingRules && !project) throw new Error(id + ' 모델 표에 역할·작업 단위가 없음');
-        if (routingRules && !a.routing) throw new Error(id + ' Task·팀원에 v2 라우팅 평가 또는 표의 고정 표시 필요');
-        const same = b => b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]) &&
-          JSON.stringify(a.routing) === JSON.stringify(b.routing);
-        if (record.legacyRun || (JSON.stringify(t.bl) === JSON.stringify(previous[id]?.bl) &&
-          t.complexity === previous[id]?.complexity && [previous[id], ...(previous[id]?.members ?? [])].some(b => same(b) && a.complexity === b.complexity))) continue;
-        const row = project || table(a.agent, a.unit, a.complexity ?? t.complexity);
-        if (a.routing) {
-          const fixed = row.note.startsWith('고정');
-          if (fixed !== a.routing.fixed) throw new Error(id + ' 프로젝트 표의 고정 여부와 다름');
-          if (a.routing.codexMap) {
-            const current = choices(routingRules.codex).codex;
-            if (Object.keys(current).length !== Object.keys(a.routing.codexMap).length ||
-              Object.keys(current).some(k => current[k] !== a.routing.codexMap[k])) throw new Error(id + ' DAG의 Codex 치환표가 프로젝트와 다름');
-          }
-          if (!fixed) continue;
+    for (const [id, a] of Object.entries(record.tasks)) {
+      const project = routingRules && matchRow(routingRules.rows, a.agent, a.unit)?.row;
+      if (routingRules && !project) throw new Error(id + ' 모델 표에 역할·작업 단위가 없음');
+      if (routingRules && !a.routing) throw new Error(id + ' Task에 v2 라우팅 평가 또는 표의 고정 표시 필요');
+      const b = previous[id];
+      const same = b && ['agent','unit','runtime','model','effort','overrideReason'].every(k => a[k] === b[k]) &&
+        JSON.stringify(a.routing) === JSON.stringify(b.routing);
+      if (record.legacyRun || (JSON.stringify(a.bl) === JSON.stringify(b?.bl) && a.complexity === b?.complexity && same)) continue;
+      const row = project || table(a.agent, a.unit, a.complexity);
+      if (a.routing) {
+        const fixed = row.note.startsWith('고정');
+        if (fixed !== a.routing.fixed) throw new Error(id + ' 프로젝트 표의 고정 여부와 다름');
+        if (a.routing.codexMap) {
+          const current = choices(routingRules.codex).codex;
+          if (Object.keys(current).length !== Object.keys(a.routing.codexMap).length ||
+            Object.keys(current).some(k => current[k] !== a.routing.codexMap[k])) throw new Error(id + ' DAG의 Codex 치환표가 프로젝트와 다름');
         }
-        if ((!a.overrideReason || row.note.startsWith('고정')) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
+        if (!fixed) continue;
       }
+      if ((!a.overrideReason || row.note.startsWith('고정')) && ['runtime','model','effort'].some(k => a[k] !== row[k])) throw new Error(`${id} 배정과 모델 표 불일치`);
     }
     if (cmd === 'approve') return { code: 0, out: approvePlan(o, record, io) };
     return { code: 0, out: { version: record.version, review: record.review } };
@@ -309,7 +299,12 @@ async function execute(cmd, o, deps, locks) {
   };
 
   // ---- Tasks registered in Orca. The map file pairs each plan id with its Orca Task. ----
-  const loadMap = () => { if (!o.map) throw new Error('--map <파일>이 필요함'); return JSON.parse(deps.read(o.map)); };
+  const loadMap = () => {
+    if (!o.map) throw new Error('--map <파일>이 필요함');
+    const m = JSON.parse(deps.read(o.map));
+    if (m.direct || m.previousDirect) throw new Error('옛 직접 기동 기록이 있는 Run입니다. 새 Run에서 계획을 다시 승인하세요');
+    return m;
+  };
   const saveMap = (m) => deps.write(o.map, `${JSON.stringify(m, null, 2)}\n`);
   const entry = (m) => { if (!Object.hasOwn(m.tasks, o.id)) throw new Error(`${o.id}가 ${o.map}에 등록되지 않음`); return m.tasks[o.id]; };
   const activeApproval = (m, id) => {
@@ -321,11 +316,10 @@ async function execute(cmd, o, deps, locks) {
     if (m.approval && m.review && m.review !== record.review) throw new Error('Run에 기록한 승인 해시와 다름');
     return record;
   };
-  const checkedSpec = (spec, id, approved, lead, overrideReason) => {
+  const checkedSpec = (spec, id, approved, overrideReason) => {
     if (!approved || /^Task:\s*(\S+)/m.exec(spec)?.[1] !== id) throw new Error(`승인 Task ID와 spec 불일치: ${id}`);
     if (approved.overrideReason !== overrideReason) throw new Error('승인된 사용자 예외 원문과 다름');
-    if ((approved.unit === '리드') !== lead) throw new Error('승인 리드 배정과 다름');
-    const errors = verifyAssignment({ spec, agent: approved.agent, unit: approved.unit, row: approved, overrideReason, lead });
+    const errors = verifyAssignment({ spec, agent: approved.agent, unit: approved.unit, row: approved, overrideReason });
     if (errors.length) throw new Error('승인 배정 불일치: ' + errors.join(', '));
     // The whole suite runs once at the end, so a Task's own criteria may not contain a command AGENTS.md marks `(전체 테스트)`.
     const lines = spec.split(/\r?\n/);
@@ -346,11 +340,10 @@ async function execute(cmd, o, deps, locks) {
       .map(l => /`([^`]+)`/.exec(l)?.[1]).filter(Boolean);
   };
   // A fix Task takes only defects the ledger allows; verification after a fix names its defects and diff.
-  // row: the governing approved row; ids: the launched Task and, for a member, its parent. Returns a refusal or null.
-  const launchRefusal = (m, mapFile, approval, row, spec, ids) => {
-    // a fix Task launched directly is under m.direct, so the round is read from the approved rows and either record's dispatch
+  // row: the launched Task's approved row. Returns a refusal or null.
+  const launchRefusal = (m, mapFile, approval, row, spec) => {
     const view = { tasks: Object.fromEntries(Object.entries(approval.tasks).map(([id, r]) =>
-      [id, { kind: r.kind, round: r.round, dispatch: m.tasks[id]?.dispatch ?? m.direct?.[id]?.dispatch }])) };
+      [id, { kind: r.kind, round: r.round, dispatch: m.tasks[id]?.dispatch }])) };
     const post = row?.kind === 'recheck' || (row?.kind === 'verify' && currentRound(view) > 1);
     if (row?.kind !== 'fix' && !post) return null;
     const value = label => new RegExp(`^${label}:(.*)$`, 'm').exec(spec)?.[1].trim() ?? '';
@@ -372,11 +365,11 @@ async function execute(cmd, o, deps, locks) {
     if (!l) return '장부를 읽을 수 없음';
     const wide = l.decisions.some(d => {
       const c = d.split('|').map(s => s.trim());
-      return ids.includes(c[0]) && c[1] === '전 범위 검증 승인' && c[2];
+      return c[0] === o.id && c[1] === '전 범위 검증 승인' && c[2];
     });
     return wide ? null : '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함';
   };
-  const taskId = (m, id) => m.tasks[id]?.orca ?? m.direct?.[id]?.task;
+  const taskId = (m, id) => m.tasks[id]?.orca;
   // The approved spec and runtime stay fixed. Only an explicitly delegated model/effort can change.
   const prepareAttempt = (row, approval, state, spec, source) => {
     const policy = row.routing;
@@ -409,7 +402,7 @@ async function execute(cmd, o, deps, locks) {
       }
     }
     const { runtime, model, effort } = decision === 'reassess' ? assessment : row;
-    const attempt = { number: attempts.length + 1, review: approval.review, id: o.id, parent: o.parent ?? null,
+    const attempt = { number: attempts.length + 1, review: approval.review, id: o.id,
       specHash: fingerprint, launchSpecHash: hash(spec), decision, reason, assessment,
       failureDispatches: [...failureDispatches], requested: { runtime, model, effort }, status: 'starting', at: deps.now() };
     attempts.push(attempt);
@@ -429,7 +422,6 @@ async function execute(cmd, o, deps, locks) {
     if (list.ok === false) throw new Error(`task-list 실패: ${list.error?.message}`);
     const byOrca = new Map((list.result?.tasks ?? []).map((t) => [t.id, t]));
     const rows = Object.fromEntries(Object.entries(m.tasks).map(([id, e]) => [id, byOrca.get(e.orca) ?? {}]));
-    for (const [id, e] of Object.entries(m.direct ?? {})) rows[id] = byOrca.get(e.task) ?? {};
     if (!reconcile) return rows;
     // A successor keeps its immutable Orca spec/ID. After replacement of an input,
     // its original Orca dependency cannot complete. Release it only on the current ID.
@@ -487,10 +479,10 @@ async function execute(cmd, o, deps, locks) {
     if (matches.length > 1) throw new Error('같은 승인 Task가 여러 번 등록됨: ' + id);
     return matches[0];
   };
-  const registerTask = (m, id, approval, path, lead, reason, edits, resource) => {
+  const registerTask = (m, id, approval, path, reason, edits, resource) => {
     const row = approval.tasks[id];
     const spec = deps.read(path);
-    checkedSpec(spec, id, row, lead, reason);
+    checkedSpec(spec, id, row, reason);
     const missing = row.deps.filter(d => !taskId(m, d));
     if (missing.length) throw new Error('미등록 선행 Task: ' + missing.join(', '));
     const registeredDeps = row.deps.map(d => taskId(m, d));
@@ -510,25 +502,27 @@ async function execute(cmd, o, deps, locks) {
       task = created.result?.task ?? { id: created.result?.taskId, status: created.result?.status };
       if (!task.id) throw new Error('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
     }
-    const { members, ...assignment } = row;
-    const entry = { ...assignment, version: approval.version, review: approval.review, orca: task.id, registeredDeps, title,
-      lead, gate: null, dispatch: null, started: null, edits, resource, spec: path };
+    const entry = { ...row, version: approval.version, review: approval.review, orca: task.id, registeredDeps, title,
+      gate: null, dispatch: null, started: null, edits, resource, spec: path };
     return { entry, status: task.status };
   };
+  // A project not moved to the flat roster stops here with setup's guidance.
+  if (cmd === 'worker' || cmd === 'register') deps.roster();
+
   if (cmd === 'register') {
     if (!o.map || !o.id || !o['spec-file']) return fail('register --map <map> --id <Task> --spec-file <p>');
     const m = loadMap(), approval = activeApproval(m, o.id);
-    if (m.transition?.id === o.id || m.direct?.[o.id]) return fail('전환 또는 직접 기동 기록 확인 필요');
+    if (m.transition?.id === o.id) return fail('전환 기록 확인 필요');
     const old = m.tasks[o.id];
     if (!approval) {
       if (old?.orca) return { code: 0, out: { id: o.id, orca: old.orca, existing: true } };
       return fail('미등록 구 Task의 당시 승인 근거가 필요함');
     }
-    const row = approval.tasks[o.id], lead = !!o.lead, reason = o['override-reason'] ?? null;
-    checkedSpec(deps.read(o['spec-file']), o.id, row, lead, reason);
+    const row = approval.tasks[o.id], reason = o['override-reason'] ?? null;
+    checkedSpec(deps.read(o['spec-file']), o.id, row, reason);
     if (o.deps !== undefined && JSON.stringify(csv(o.deps).sort()) !== JSON.stringify(row.deps)) return fail('승인 DAG 의존과 다름');
     if (old) return { code: 0, out: { id: o.id, orca: old.orca, existing: true } };
-    const result = registerTask(m, o.id, approval, o['spec-file'], lead, reason, csv(o.edits), csv(o.resource));
+    const result = registerTask(m, o.id, approval, o['spec-file'], reason, csv(o.edits), csv(o.resource));
     m.tasks[o.id] = result.entry;
     saveMap(m);
     // A Task registered after its inputs finished is made ready here; Orca's own readiness at creation is not measured.
@@ -549,8 +543,7 @@ async function execute(cmd, o, deps, locks) {
     const previousPath = m.approval ?? m.approvals?.[o.id];
     const previous = previousPath && loadApproval(previousPath, io, o.map);
     const row = next.tasks[o.id], old = m.tasks[o.id];
-    const direct = m.direct?.[o.id];
-    if (!row || (direct && (direct.dispatch || direct.attempts?.at(-1)?.status !== 'rejected'))) return fail('미기동 승인 Task만 전환한다');
+    if (!row) return fail('미기동 승인 Task만 전환한다');
     if (m.transition && (m.transition.id !== o.id || m.transition.approval !== o.approval)) return fail('먼저 진행 중인 재승인을 마친다');
     if (m.approval && m.review && previous.review !== m.review) return fail('Run에 기록한 이전 승인 해시와 다름');
     if (previous?.review === next.review) return { code: 0, out: { id: o.id, version: next.version, existing: true } };
@@ -563,7 +556,7 @@ async function execute(cmd, o, deps, locks) {
       if (old.dispatch || old.started || old.attempts?.some(a => a.status !== 'rejected')) return fail('이미 기동했거나 기동 확인 중인 Task');
       const st = statuses(m)[o.id];
       if (!['ready','pending','blocked'].includes(st.status) && !(m.transition && st.status === 'failed')) return fail('미기동 Task 상태 확인 필요');
-      checkedSpec(deps.read(old.spec), o.id, row, row.unit === '리드', row.overrideReason);
+      checkedSpec(deps.read(old.spec), o.id, row, row.overrideReason);
       if (row.deps.some(id => !taskId(m, id))) return fail('새 선행 Task 등록이 먼저 필요함');
       if (!m.transition) {
         m.transition = { id: o.id, approval: o.approval, from: old.orca };
@@ -574,17 +567,13 @@ async function execute(cmd, o, deps, locks) {
         const retired = setStatus(m, old.orca, 'failed', '--result', 'superseded: ' + next.version + ' ' + o.id);
         if (retired.ok !== true) return fail('이전 Task를 비활성화하지 못함');
       }
-      const replacement = registerTask(m, o.id, next, old.spec, row.unit === '리드', row.overrideReason, old.edits ?? [], old.resource ?? []);
+      const replacement = registerTask(m, o.id, next, old.spec, row.overrideReason, old.edits ?? [], old.resource ?? []);
       m.tasks[o.id] = { ...replacement.entry, previous: [...(old.previous ?? []), {
         orca: old.orca, deps: old.deps, registeredDeps: old.registeredDeps, version: old.version, review: old.review,
         gates: old.gates ?? [], agent: old.agent, unit: old.unit, runtime: old.runtime, model: old.model, effort: old.effort,
         ...(old.attempts ? { attempts: old.attempts } : {}),
       }] };
       delete m.transition;
-    }
-    if (direct) {
-      (m.previousDirect ??= []).push({ id: o.id, ...direct });
-      delete m.direct[o.id];
     }
     if (m.approval) { m.approval = o.approval; m.review = next.review; }
     else (m.approvals ??= {})[o.id] = o.approval;
@@ -621,7 +610,7 @@ async function execute(cmd, o, deps, locks) {
     }
     if (o.retry && (st ?? statuses(m))[o.id]?.status !== 'failed') return fail('실패로 정산된 Task만 재시도한다');
     if (approved?.routing && !o.retry && st[o.id]?.status !== 'ready') return fail('ready Task만 기동한다');
-    const refusal = approved && launchRefusal(m, o.map, approval, approved,st[o.id]?.spec ?? '', [o.id]);
+    const refusal = approved && launchRefusal(m, o.map, approval, approved,st[o.id]?.spec ?? '');
     if (refusal) return fail(refusal);
     const previous = e.attempts?.findLast(a => a.dispatch && a.dispatch === e.dispatch);
     if (o.retry && previous?.turnStarted) previous.failed = true;
@@ -765,7 +754,7 @@ async function execute(cmd, o, deps, locks) {
     const existing = !!e?.skipped;
     if (!existing) {
       const started = `${o.id}는 이미 기동했거나 끝난 Task`;
-      if (m.transition?.id === o.id || m.direct?.[o.id]) return fail(started);
+      if (m.transition?.id === o.id) return fail(started);
       const inputs = e?.deps ?? row.deps;
       const missing = inputs.filter(d => !taskId(m, d));
       if (missing.length) return fail('미등록 선행 Task: ' + missing.join(', '));
@@ -795,9 +784,8 @@ async function execute(cmd, o, deps, locks) {
           orca = created.result?.task?.id ?? created.result?.taskId;
           if (!orca) return fail('task-create 실패: ' + (created.error?.message ?? 'Task ID 없음'));
         }
-        const { members, ...assignment } = row;
-        e = m.tasks[o.id] = { ...assignment, version: approval.version, review: approval.review, orca, registeredDeps, title,
-          lead: row.unit === '리드', gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
+        e = m.tasks[o.id] = { ...row, version: approval.version, review: approval.review, orca, registeredDeps, title,
+          gate: null, dispatch: null, started: null, edits: [], resource: [], spec: null };
       }
       // Saved before closing: a re-run finishes a close whose reply was lost, and nothing launches the Task meanwhile.
       e.skipping ??= { reason: o.reason };
@@ -853,113 +841,35 @@ async function execute(cmd, o, deps, locks) {
     let m, st;
     try { m = loadMap(); st = statuses(m); } catch (e) { return fail(e.message); }
     // start is this script's launch time, end is Orca's; a Task that has not settled is left out
-    const rows = Object.entries({ ...m.tasks, ...m.direct })
+    const rows = Object.entries(m.tasks)
       .filter(([id, e]) => e.started && ['completed', 'failed'].includes(st[id].status) && st[id].completed_at)
       .map(([id, e]) => ({ id, start: e.started, end: new Date(st[id].completed_at).toISOString(), status: st[id].status }));
     return { code: 0, out: rows };
   }
 
   if (cmd === 'worker') {
-    if (!o.agent || !(o.unit || o.lead) || !o['spec-file'] || !o.bracket || !o.does) {
-      return fail('사용법: worker --agent <a> --unit <u> --spec-file <p> --bracket <b> --does <d> [--run <id>] [--task <id>] [--lead] [--override-reason <원문>]');
+    if (!o.agent || !o.unit || !o['spec-file'] || !o.bracket || !o.does) {
+      return fail('사용법: worker --agent <a> --unit <u> --spec-file <p> --bracket <b> --does <d> [--run <id>] [--task <id>] [--override-reason <원문>]');
     }
-    const unit = o.lead ? '리드' : o.unit;
     const spec = deps.read(o['spec-file']);
     const overrideReason = o['override-reason'] ?? null;
-    let row, map, mapPath, approval, state, retryTask, retrySpec;
-    if (o.approval || o.id || o.parent) {
-      if (!o.approval || !o.id || o.task || !/^[\w-]+$/.test(o.id) || o.id in {}) return fail('팀원은 승인 파일과 Task ID가 필요함');
-      mapPath = join(dirname(o.approval), 'orca-tasks.json');
-      map = JSON.parse(deps.read(mapPath));
-      approval = activeApproval(map, o.parent ?? o.id);
-      if (o.run && o.run !== map.run) return fail('팀원의 Run이 승인 대응표와 다름');
-      const parent = approval.tasks[o.parent ?? o.id];
-      if (!parent || map.transition?.id === (o.parent ?? o.id)) return fail('현재 승인 범위 밖의 팀원 Task');
-      row = o.parent ? parent.members.find(x => x.agent === o.agent && x.unit === unit) : parent;
-      if (!row || row.agent !== o.agent || row.unit !== unit || (o.parent && approval.tasks[o.id])) return fail('승인된 역할·작업 단위 불일치');
-      if (o.parent && !(map.tasks[o.parent]?.dispatch || map.direct?.[o.parent]?.dispatch)) return fail('부모 Task 배정이 먼저 필요함');
-      if (!o.parent && parent.deps.length) {
-        const st = statuses(map);
-        for (const id of parent.deps) {
-          if (st[id]?.status !== 'completed') return fail('미완료 선행 Task: ' + id);
-        }
-      }
-      checkedSpec(spec, o.id, row, !!o.lead, overrideReason);
-      state = map.direct?.[o.id];
-      if (state && ['starting','unknown'].includes(state.attempts?.at(-1)?.status)) {
-        const marker = '실행 승인: ' + (state.specReview ?? state.review) + ' ' + o.id;
-        const found = call(['orchestration','task-list','--run',map.run,'--full']).result?.tasks?.filter(t => (t.spec ?? '').split(/\r?\n/).includes(marker));
-        const dispatch = found?.length === 1 && call(['orchestration','dispatch-show','--task',found[0].id]).result?.dispatch?.id;
-        if (dispatch && dispatch !== state.dispatch) {
-          Object.assign(state, { task: found[0].id, dispatch });
-          Object.assign(state.attempts.at(-1), { status: 'dispatched', dispatch });
-          deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
-        }
-        return fail('이전 팀원 기동 영수증 확인 필요', { id: o.id, dispatch: dispatch || null });
-      }
-      if (map.tasks[o.id]) return fail('이미 등록한 Task');
-      if (o.retry) {
-        const st = statuses(map)[o.id];
-        if (!row.routing || !state?.task || !state.dispatch || st?.status !== 'failed') return fail('실패로 정산된 동일 팀원 Task만 재시도한다');
-        retryTask = state.task;
-        retrySpec = st.spec;
-        if (!retrySpec) return fail('재시도할 팀원의 등록 spec 확인 필요');
-        const previous = state.attempts.findLast(a => a.dispatch && a.dispatch === state.dispatch);
-        if (previous?.turnStarted) previous.failed = true;
-      } else if (state && (state.dispatch || state.attempts?.at(-1)?.status !== 'rejected')) return fail('이미 직접 기동한 Task');
-      if (state && (state.parent !== (o.parent ?? null) || state.agent !== o.agent || state.unit !== unit)) return fail('팀원의 이전 기동 범위와 다름');
-      // a member follows its parent's kind
-      const refusal = launchRefusal(map, mapPath, approval, parent,spec, [o.id, o.parent].filter(Boolean));
-      if (refusal) return fail(refusal);
-    } else {
-      if (/^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run의 직접 기동은 --approval과 --id가 필요함');
-      row = table(o.agent, unit, o.complexity);
-    }
-    const errors = verifyAssignment({ spec, agent: o.agent, unit, row, overrideReason, lead: !!o.lead });
+    if (o.approval || o.id || /^실행 승인:/m.test(spec) || findPhaseMap(o['spec-file'], io)) return fail('실행 Run에서는 register한 Task를 worker --map --id로 띄운다');
+    const row = table(o.agent, o.unit, o.complexity);
+    const errors = verifyAssignment({ spec, agent: o.agent, unit: o.unit, row, overrideReason });
     if (errors.length) return fail('배정 불일치 — 띄우지 않음', { errors });
     const a = parseAssignLine(spec);
-    const base = overrideReason ? { ...row, runtime: a.runtime, model: a.model, effort: a.effort } : row;
+    const use = overrideReason ? { ...row, runtime: a.runtime, model: a.model, effort: a.effort } : row;
     let specFile = o['spec-file'];
     let content = spec;
-    if (row.routing) content = content.trimEnd() + '\n\n실행 승인: ' + approval.review + ' ' + o.id + '\n';
-    if (base.runtime === 'codex') {
+    if (use.runtime === 'codex') {
       if (o.task) console.error('경고: Codex 워커 — Task spec에 작업 방식 여섯 줄이 들어 있어야 한다(codex-rules)');
       else content = content.trimEnd() + '\n\n' + rules().trimEnd() + '\n';
     }
-    state ??= {};
-    const attempt = row.routing && prepareAttempt(row, approval, state, retrySpec ?? content,
-      retrySpec ? authoredSpec(retrySpec, state.specReview, o.id) : spec);
-    const use = attempt?.requested ?? base;
-    if (!retryTask && content !== spec) specFile = specCopy(specFile, content);
+    if (content !== spec) specFile = specCopy(specFile, content);
     const title = tabTitle({ bracket: o.bracket, agent: o.agent, model: use.model, effort: use.effort, does: o.does });
-    const args = workerStartArgs({ row: use, specFile, run: map?.run ?? o.run, task: retryTask ?? o.task, displayName: title, worktree });
-    if (map) {
-      (map.direct ??= {})[o.id] = Object.assign(state, { parent: o.parent ?? null, version: approval.version, review: approval.review, agent: o.agent, unit, requested: true });
-      if (attempt && !retryTask) state.specReview = approval.review;
-      deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
-      if (retryTask) {
-        try { args.push(...retryArgs(map, retryTask)); } catch (err) {
-          attempt.status = 'rejected';
-          deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
-          return fail(err.message);
-        }
-      }
-      locks.unlock();
-    }
-    const { code, out, res } = start(use, title, args);
-    if (map) {
-      await locks.lock();
-      map = JSON.parse(deps.read(mapPath));
-      if (!attempt && refused(out, res)) delete map.direct[o.id];
-      else {
-        finishAttempt(map.direct[o.id].attempts?.at(-1), out, res);
-        const saved = map.direct[o.id];
-        Object.assign(saved, out, { task: out.task ?? saved.task, dispatch: out.dispatch ?? saved.dispatch, started: out.dispatch ? deps.now() : saved.started ?? null });
-      }
-      deps.write(mapPath, JSON.stringify(map, null, 2) + '\n');
-    }
-    return { code: attempt && !out.matched ? 1 : code, out: map ? { ...out, id: o.id, version: approval.version,
-      ...(attempt ? { routing: map.direct[o.id].attempts.at(-1) } : {}) } : out };
+    const args = workerStartArgs({ row: use, specFile, run: o.run, task: o.task, displayName: title, worktree });
+    const { code, out } = start(use, title, args);
+    return { code, out };
   }
 
   if (cmd === 'coordinator') {
@@ -1048,6 +958,7 @@ const deps = {
   write: writeJson,
   exists: existsSync,
   snapshot: () => takeTree(defaultGit),
+  roster: () => readRoster(),
   create: (p, text) => writeJson(p, text, true),
   lock: async p => {
     mkdirSync(dirname(p), { recursive: true });
