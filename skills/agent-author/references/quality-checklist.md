@@ -12,7 +12,7 @@
 - [ ] Tool/Skill/MCP/모델/경로의 존재와 권한을 확인했거나 조건부로 표기함.
 - [ ] 실제 하지 않은 검증을 완료로 보고하지 못하도록 설계함.
 - [ ] 작업 실패 및 위험 변경의 승인/중단 조건이 있음.
-- [ ] 팀에 속한다면 Task 소유권, 종속성 및 Handoff 항목이 있음.
+- [ ] 다른 Agent와 함께 일한다면 Task 소유권, 종속성 및 Handoff 항목이 있음.
 - [ ] 중복된 역할·스킬 전문 지식 복제·무의미한 표어/과잉 지침이 없음.
 
 ## 설치 프로젝트의 인수 확인
@@ -69,5 +69,5 @@ Role: <핵심 성과>
 Specialized rules: <분야별 핵심 판단 2~4개>
 Tools/Skills: <확인 완료/조건부/미사용 구분>
 Validation: YAML PASS, prompt review PASS, runtime NOT_RUN
-Follow-up: <연결할 팀·Task·필요한 설치 작업>
+Follow-up: <연결할 Agent·Task·필요한 설치 작업>
 ```

@@ -52,7 +52,7 @@
 
 > **읽는 시점:** <어떤 작업 전에 / 어떤 증상을 만났을 때>
 > **역할:** <router|canonical|contract|runbook|spec> — <소유하는 것>. <소유하지 않는 것>은 `<다른 문서>`가 소유한다.
-> **소유자:** <팀·스킬> · **상태:** current
+> **소유자:** <에이전트·스킬> · **상태:** current
 ```
 
 ## 3. 완료 흐름 규칙 (`.claude/rules/45-quality-gate.md`)

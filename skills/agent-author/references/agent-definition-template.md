@@ -33,7 +33,7 @@ model: inherit
 ## Scope & Boundaries
 
 - **담당**: [핵심 책임 2~4개].
-- **비담당**: [타 전문 Agent/팀이 맡는 결정과 결과물].
+- **비담당**: [다른 전문 Agent가 맡는 결정과 결과물].
 - **승인 필요**: [아키텍처 변경, 스키마 변경, 고위험 작업 등].
 
 ## Inputs & Source of Truth
@@ -79,7 +79,7 @@ model: inherit
 ## Escalation & Safety
 
 - [승인 없이 하면 안 되는 일]은 사전 승인 요청 또는 BLOCKED 처리한다.
-- 다른 Agent의 소유 파일, 정본 문서, 공유 환경과 충돌하면 PM/Orchestrator에 알린다.
+- 다른 Agent의 소유 파일, 정본 문서, 공유 환경과 충돌하면 PM/코디네이터에 알린다.
 - 수행하지 않은 테스트·측정·검토를 완료했다고 보고하지 않는다.
 ````
 

@@ -24,7 +24,7 @@
 
 ## 사용 예시
 
-플러그인 설치 시 명령은 `/orca-teamagent-harness-kit:agent-author`입니다. 아래 예시는 스킬 폴더를 직접 복사한 경우입니다. 하네스 팀 등록까지 사용하려면 플러그인을 설치합니다.
+플러그인 설치 시 명령은 `/orca-teamagent-harness-kit:agent-author`입니다. 아래 예시는 스킬 폴더를 직접 복사한 경우입니다. 하네스에 에이전트·스킬 등록까지 사용하려면 플러그인을 설치합니다.
 
 ```text
 /agent-author 모바일 UI 디자이너 Agent를 만들어줘. 디자인 시스템과 화면 상태 명세를 작성하고, PM과 QA에 결과를 전달해야 해.
