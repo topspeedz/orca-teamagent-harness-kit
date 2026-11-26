@@ -126,7 +126,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **모델과 effort를 표 하나로 관리한다**
 
 - 점수는 에이전트가 아니라 Task에 붙는다. PM은 BL에 구조 복잡도·불확실성·실패 영향·검증 근거를 남기고, 계획에서 Task마다 C·U·R·V의 값과 근거를 적는다. `model-routing.mjs plan`이 model과 effort를 계산하고, 해석에 따라 배정이 달라질 때만 Haiku로 점수를 확인한다. 사용자는 DAG에서 추천을 검토하고 직접 고정하거나 기동 직전 재평가를 위임한다. 코디네이터는 승인된 런타임과 치환표에서 최종 배정을 적용한다.
-- 모델 표에서 메모가 `고정`으로 시작하는 행만 고정 행이고, 그 밖의 행은 model이 `복잡도`든 값이 적혀 있든 산정 행이다. 산정 행의 Task는 점수 없이 뜨지 않는다. 기동 스크립트는 기본값으로 넘어가지 않고 거부한다. 계획 밖에서 띄우는 워커(설계 전의 `research` 등)는 `--assessment`로 점수를 함께 넘긴다.
+- 모델 표에서 메모가 `고정`으로 시작하는 행만 고정 행이고, 그 밖의 행은 model이 `산정`이든 값이 적혀 있든 산정 행이다. 산정 행의 Task는 점수 없이 뜨지 않는다. 기동 스크립트는 기본값으로 넘어가지 않고 거부한다. 계획 밖에서 띄우는 워커(설계 전의 `research` 등)는 `--assessment`로 점수를 함께 넘긴다.
 - PM의 기획 세션은 `setup`에서 고른 model과 effort 하나로 뜬다(기본 fable/xhigh). 요구에서 계획까지 한 세션이 이 값으로 잇는다. [배정 기준과 Astra ultra 치환](template/docs/harness/model-selection.md)
 - 표를 수정하면 다음 계획부터 적용된다. 현재 Run의 Task 배정을 바꾸려면 해당 배정과 DAG를 갱신하고 다시 승인받는다.
 
@@ -245,7 +245,7 @@ node "<플러그인 디렉터리>/skills/setup/scripts/setup.mjs" verify --targe
 
 1. 스킬 양식 `docs/harness/templates/skill.md`를 `.claude/skills/<스킬>/SKILL.md`로 복사해 작성한다.
 2. 그 에이전트의 역할 파일 `.claude/agents/<에이전트>.md`의 `- 로드할 스킬:` 줄과 `## 작업 단위와 스킬` 표, 명단 `docs/harness/agents.md`의 스킬 칸에 같은 이름을 넣는다.
-3. 새 작업 단위가 생기면 `docs/harness/model-selection.md`에 그 단위의 산정 행(model `복잡도`)을 추가한다.
+3. 새 작업 단위가 생기면 `docs/harness/model-selection.md`에 그 단위의 산정 행(model `산정`)을 추가한다.
 4. `node .claude/scripts/agent-definition.mjs --agent <에이전트>`와 `node .claude/scripts/model-selection.mjs check`를 실행한다.
 
 새 에이전트는 에이전트 양식 `docs/harness/templates/agent.md`를 `.claude/agents/<이름>.md`로 복사해 작성하고, 명단에 한 행(`| 에이전트 | 맡는 단위 | 스킬 | 편집 범위 |`)과 모델 표의 산정 행을 함께 더한 뒤 같은 두 검사를 실행한다.
@@ -292,6 +292,14 @@ docs/
 ```
 
 플러그인을 설치한 뒤 대상 프로젝트에서 `/orca-teamagent-harness-kit:agent-toggle`을 실행하면 에이전트 토글과 실시간 에이전트 구조도가 열린다. [스킬 안내](skills/agent-toggle/SKILL.md)
+
+## 0.6.0에서 올리기
+
+0.6.1은 모델 표의 복잡도 기본표(1·2·3·5·8·13)를 없애고, 산정 행의 model 표시를 `복잡도`에서 `산정`으로 바꿨다. 산정 행은 0.6.0부터 Task 점수로만 정해져 그 표를 읽는 기동 경로가 없었다. 모델 표는 사용자 소유라 setup이 고치지 않으므로, 플러그인을 올린 뒤 손으로 옮긴다.
+
+1. `docs/harness/model-selection.md` 배정 표의 model 칸 `복잡도`를 `산정`으로 바꾼다.
+2. `## 복잡도 기본표` 절을 지운다. 백로그 크기(1·2·3·5·8·13)는 `backlog-management`가 그대로 쓴다.
+3. `node .claude/scripts/model-selection.mjs check`. 옮기지 않은 줄은 이 검사가 줄 번호와 함께 알린다.
 
 ## 0.5.x에서 올리기
 

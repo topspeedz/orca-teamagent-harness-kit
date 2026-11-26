@@ -17,24 +17,11 @@ PM이 수락 기준을 쓸 때 C·U·R·V의 값과 근거를 남기고, 계획�
 | V 검증 난도 | 즉시 대조 | 단위 테스트 | 통합·여러 상태 재현 | 믿을 자동 검증이 거의 없음 |
 | F 동일 작업의 확정 실패 | 최초 시도 | 1회 | 2회 이상 | — |
 
-1. 역할·단위의 런타임은 아래 배정 표에서 조회한다. 메모가 `고정`으로 시작하면 그 모델·effort를 쓴다. 나머지 실행 배정은 `model-routing.mjs plan`으로 계산한다.
+1. 역할·단위의 런타임은 아래 배정 표에서 조회한다. 메모가 `고정`으로 시작하면 그 모델·effort를 쓴다. 나머지 실행 배정은 `model-routing.mjs plan`으로 계산한다. model 칸의 `산정`은 기본값이 없는 행이라는 표시다. 값이 적혀 있어도 고정이 아니면 같은 식으로 정한다.
 2. 모델은 조건을 순서대로 본다. `C=0, R≤1, V=0, U≤1, F=0`이면 Haiku, `C=3, R=3`이면 Fable, `C=3 또는 R=3 또는 (C≥2 이고 R≥2)`이면 Opus, 나머지는 Sonnet이다.
 3. effort 점수는 `E = 2U + V + F + (C=3이면 2)`다. 0~1 low, 2~4 medium, 5~7 high, 8~10 xhigh다. 11~13은 `U=3, V≥2, (C=3 또는 F=2)`일 때 max이고 그 밖에는 xhigh다. Haiku 워커는 effort를 생략한다. Codex이면 아래 치환표를 적용한다.
 4. 해석이 둘 이상 가능한 축에는 대안 점수와 근거를 붙인다. 가능한 해석이 실제 모델·effort를 바꿀 때만 Haiku 분류기를 한 번 호출한다. Haiku는 짧은 축별 근거를 보고 허용된 점수 중에서 고른다. 최종 조합은 같은 식으로 계산한다. 분류가 실패하면 최초 점수와 실패 사유를 남긴다.
 5. DAG에서 Task별로 추천값과 기동 직전 재평가 위임 여부를 검토한다. 사용자가 직접 지정한 값은 추천과 같아도 고정한다. 승인된 런타임 안에서 자동 배정만 재평가한다. 고정 해제나 런타임·범위 변경에는 새 DAG 승인 절차를 쓴다. 위임 기록이 없는 기존 승인 파일은 당시 배정으로 재개한다.
-
-## 복잡도 기본표
-
-BL 규모와 RICE에는 기존 1·2·3·5·8·13을 쓴다. `model-selection.mjs lookup`에 BL이나 복잡도 값을 넘겨 조회할 때는 아래 표를 사용한다. 산정 행의 워커 기동에는 쓰이지 않는다. 기동은 점수가 있어야 한다.
-
-| 복잡도 | model | effort |
-| --- | --- | --- |
-| 1 | sonnet | medium |
-| 2 | sonnet | high |
-| 3 | opus | medium |
-| 5 | opus | high |
-| 8 | opus | xhigh |
-| 13 | fable | high |
 
 ## Codex 치환표
 
@@ -67,14 +54,14 @@ Claude의 모든 model/effort 조합을 Codex 값으로 바꾼다. 형식 검사
 | --- | --- | --- | --- | --- | --- |
 | `coordinator` | 실행 감독 | claude | opus | high | 고정(사용자 결정 2026-11-22). 100만 토큰 창 전제 |
 | `product-manager` | 기획 | claude | fable | xhigh | 고정(setup에서 사용자가 정한다). 요구에서 계획까지 한 세션 |
-| `product-manager` | 완료 처리 | claude | 복잡도 | | 백로그 완료·보관 |
-| `research` | 조사 | claude | 복잡도 | | |
-| `frontend` | 구현, 결함 수정, 시험 갱신 | claude | 복잡도 | | |
-| `backend` | 구현, 결함 수정, 시험 갱신 | claude | 복잡도 | | |
-| `verifier` | 중간 변경 리뷰 | claude | 복잡도 | | 코드를 읽는 검토만 |
-| `verifier` | 끝 검증 | claude | 복잡도 | | 읽기와 실행. 영역마다 Task 하나 |
-| `verifier` | 재검 | claude | 복잡도 | | 재현 테스트가 없는 결함의 재현 확인만 |
+| `product-manager` | 완료 처리 | claude | 산정 | | 백로그 완료·보관 |
+| `research` | 조사 | claude | 산정 | | |
+| `frontend` | 구현, 결함 수정, 시험 갱신 | claude | 산정 | | |
+| `backend` | 구현, 결함 수정, 시험 갱신 | claude | 산정 | | |
+| `verifier` | 중간 변경 리뷰 | claude | 산정 | | 코드를 읽는 검토만 |
+| `verifier` | 끝 검증 | claude | 산정 | | 읽기와 실행. 영역마다 Task 하나 |
+| `verifier` | 재검 | claude | 산정 | | 재현 테스트가 없는 결함의 재현 확인만 |
 | `verifier` | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정(사용자 결정 2026-11-22) |
-| `harness-engineer` | 회고, 구조 변경 | claude | 복잡도 | | |
-| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | 복잡도 | | 동기화는 장부의 `## 라이브 문서 확인`에 행이 있을 때만 |
-| `*` | 기본 | claude | 복잡도 | | 표에 없는 조합 |
+| `harness-engineer` | 회고, 구조 변경 | claude | 산정 | | |
+| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | 산정 | | 동기화는 장부의 `## 라이브 문서 확인`에 행이 있을 때만 |
+| `*` | 기본 | claude | 산정 | | 표에 없는 조합 |

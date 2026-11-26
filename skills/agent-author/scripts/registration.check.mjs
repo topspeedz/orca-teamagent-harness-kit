@@ -151,7 +151,7 @@ function project(scenario) {
     const source = read(root, '.claude/agents/' + agent + '.md').split(/\r?\n---\r?\n/)[1].replaceAll('\r\n', '\n');
     const toml = read(root, '.codex/agents/' + agent + '.toml');
     assert.equal(JSON.parse(toml.match(/^developer_instructions = (.*)$/m)[1]), source);
-    const row = JSON.parse(run(root, '.claude/scripts/model-selection.mjs', 'lookup', '--agent', agent, '--unit', agent === api ? '계약 변경' : '소비 검증', '--complexity', '2', '--json'));
+    const row = JSON.parse(run(root, '.claude/scripts/model-selection.mjs', 'lookup', '--agent', agent, '--unit', agent === api ? '계약 변경' : '소비 검증', '--json'));
     assert.equal(row.matched, 'exact');
   }
   run(root, '.claude/scripts/model-selection.mjs', 'check');

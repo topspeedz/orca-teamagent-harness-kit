@@ -128,7 +128,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 **Model and effort managed in one table**
 
 - Scores belong to Tasks, not agents. The PM records backlog evidence for complexity, uncertainty, impact and verification, and the plan gives each Task C, U, R and V values with reasons. `model-routing.mjs plan` computes the model and effort, consulting Haiku only when competing interpretations could change the assignment. On the DAG, users can lock a model and effort or delegate reassessment just before launch. The coordinator applies the approved runtime and model mapping.
-- Only a row whose memo starts with `고정` (fixed) is a fixed row of the model table. Every other row is a formula row, whether its model is `복잡도` or a value is written in. A Task on a formula row does not launch without scores. The launch script refuses instead of falling back to a default. A worker started outside the plan (such as `research` before the design) passes its scores with `--assessment`.
+- Only a row whose memo starts with `고정` (fixed) is a fixed row of the model table. Every other row is a formula row, whether its model is `산정` (formula) or a value is written in. A Task on a formula row does not launch without scores. The launch script refuses instead of falling back to a default. A worker started outside the plan (such as `research` before the design) passes its scores with `--assessment`.
 - The PM's planning session launches with the one model and effort chosen in `setup` (default fable/xhigh), and the same session uses it from requirements through the plan. [Routing rubric and Astra ultra mapping](template/docs/harness/model-selection.md)
 - Editing the table changes the next plan. Changing a Task in the current Run requires an updated assignment and DAG and renewed approval.
 
@@ -247,7 +247,7 @@ To add a skill by hand, follow these steps.
 
 1. Copy the skill template `docs/harness/templates/skill.md` to `.claude/skills/<skill>/SKILL.md` and fill it in.
 2. Put the same name in the agent's role file `.claude/agents/<agent>.md` (the `- 로드할 스킬:` line and the `## 작업 단위와 스킬` table) and in the skills column of the roster `docs/harness/agents.md`.
-3. If a new unit of work appears, add a formula row (model `복잡도`) for it to `docs/harness/model-selection.md`.
+3. If a new unit of work appears, add a formula row (model `산정`) for it to `docs/harness/model-selection.md`.
 4. Run `node .claude/scripts/agent-definition.mjs --agent <agent>` and `node .claude/scripts/model-selection.mjs check`.
 
 For a new agent, copy the agent template `docs/harness/templates/agent.md` to `.claude/agents/<name>.md` and fill it in, add one roster row (`| 에이전트 | 맡는 단위 | 스킬 | 편집 범위 |`) and a formula row in the model table, then run the same two checks.
@@ -297,6 +297,14 @@ docs/
 ```
 
 After installing the plugin, run `/orca-teamagent-harness-kit:agent-toggle` in the target project to open the agent toggles and live agent chart. [Skill guide](skills/agent-toggle/SKILL.md)
+
+## Upgrading from 0.6.0
+
+0.6.1 drops the complexity table (1·2·3·5·8·13) from the model table and renames the model cell of a formula row from `복잡도` to `산정`. Since 0.6.0 a formula row is decided only by the Task's scores, so no launch path read that table. The model table belongs to the user and setup does not edit it, so move it by hand after updating the plugin.
+
+1. In the assignment table of `docs/harness/model-selection.md`, change the model cell `복잡도` to `산정`.
+2. Delete the `## 복잡도 기본표` section. Backlog sizes (1·2·3·5·8·13) stay in `backlog-management`.
+3. Run `node .claude/scripts/model-selection.mjs check`. It names, with line numbers, any line not yet moved.
 
 ## Upgrading from 0.5.x
 

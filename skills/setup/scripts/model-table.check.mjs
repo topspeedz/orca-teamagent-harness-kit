@@ -184,14 +184,15 @@ test('the local survey opens at the project values and carries the current revis
 test('setup rules and fixed assignments round-trip through the same choices array', () => {
   const table = readFileSync(new URL('../../../template/docs/harness/model-selection.md', import.meta.url), 'utf8');
   const { settings } = pageData(table, [], true);
-  assert.equal(settings.filter(x => x.rule === 'complexity').length, 6);
+  assert.equal(settings.filter(x => x.rule === 'complexity').length, 0);
   assert.equal(settings.filter(x => x.rule === 'codex').length, 16);
   assert.equal(applyChoices(table, settings), table);
+  // the first edit is what a survey page published before 0.6.1 still sends: it changes nothing
   const edits = [{rule:'complexity',unit:'3',model:'sonnet',effort:'max'},
     {rule:'codex',unit:'sonnet/max',model:'local-sol',effort:'high'},
     {rule:'approval',model:'끔'}, {agent:'research',unit:'조사',model:'opus',effort:'high',fixed:true}];
+  assert.equal(applyChoices(table, [edits[0]]), table);
   const next = pageData(applyChoices(table, edits), [], true);
-  assert.equal(next.settings.find(x => x.unit === '3').model, 'sonnet');
   assert.equal(next.settings.find(x => x.unit === 'sonnet/max').model, 'local-sol');
   assert.equal(next.settings.find(x => x.rule === 'approval').model, '끔');
   assert.match(next.rows.find(x => x.unit === '조사').note, /^고정/);

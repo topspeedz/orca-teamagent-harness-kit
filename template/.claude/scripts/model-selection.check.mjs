@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseTable, checkTable, checkRules, lookup, backlogComplexity, toCodex, choices } from './model-selection.mjs';
+import { parseTable, checkTable, checkRules, lookup, toCodex, choices } from './model-selection.mjs';
 
 const script = fileURLToPath(new URL('./model-selection.mjs', import.meta.url));
 // Setup edits the real table per project, so value cases use this fixture; the real table is only parsed.
@@ -100,52 +100,55 @@ t(() => {
   assert.equal(JSON.parse(r.stdout).model, 'opus');
 });
 
-const fixture = table.replace('| `*` | 기본 | claude | opus | medium |', '| `*` | 기본 | claude | 복잡도 | |')
+const fixture = table.replace('| `*` | 기본 | claude | opus | medium |', '| `*` | 기본 | claude | 산정 | |')
   .replace('보안·돈이 걸린 변경 리뷰 | claude | opus | high', '보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh')
-  + '\n| 복잡도 | model | effort |\n| --- | --- | --- |\n'
-  + ['1 | sonnet | medium', '2 | sonnet | high', '3 | opus | medium', '5 | opus | high', '8 | opus | xhigh', '13 | fable | high'].map(x => '| ' + x + ' |').join('\n')
-  + '\n\n| Claude | Codex | 메모 |\n| --- | --- | --- |\n| haiku | gpt-6.2-sol/low | |\n'
+  + '\n| Claude | Codex | 메모 |\n| --- | --- | --- |\n| haiku | gpt-6.2-sol/low | |\n'
   + ['sonnet', 'opus', 'fable'].flatMap(m => ['low','medium','high','xhigh','max'].map((e,i) =>
     `| ${m}/${e} | gpt-6.2-${m === 'sonnet' ? 'sol' : 'astra'}/${m === 'fable' ? ['medium','high','xhigh','max','ultra'][i] : e} | |`)).join('\n');
 
-// 13-17. complexity rows: default table, Codex table, fixed rows ignore complexity, missing complexity refused, table checks
+// 13-17. formula rows (model `산정`): lookup returns the row as written, the Codex table must be complete, the old marker and table are refused
 {
   const rules = parseTable(fixture);
-  rules.rows.push({agent: 'environment-artist', units: ['3D 환경·프롭 모델링'], runtime: 'codex', model: '복잡도', effort: null});
-  const pick = (agent, unit, complexity) => (({ runtime, model, effort }) => `${runtime} ${model}/${effort}`)(lookup(rules.rows, agent, unit, { complexity, rules }));
   t(() => {
-    assert.equal(pick('unity-gameplay-engineer', '게임플레이 구현', 1), 'claude sonnet/medium');
-    assert.equal(pick('unity-gameplay-engineer', '게임플레이 구현', 5), 'claude opus/high');
-    assert.equal(pick('unity-gameplay-engineer', '게임플레이 구현', 13), 'claude fable/high');
+    const r = lookup(rules.rows, 'unity-gameplay-engineer', '게임플레이 구현');
+    assert.deepEqual([r.model, r.effort, r.matched], ['산정', null, 'default']);
+    assert.equal(lookup(rules.rows, 'verifier', '보안·돈이 걸린 변경 리뷰').model, 'fable');
   });
+  t(() => assert.deepEqual(checkRules(rules.rows, rules), []));
   t(() => {
-    assert.equal(pick('environment-artist', '3D 환경·프롭 모델링', 5), 'codex gpt-6.2-astra/high');
-    assert.equal(pick('environment-artist', '3D 환경·프롭 모델링', 13), 'codex gpt-6.2-astra/xhigh');
-    assert.equal(lookup(rules.rows, 'environment-artist', '3D 환경·프롭 모델링', { complexity: 13, rules }).claude, 'fable/high');
-  });
-  t(() => {
-    assert.equal(pick('coordinator', '실행 감독', 1), 'claude opus/high');
-    assert.equal(pick('verifier', '보안·돈이 걸린 변경 리뷰', 1), 'claude fable/xhigh');
-    assert.equal(pick('product-manager', '계획', 13), 'claude opus/max');
-  });
-  t(() => {
-    assert.throws(() => lookup(rules.rows, 'unity-gameplay-engineer', '게임플레이 구현', { rules }), /복잡도가 필요함/);
-    assert.throws(() => lookup(rules.rows, 'unity-gameplay-engineer', '게임플레이 구현', { complexity: 4, rules }), /기본표/);
-  });
-  t(() => {
-    assert.deepEqual(checkRules(rules.rows, rules), []);
-    const broken = parseTable(fixture.replace(/^\| fable\/max \|.*$/m, '').replace('| 13 | fable | high |', '| 13 | fable | ultra |'));
+    const broken = parseTable(fixture.replace(/^\| fable\/max \|.*$/m, '').replace('| `*` | 기본 | claude | 산정 | |', '| `*` | 기본 | claude | 산정 | high |'));
     const e = checkRules(broken.rows, broken);
     assert.ok(e.some((m) => /빠진 Claude 조합 fable\/max/.test(m)), e.join('\n'));
-    assert.ok(e.some((m) => /fable\/ultra/.test(m)), e.join('\n'));
+    assert.ok(e.some((m) => /산정 줄은 effort를 비움/.test(m)), e.join('\n'));
+  });
+  t(() => {
+    // a table still on the 0.6.0 marker: each old row and the old complexity table are named once
+    const old = parseTable(fixture.replace('| `*` | 기본 | claude | 산정 | |', '| `*` | 기본 | claude | 복잡도 | |')
+      + '\n\n| 복잡도 | model | effort |\n| --- | --- | --- |\n| 13 | fable | high |\n');
+    const e = checkRules(old.rows, old);
+    assert.equal(e.filter((m) => /`복잡도`는 0\.6\.1에서 `산정`/.test(m)).length, 1, e.join('\n'));
+    assert.equal(e.filter((m) => /복잡도 기본표는 0\.6\.1에서 없어졌다/.test(m)).length, 1, e.join('\n'));
+  });
+  t(() => {
+    // no formula row and no Codex table: nothing to check
+    const plain = parseTable(table);
+    assert.deepEqual(checkRules(plain.rows, plain), []);
   });
 }
 
-// 18. backlog complexity: the largest of several BLs; a row without the value is refused
+// 18. CLI lookup: a formula row prints the routing hint, a fixed row does not; --json carries fixed
 t(() => {
-  const backlog = '| BL-0001 | a | x | todo | 복잡도 3(기술 3) |\n| BL-0002 | b | x | todo | 우선순위 1 · 복잡도 8(기술 8) |\n| BL-0003 | c | x | todo | 없음 |';
-  assert.deepEqual(backlogComplexity(backlog, ['BL-0001', 'BL-0002']), { value: 8, dims: '기술 8' });
-  assert.throws(() => backlogComplexity(backlog, ['BL-0003']), /BL-0003/);
+  const dir = mkdtempSync(join(tmpdir(), 'model-selection-'));
+  const file = join(dir, 'm.md');
+  writeFileSync(file, fixture.replace('| `coordinator` | 실행 감독 | claude | opus | high | |', '| `coordinator` | 실행 감독 | claude | opus | high | 고정 |'));
+  const run = (...args) => spawnSync(process.execPath, [script, ...args, '--table', file], { cwd: dir, encoding: 'utf8' });
+  let r = run('lookup', '--agent', 'developer', '--unit', '없는 단위');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /claude 산정 \(default\) — 고정 행이 아니라 Task 점수로 정한다/);
+  r = run('lookup', '--agent', 'coordinator', '--unit', '실행 감독');
+  assert.equal(r.stdout.trim(), 'claude opus/high (exact)');
+  r = run('lookup', '--agent', 'coordinator', '--unit', '실행 감독', '--json');
+  assert.equal(JSON.parse(r.stdout).fixed, true);
 });
 
 // 19. Codex table conversion and the dropdown choices

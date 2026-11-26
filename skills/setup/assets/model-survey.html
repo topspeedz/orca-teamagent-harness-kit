@@ -68,7 +68,7 @@ textarea { width: 100%; box-sizing: border-box; min-height: 12em; font: 0.85rem/
 const DATA = /*__DATA__*/null;
 const COLLECTION = 'model-selection', DOC_ID = 'choices';
 // the same condition locks the effort select and clears it
-const noEffort = (s) => s.model === '복잡도' || s.runtime === 'claude' && s.model === 'haiku';
+const noEffort = (s) => s.model === '산정' || s.runtime === 'claude' && s.model === 'haiku';
 DATA.rows.push(...(DATA.settings ?? []));
 const state = DATA.rows.map((r) => ({ runtime: r.runtime, model: r.model, fixed: r.note?.startsWith('고정') ?? false, effort: noEffort(r) ? '' : r.effort }));
 let touched = false;
@@ -113,7 +113,7 @@ function render() {
       sel.onchange = () => {
         s.runtime = sel.value;
         // claude keeps only a model from its list; codex starts from an empty box the user fills
-        if (s.model === '복잡도') s.effort = '';
+        if (s.model === '산정') s.effort = '';
         else if (s.runtime === 'codex') s.model = '';
         else if (!DATA.models.includes(s.model)) s.model = DATA.models[0];
         if (noEffort(s)) s.effort = '';
@@ -129,7 +129,7 @@ function render() {
       // Codex's own model list as suggestions; any other ID can still be typed
       model.setAttribute('list', 'codex-models');
     } else {
-      const models = r.rule === 'approval' ? ['켬', '끔'] : r.rule ? DATA.models : [...DATA.models, '복잡도'];
+      const models = r.rule === 'approval' ? ['켬', '끔'] : r.rule ? DATA.models : [...DATA.models, '산정'];
       model = select(`model-${i}`, models, s.model);
       model.onchange = () => { s.model = model.value; if (noEffort(s)) s.effort = ''; change(model.id); };
     }
@@ -141,7 +141,7 @@ function render() {
     ef.onchange = () => { s.effort = ef.value; change(ef.id); };
     const recTd = el('td'), line = el('div', { className: 'rec' });
     if (r.isNew) {
-      line.append(el('span', { className: 'pill new' }, '새 팀'));
+      line.append(el('span', { className: 'pill new' }, '새 줄'));
     } else {
       line.append(el('span', { className: 'pill' }, '지금 값 유지'));
       if (r.recommend) {
@@ -153,7 +153,7 @@ function render() {
     }
     recTd.append(line);
     if (r.recommend && r.recommend.reason) recTd.append(el('div', { className: 'reason' }, r.recommend.reason));
-    const fixed = el('input', { type: 'checkbox', checked: s.fixed, disabled: s.model === '복잡도' });
+    const fixed = el('input', { type: 'checkbox', checked: s.fixed, disabled: s.model === '산정' });
     fixed.setAttribute('aria-label', r.agent + ' ' + r.unit + ' 고정');
     fixed.onchange = () => { s.fixed = fixed.checked; touched = true; };
     tr.append(rt, md, td(ef), recTd, r.rule ? td() : td(fixed));
@@ -163,7 +163,7 @@ function render() {
 // the table is drawn again, so focus goes back to the control the user just changed
 function change(id) { touched = true; render(); document.getElementById(id)?.focus(); }
 
-const choices = () => DATA.rows.map((r, i) => ({ ...(r.rule ? { rule: r.rule } : { fixed: state[i].fixed && state[i].model !== '복잡도' }), agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
+const choices = () => DATA.rows.map((r, i) => ({ ...(r.rule ? { rule: r.rule } : { fixed: state[i].fixed && state[i].model !== '산정' }), agent: r.agent, unit: r.unit, runtime: state[i].runtime, model: state[i].model, effort: state[i].effort }));
 let saved = choices();
 
 async function save() {

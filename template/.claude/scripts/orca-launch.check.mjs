@@ -1041,9 +1041,8 @@ await ta(async () => {
 });
 
 // ---- A formula row (메모 not `고정`) launches only with the Task's scores ----
-const FORMULA = TABLE.replace('| `frontend` | 구현 | claude | opus | medium | 고정 |', '| `frontend` | 구현 | claude | 복잡도 | | |')
-  + '\n| `product-manager` | 기획 | claude | fable | xhigh | 고정 |'
-  + '\n\n| 복잡도 | model | effort |\n| --- | --- | --- |\n| 3 | opus | medium |';
+const FORMULA = TABLE.replace('| `frontend` | 구현 | claude | opus | medium | 고정 |', '| `frontend` | 구현 | claude | 산정 | | |')
+  + '\n| `product-manager` | 기획 | claude | fable | xhigh | 고정 |';
 const NEEDS_SCORES = /산정 행은 점수가 필요함: T01 \(frontend, 구현\)/;
 
 // Approval review: a formula-row Task without routing is refused, with or without routingVersion 2 (complexity alone is not enough).

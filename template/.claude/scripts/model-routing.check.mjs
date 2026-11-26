@@ -92,7 +92,7 @@ try {
   writeFileSync(fixture, [
     '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |', '| --- | --- | --- | --- | --- | --- |',
     '| reviewer | inspect | claude | fable | xhigh | 고정(auth) |',
-    '| * | 기본 | claude | 복잡도 | | |',
+    '| * | 기본 | claude | 산정 | | |',
   ].join('\n'));
   writeFileSync(axesFile, '\uFEFF' + JSON.stringify({ scores: baseline, evidence }));
   const plan = (agent, unit, ...args) => cli(['plan', '--agent', agent, '--unit', unit, '--selection', fixture, ...args]);

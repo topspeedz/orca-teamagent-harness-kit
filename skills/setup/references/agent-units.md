@@ -80,7 +80,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
 
 기존 에이전트에 스킬 더하기, 기본 에이전트 바꾸기, 새 에이전트 만들기 모두 아래 순서를 쓴다. 해당하지 않는 단계는 건너뛴다. 시작 전에 명단·모델 행과 역할·스킬 파일(OFF 포함)의 충돌을 확인한다. 같은 구성은 재사용하고 충돌은 사용자에게 알린다. 중간에 멈췄다면 이미 반영한 행을 먼저 대조하고 남은 부분만 진행한다. 양식의 안내 문장과 `<...>`는 남기지 않는다.
 
-1. 모델 표에 새 작업 단위의 줄. runtime·model·effort는 표의 `*` 기본 줄(agent `*`, unit `기본`) 값을 그대로 쓴다(`rows` 명령으로 읽는다). 틀의 `*` 줄은 model이 `복잡도`인 산정 행이라 새 줄도 산정 행이 된다. 추천값은 넣지 않는다. 사용자가 8단계 설문에서 저장할 때만 표에 쓰인다. 이미 있는 역할·작업 행은 보존하고 새 줄만 `_workspace/setup/model-rows.json`에 모아 한 번에 넣는다.
+1. 모델 표에 새 작업 단위의 줄. runtime·model·effort는 표의 `*` 기본 줄(agent `*`, unit `기본`) 값을 그대로 쓴다(`rows` 명령으로 읽는다). 틀의 `*` 줄은 model이 `산정`인 산정 행이라 새 줄도 산정 행이 된다. 추천값은 넣지 않는다. 사용자가 8단계 설문에서 저장할 때만 표에 쓰인다. 이미 있는 역할·작업 행은 보존하고 새 줄만 `_workspace/setup/model-rows.json`에 모아 한 번에 넣는다.
 
    ```sh
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" rows --table docs/harness/model-selection.md
@@ -94,7 +94,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/model-table.mjs" add --table docs/harness/model-selection.md --rows _workspace/setup/model-rows.json
    ```
 
-   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`, 산정 행의 `복잡도`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`나 `복잡도`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. runtime·model·effort가 모두 `*` 기본 줄과 같은 줄은 목록을 보지 않고 받는다. 그 값은 소유자가 정한 기본값이다(고정한 모델 ID 등). 이미 있는 (에이전트, 작업 단위) 줄도 거절한다. 거절되면 메시지를 보여 주고 이 에이전트의 나머지 단계로 가지 않는다.
+   `add`는 빈 `agent`나 `unit`, 칸 안의 `|`나 줄바꿈, `claude`·`codex` 밖의 runtime을 거절한다. runtime이 `claude`이면 목록 밖의 model(`opus`·`sonnet`·`haiku`·`fable`, 산정 행의 `산정`)과 effort(`low`·`medium`·`high`·`xhigh`·`max`), effort를 단 `haiku`나 `산정`도 거절한다. `codex`이면 빈 model만 거절하고 effort는 검사하지 않는다. runtime·model·effort가 모두 `*` 기본 줄과 같은 줄은 목록을 보지 않고 받는다. 그 값은 소유자가 정한 기본값이다(고정한 모델 ID 등). 이미 있는 (에이전트, 작업 단위) 줄도 거절한다. 거절되면 메시지를 보여 주고 이 에이전트의 나머지 단계로 가지 않는다.
 2. 각 신규 역할은 **대상 프로젝트**의 `docs/harness/templates/agent.md`와 플러그인의 [전문 판단 질문](../../agent-author/references/agent-definition-template.md)을 함께 읽어 작성한다. `## 따로 두는 이유`에는 2절의 세 기준 가운데 이 역할에 참인 것과 그 근거를 적는다. 전문 역할은 [지정 원문 조사](../../agent-author/references/agent-corpus-research.md)로 판단 분기와 실패 신호를 비교하고 실제 프로젝트 경로·검증 증거·출처를 남긴다. `.claude/agents/<에이전트>.md`에는 위에서 수락한 문서·절만 배정한다. 직접 협의 경로는 양쪽에서 찾을 수 있게 하고 새 배정과 범위 변경은 배정자에게 올린다.
 3. 스킬은 4절로 만들거나 고른다. 그 에이전트의 역할 파일 `- 로드할 스킬:` 줄과 `## 작업 단위와 스킬` 표에 같은 이름을 넣는다. `docs-management`는 모든 에이전트가 쓴다.
 4. `docs/harness/agents.md`에서 기존 에이전트는 해당 행의 스킬·승인된 편집 범위만, 새 에이전트는 한 행(`| 에이전트 | 맡는 단위 | 스킬 | 편집 범위 |`)만 추가한다. 편집 범위는 다른 행과 겹치지 않게 한다. 기본 에이전트의 이름을 바꾸거나 빼면 역할 파일, 명단 행, 모델 표 행, 다른 역할의 직접 협업 행을 함께 고친다. setup이 깐 기본 에이전트의 역할 파일을 지우면 setup을 다시 돌려도 되살리지 않는다(`skipped`에 사유 `사용자가 지움`). 그 에이전트의 스킬 파일은 다시 깔린다. 사용자 선택에 따른 대기 표 변경은 해당 문서·절에만 적용한다.
@@ -128,7 +128,7 @@ Codex를 골랐으면(`_workspace/setup/answers.json`의 `codex`) `.agents/skill
    ```
 
 3. `artifact-capabilities` 스킬을 로드한다. 만든 파일을 끝까지 읽은 뒤 Artifact로 게시한다: `capabilities: {"db": {}}`, 첫 게시에는 `icon`. 새 파일 이름이므로 저장소가 빈 새 Artifact가 된다. 옛 Artifact에 다시 게시하지 않는다(옛 저장 문서가 남는다). 링크를 주고 "고친 뒤 저장을 누르고 알려 달라"고 한다. 페이지는 비공개다.
-복잡도 기준 여섯 줄, 고정할 역할, 승인 화면 Task 선택(기본 켬)을 함께 확인한다. Codex를 쓰면 치환표에 이 PC의 모델과 effort를 지정한다. 저장한 배열에는 기준표 행의 `rule`과 역할 행의 `fixed`도 있으므로 그대로 반영한다.
+고정할 역할, 승인 화면 Task 선택(기본 켬)을 함께 확인한다. Codex를 쓰면 치환표에 이 PC의 모델과 effort를 지정한다. 저장한 배열에는 설정 행의 `rule`과 역할 행의 `fixed`도 있으므로 그대로 반영한다.
 
 4. 사용자가 저장했다고 하면 ArtifactData로 읽는다: action `get`, 그 Artifact의 `url`, `collection` `model-selection`, `doc_id` `choices`. 문서는 `{ savedAt, choices: [{ agent, unit, runtime, model, effort }] }`이고 모든 줄이 들어 있다. `choices` 배열만 `_workspace/setup/model-choices.json`에 쓰고 반영한다.
 

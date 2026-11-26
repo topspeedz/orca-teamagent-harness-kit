@@ -165,7 +165,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 ## 8. 모델 표
 
-[references/agent-units.md](references/agent-units.md)의 "모델 표 설문"을 따른다. 표의 모든 줄을 Artifact 페이지로 띄운다. 복잡도별 여섯 기준값, 고정 역할, Codex 치환표(사용 시), 승인 DAG의 Task별 직접 지정 여부(기본 켬)도 함께 받는다. 새 줄은 추천값으로 채우고, 기존 줄은 지금 값을 두고 추천을 참고로만 보여 준다. 사용자가 저장했다고 알리면 그 값을 읽어 표에 반영하고 `node .claude/scripts/model-selection.mjs check`를 돌린다. 사용자가 저장하지 않은 값은 표에 쓰지 않는다. 구조도에서 같은 설문을 열면 현재 프로젝트 표를 읽고 저장 즉시 변경 행을 반영한다. 적용 중 충돌이 표시되면 다시 열어 외부 변경을 확인한다.
+[references/agent-units.md](references/agent-units.md)의 "모델 표 설문"을 따른다. 표의 모든 줄을 Artifact 페이지로 띄운다. 고정 역할, Codex 치환표(사용 시), 승인 DAG의 Task별 직접 지정 여부(기본 켬)도 함께 받는다. 새 줄은 추천값으로 채우고, 기존 줄은 지금 값을 두고 추천을 참고로만 보여 준다. 사용자가 저장했다고 알리면 그 값을 읽어 표에 반영하고 `node .claude/scripts/model-selection.mjs check`를 돌린다. 사용자가 저장하지 않은 값은 표에 쓰지 않는다. 구조도에서 같은 설문을 열면 현재 프로젝트 표를 읽고 저장 즉시 변경 행을 반영한다. 적용 중 충돌이 표시되면 다시 열어 외부 변경을 확인한다.
 
 ## 9. 보고
 

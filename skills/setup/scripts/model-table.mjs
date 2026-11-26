@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 const installed = existsSync(new URL('./model-selection.mjs', import.meta.url));
 const parser = installed ? './model-selection.mjs' : '../../../template/.claude/scripts/model-selection.mjs';
-const { parseTable, checkRules, NO_EFFORT_MODELS, BY_COMPLEXITY } = await import(new URL(parser, import.meta.url));
+const { parseTable, checkRules, NO_EFFORT_MODELS, BY_FORMULA } = await import(new URL(parser, import.meta.url));
 
 export const MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
 
@@ -31,12 +31,12 @@ const cell = (v) => (v ? ` ${v} ` : ' ');
 const runtimeError = (runtime) => (RUNTIMES.includes(runtime) ? null : `런타임 \`${runtime}\`은 ${RUNTIMES.join(', ')} 중 하나가 아님`);
 const modelError = (model, runtime) => {
   if (runtime === 'codex') return typeof model === 'string' && model.trim() ? null : 'model이 빔';
-  return model === BY_COMPLEXITY || MODELS.includes(model) ? null : `model \`${model}\`은 ${MODELS.join(', ')} 중 하나가 아님`;
+  return model === BY_FORMULA || MODELS.includes(model) ? null : `model \`${model}\`은 ${MODELS.join(', ')} 중 하나가 아님`;
 };
 const effortError = (effort, runtime) =>
   runtime === 'codex' || !effort || EFFORTS.includes(effort) ? null : `effort \`${effort}\`은 ${EFFORTS.join(', ')} 중 하나가 아님`;
 const haikuError = (model, effort, runtime) =>
-  effort && (model === BY_COMPLEXITY || runtime === 'claude' && NO_EFFORT_MODELS.includes(model)) ? `${model}은 effort를 받지 않음(\`${effort}\`)` : null;
+  effort && (model === BY_FORMULA || runtime === 'claude' && NO_EFFORT_MODELS.includes(model)) ? `${model}은 effort를 받지 않음(\`${effort}\`)` : null;
 
 export function validate(choice, runtime) {
   const effort = choice.effort ?? '';
@@ -84,13 +84,13 @@ export function applyChoices(tableText, choices) {
   if (!Array.isArray(choices)) throw new Error('choices는 배열이어야 함');
   const rules = parseTable(tableText);
   for (const c of choices) {
-    if (c?.rule === 'complexity' || c?.rule === 'codex') {
-      const complexity = c.rule === 'complexity';
-      const entry = complexity ? rules.complexity.find(x => String(x.value) === c.unit) : rules.codex.find(x => x.from === c.unit);
+    // a survey page published before 0.6.1 still sends its complexity rows; that table is gone, so they change nothing
+    if (c?.rule === 'complexity') continue;
+    if (c?.rule === 'codex') {
+      const entry = rules.codex.find(x => x.from === c.unit);
       if (!entry || !c.model || typeof c.model !== 'string' || typeof c.effort !== 'string' || /[|/\s]/.test(c.model + c.effort)) throw new Error('잘못된 기준표 값');
       const cells = lines[entry.line - 1].split('|');
-      cells[2] = cell(complexity ? c.model : [c.model, c.effort].join('/'));
-      if (complexity) cells[3] = cell(c.effort);
+      cells[2] = cell([c.model, c.effort].join('/'));
       lines[entry.line - 1] = cells.join('|');
       continue;
     }
@@ -120,7 +120,7 @@ export function applyChoices(tableText, choices) {
     if (err) throw new Error(`${name}: ${err}`);
     [['runtime', 3], ['model', 4], ['effort', 5]].forEach(([k, i]) => { if (changed(k)) cells[i] = cell(next[k]); });
     if (c.fixed !== undefined) {
-      if (typeof c.fixed !== 'boolean' || (c.fixed && next.model === BY_COMPLEXITY)) throw new Error('고정할 모델을 지정하세요');
+      if (typeof c.fixed !== 'boolean' || (c.fixed && next.model === BY_FORMULA)) throw new Error('고정할 모델을 지정하세요');
       if (c.fixed !== row.note.startsWith('고정')) cells[6] = cell(c.fixed ? '고정 ' + row.note : row.note.replace(/^고정(?:\([^)]*\))?[. ]*/, ''));
     }
     lines[row.line - 1] = cells.join('|');
@@ -148,7 +148,6 @@ export function pageData(tableText, recommend = [], codex = false) {
   const rows = listRows(tableText);
   const rules = parseTable(tableText);
   const settings = [
-    ...rules.complexity.map(x => ({ rule: 'complexity', agent: '복잡도 기준', unit: String(x.value), runtime: 'claude', model: x.model, effort: x.effort ?? '' })),
     ...(codex ? rules.codex.map(x => {
       const [model, effort] = x.to.split('/');
       return { rule: 'codex', agent: 'Codex 치환', unit: x.from, runtime: 'codex', model, effort };

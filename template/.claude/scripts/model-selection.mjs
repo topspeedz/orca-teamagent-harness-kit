@@ -8,12 +8,14 @@ export const NO_EFFORT_MODELS = ['haiku'];
 // Same lists as MODELS/EFFORTS in model-table.mjs (that file imports this one, so it cannot be imported back).
 const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
-// A row whose model cell is this word takes model/effort from the complexity table (and the Codex table on codex).
-export const BY_COMPLEXITY = '복잡도';
+// A row whose model cell is this word has no default model: the Task's scores pick model and effort (model-routing.mjs).
+export const BY_FORMULA = '산정';
 // A row the user fixed (메모 `고정`) launches with its own values; every other row needs the Task's scores.
 export const isFixed = (row) => row.note.startsWith('고정');
 const HEADER = ['에이전트', '작업 단위', '런타임', 'model', 'effort', '메모'];
-const COMPLEXITY_HEADER = ['복잡도', 'model', 'effort'];
+// Before 0.6.1 formula rows said `복잡도` and a complexity table sat beside them; check names both so a project moves off them.
+const OLD_FORMULA = '복잡도';
+const OLD_COMPLEXITY_HEADER = ['복잡도', 'model', 'effort'];
 const CODEX_HEADER = ['Claude', 'Codex', '메모'];
 
 const cellsOf = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
@@ -34,10 +36,10 @@ export function parseTable(text) {
   const lines = text.replace(/^﻿/, '').split(/\r?\n/);
   const rows = [];
   const errors = [];
-  const complexity = (block(lines, COMPLEXITY_HEADER) ?? []).map(({ line, c }) => ({ line, value: Number(c[0]), model: c[1], effort: c[2] || null }));
+  const legacyTable = lines.findIndex((l) => l.trim().startsWith('|') && cellsOf(l).join('|') === OLD_COMPLEXITY_HEADER.join('|')) + 1;
   const codex = (block(lines, CODEX_HEADER) ?? []).map(({ line, c }) => ({ line, from: c[0], to: c[1] }));
   const main = block(lines, HEADER);
-  if (!main) return { rows, errors: [`L0: 머리 줄 \`${HEADER.join(' | ')}\`인 표가 없음`], complexity, codex };
+  if (!main) return { rows, errors: [`L0: 머리 줄 \`${HEADER.join(' | ')}\`인 표가 없음`], codex, legacyTable };
   for (const { line, c } of main) {
     // cell count is checked here because Row cannot carry a malformed line
     if (c.length !== 6) { errors.push(`L${line}: 칸 수 6이 아님`); continue; }
@@ -51,7 +53,7 @@ export function parseTable(text) {
       note: c[5],
     });
   }
-  return { rows, errors, complexity, codex };
+  return { rows, errors, codex, legacyTable };
 }
 
 export function checkTable(rows, { agentNames, noEffortModels }) {
@@ -72,19 +74,13 @@ export function checkTable(rows, { agentNames, noEffortModels }) {
   return errors;
 }
 
-// The complexity and Codex tables: checked only when some row says `복잡도`.
-export function checkRules(rows, { complexity, codex }) {
+// Formula rows and the Codex table: a formula row on codex takes its pair from the Codex table, so it must cover every Claude pair.
+export function checkRules(rows, { codex, legacyTable = 0 }) {
   const errors = [];
-  for (const r of rows.filter((x) => x.model === BY_COMPLEXITY && x.effort !== null)) errors.push(`L${r.line}: ${BY_COMPLEXITY} 줄은 effort를 비움`);
-  if (!complexity.length && !codex.length && !rows.some((r) => r.model === BY_COMPLEXITY)) return errors;
-  if (!complexity.length) errors.push(`L0: 머리 줄 \`${COMPLEXITY_HEADER.join(' | ')}\`인 표가 없음`);
-  const values = new Set();
-  for (const x of complexity) {
-    if (![1, 2, 3, 5, 8, 13].includes(x.value) || values.has(x.value)) errors.push(`L${x.line}: 복잡도 값은 1·2·3·5·8·13 중 하나이며 중복할 수 없음`);
-    values.add(x.value);
-    if (!claudePairs().includes(pair(x.model, x.effort))) errors.push(`L${x.line}: \`${pair(x.model, x.effort)}\`은 Claude model/effort 조합이 아님`);
-  }
-  for (const n of [1, 2, 3, 5, 8, 13]) if (!values.has(n)) errors.push(`복잡도 기본표에 ${n} 줄이 없음`);
+  for (const r of rows.filter((x) => x.model === OLD_FORMULA)) errors.push(`L${r.line}: model \`${OLD_FORMULA}\`는 0.6.1에서 \`${BY_FORMULA}\`로 바뀌었다`);
+  if (legacyTable) errors.push(`L${legacyTable}: 복잡도 기본표는 0.6.1에서 없어졌다 — 산정 행은 Task 점수로 정하므로 표를 지운다`);
+  for (const r of rows.filter((x) => x.model === BY_FORMULA && x.effort !== null)) errors.push(`L${r.line}: ${BY_FORMULA} 줄은 effort를 비움`);
+  if (!codex.length && !rows.some((r) => r.model === BY_FORMULA)) return errors;
   const from = new Map();
   for (const x of codex) {
     if (from.has(x.from)) errors.push(`L${x.line}: \`${x.from}\` 중복 — L${from.get(x.from)}`);
@@ -103,24 +99,6 @@ export function toCodex(model, effort, codex) {
   return split(row.to);
 }
 
-// `claude` keeps the Claude pair before substitution: the approval dropdown is always in Claude values.
-export function byComplexity(runtime, complexity, rules) {
-  const base = rules.complexity.find((x) => x.value === Number(complexity));
-  if (!base) throw new Error(`복잡도 ${complexity}은 기본표(${rules.complexity.map((x) => x.value).join(', ')})에 없음`);
-  const claude = pair(base.model, base.effort);
-  return { ...(runtime === 'codex' ? toCodex(base.model, base.effort, rules.codex) : { model: base.model, effort: base.effort }), claude };
-}
-
-// Highest `복잡도 <n>(<dims>)` among the given backlog rows (a Task with several BLs takes the largest), with that row's dims.
-export function backlogComplexity(backlogText, ids) {
-  const lines = backlogText.split(/\r?\n/);
-  return ids.map((id) => {
-    const m = /복잡도 (\d+)(?:\(([^)]*)\))?/.exec(lines.find((l) => l.startsWith(`| ${id} |`)) ?? '');
-    if (!m) throw new Error(`${id}: docs/backlog.md 행 또는 \`복잡도 <값>\`이 없음`);
-    return { value: Number(m[1]), dims: m[2] ?? null };
-  }).reduce((a, b) => (b.value > a.value ? b : a));
-}
-
 // The dag-swimlane `choices` input: every Claude model with its efforts ([] = no effort), and the Codex table as a map.
 export function choices(codex) {
   const claude = {};
@@ -132,7 +110,6 @@ export function choices(codex) {
   return { claude, codex: Object.fromEntries(mappings) };
 }
 
-// `complexity` and `rules` (the parsed table) matter only for a `복잡도` row; other rows ignore them.
 export function matchRow(rows, agent, unit) {
   for (const [a, u, matched] of [[agent, unit, 'exact'], ['*', unit, 'unit-default'], ['*', '기본', 'default']]) {
     const r = rows.find((x) => x.agent === a && x.units.includes(u));
@@ -141,13 +118,10 @@ export function matchRow(rows, agent, unit) {
   return null;
 }
 
-export function lookup(rows, agent, unit, { complexity, rules } = {}) {
+// The row as written. Only a fixed row's values are a launch pair; any other row launches with the Task's scores.
+export function lookup(rows, agent, unit) {
   const match = matchRow(rows, agent, unit);
-  if (!match) return null;
-  const { row: r, matched } = match;
-  if (r.model !== BY_COMPLEXITY) return { ...r, matched };
-  if (complexity == null || complexity === '') throw new Error(`(${agent}, ${unit})은 BL 복잡도로 정한다 — 복잡도가 필요함`);
-  return { ...r, ...byComplexity(r.runtime, complexity, rules), complexity: Number(complexity), matched };
+  return match ? { ...match.row, matched: match.matched } : null;
 }
 
 const fmt = (r) => `${r.runtime} ${r.model}${r.effort ? `/${r.effort}` : ''}`;
@@ -171,17 +145,12 @@ function main(argv) {
   if (cmd === 'lookup') {
     const agent = arg('--agent');
     const unit = arg('--unit');
-    if (!agent || !unit) { console.error('사용법: lookup --agent <a> --unit <u> [--complexity <n> | --bl BL-####[,BL-####]] [--json]'); return 1; }
-    let r;
-    try {
-      const bl = arg('--bl');
-      const found = bl && matchRow(rows, agent, unit)?.row.model === BY_COMPLEXITY ? backlogComplexity(readFileSync(arg('--backlog') ?? 'docs/backlog.md', 'utf8'), bl.split(',').map((x) => x.trim())) : null;
-      r = lookup(rows, agent, unit, { complexity: found?.value ?? arg('--complexity'), rules: parsed });
-      // DAG card fields: the BL dims, and whether the row is one the user fixed (메모 `고정`)
-      if (r) Object.assign(r, found && r.complexity ? { dims: found.dims } : {}, { fixed: isFixed(r) });
-    } catch (e) { console.error(`model-selection: ${e.message}`); return 1; }
+    if (!agent || !unit) { console.error('사용법: lookup --agent <a> --unit <u> [--json]'); return 1; }
+    const r = lookup(rows, agent, unit);
     if (!r) { console.error(`model-selection: (${agent}, ${unit})에 맞는 줄이 없음`); return 1; }
-    console.log(rest.includes('--json') ? JSON.stringify(r) : `${fmt(r)} (${r.matched}${r.complexity ? `, 복잡도 ${r.complexity}` : ''})`);
+    const fixed = isFixed(r);
+    console.log(rest.includes('--json') ? JSON.stringify({ ...r, fixed })
+      : `${fmt(r)} (${r.matched})${fixed ? '' : ' — 고정 행이 아니라 Task 점수로 정한다(model-routing.mjs plan)'}`);
     return 0;
   }
   if (cmd === 'list') {

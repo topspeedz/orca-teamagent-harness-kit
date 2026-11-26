@@ -11,4 +11,4 @@
 
 ## 모델 표 `docs/harness/model-selection.md`
 
-고칠 줄이 없다. `frontend`와 `backend`의 `구현, 결함 수정, 시험 갱신` 행은 설치 때 산정 행(model `복잡도`)으로 이미 있다. 워커는 계획이 Task마다 적은 점수로 model과 effort를 받는다.
+고칠 줄이 없다. `frontend`와 `backend`의 `구현, 결함 수정, 시험 갱신` 행은 설치 때 산정 행(model `산정`)으로 이미 있다. 워커는 계획이 Task마다 적은 점수로 model과 effort를 받는다.
