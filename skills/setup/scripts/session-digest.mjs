@@ -80,7 +80,8 @@ export function pipelineFiles(target) {
     ...['.gitlab-ci.yml', 'Jenkinsfile', 'Makefile', 'package.json'].filter((f) => existsSync(join(target, f))),
     ...list('scripts', 30),
     ...list('_workspace/_run', Infinity, true),
-    ...['docs/harness/team-org.md'].filter((f) => existsSync(join(target, f))),
+    // the old roster stays while it exists: a migration is pending until agent-author deletes it
+    ...['docs/harness/agents.md', 'docs/harness/team-org.md'].filter((f) => existsSync(join(target, f))),
   ];
 }
 

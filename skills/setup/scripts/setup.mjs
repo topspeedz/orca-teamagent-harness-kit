@@ -5,11 +5,12 @@
 //        node setup.mjs verify --target <dir>                                              exit 1 when a check fails
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { readRoster } from '../../../template/.claude/scripts/roster.mjs';
 
 const TEMPLATE = fileURLToPath(new URL('../../../template', import.meta.url));
 const CODEX = fileURLToPath(new URL('../../../template-codex', import.meta.url));
@@ -25,8 +26,20 @@ const INSTALL_RECORD = '.claude/harness-install.json';
 const DIAGRAM = ['dag-swimlane', 'waterfall-timeline'];
 const EXISTING = ['AGENTS.md', 'CLAUDE.md', '.claude', '.gitignore', '.agents', '.codex', 'package.json', 'Makefile'];
 const MODES = ['default', 'acceptEdits', 'bypassPermissions'];
-const PLANNER_EFFORTS = ['high', 'max'];
+const PM_MODELS = ['sonnet', 'opus', 'fable'];
+const PM_EFFORTS = ['medium', 'high', 'xhigh', 'max'];
+const PM_DEFAULT = { model: 'fable', effort: 'xhigh' };
+// Files earlier kit versions installed. Listed by name: the install record also holds merged and generated files.
+const RETIRED = [
+  '.claude/skills/team-lead/SKILL.md', '.claude/skills/team-qa/SKILL.md',
+  '.agents/skills/team-lead/SKILL.md', 'docs/harness/templates/team-skill.md',
+  '.claude/agents/planner.md', '.claude/agents/code-reviewer.md', '.claude/agents/qa-inspector.md',
+  '.codex/agents/planner.toml', '.codex/agents/code-reviewer.toml', '.codex/agents/qa-inspector.toml',
+];
+const OLD_ROSTER = 'docs/harness/team-org.md';
+const SKELETON = '> 이 스킬은 틀이다. `agent-author`가 프로젝트에 맞게 채운다.';
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'worktrees']);
+const fileNames = (dir, re) => (existsSync(dir) ? readdirSync(dir).map((f) => re.exec(f)?.[1]).filter(Boolean).sort() : []);
 
 function walk(dir, base = dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -47,6 +60,15 @@ export function inspect(target, { run, exists, globalSkillsDir }) {
     globalDiagramSkills: Object.fromEntries(DIAGRAM.map((s) => [s, exists(join(globalSkillsDir, s, 'SKILL.md'))])),
     codex: out('codex', ['--version']) !== null,
     existing: EXISTING.filter((p) => exists(join(target, p))),
+    migration: exists(join(target, OLD_ROSTER)) ? {
+      roster: OLD_ROSTER,
+      projectRoles: fileNames(join(target, '.claude/agents'), /^(.+)\.md(?:\.agent-toggle-off)?$/)
+        .filter((n) => !existsSync(join(TEMPLATE, '.claude/agents', n + '.md')) && !RETIRED.includes(`.claude/agents/${n}.md`)),
+    } : null,
+    unfilledSkills: fileNames(join(target, '.claude/skills'), /^(.+)$/).filter((n) => {
+      const skill = join(target, '.claude/skills', n, 'SKILL.md');
+      return existsSync(skill) && readFileSync(skill, 'utf8').split(/\r?\n/).includes(SKELETON);
+    }),
   };
 }
 
@@ -81,13 +103,19 @@ export function mergeGitignore(text, lines) {
   return (text && !text.endsWith('\n') ? text + eol : text) + add.map((l) => l + eol).join('');
 }
 
-// Setup asks only for the planner's effort; the model stays what the table says.
-export function setPlannerRow(tableText, effort) {
-  return tableText.replace(/^\|[ \t]*`planner`[ \t]*\|[ \t]*(?:설계|계획)[ \t]*\|.*$/gm, (line) => {
+// Setup asks for the PM's model and effort; they go to the one 기획 row.
+const PM_ROW = /^\|[ \t]*`product-manager`[ \t]*\|[ \t]*기획[ \t]*\|.*$/m;
+export function setPmRow(tableText, pm) {
+  return tableText.replace(PM_ROW, (line) => {
     const cells = line.split('|');
-    cells[5] = ` ${effort} `;
+    cells[4] = ` ${pm.model} `;
+    cells[5] = ` ${pm.effort} `;
     return cells.join('|');
   });
+}
+function hasPmRow(tableText, pm) {
+  const cells = PM_ROW.exec(tableText)?.[0].split('|').map((c) => c.trim());
+  return cells?.[4] === pm.model && cells?.[5] === pm.effort;
 }
 
 const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
@@ -154,7 +182,8 @@ function planDocumentDrafts(plan, templateDir) {
 }
 
 export function planInstall(templateDir, codexDir, target, answers, ins) {
-  const plan = { target, copy: [], skip: [], conflict: [] };
+  const plan = { target, copy: [], skip: [], conflict: [], notices: [] };
+  const pm = { ...PM_DEFAULT, ...answers.pm };
   const installed = readRecord(target);
   const sources = walk(templateDir).map((rel) => [join(templateDir, rel), rel]);
   if (answers.codex) sources.push(...walk(codexDir).map((rel) => [join(codexDir, rel), rel]));
@@ -179,6 +208,9 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
       plan.skip.push({ to, reason: '에이전트 OFF' });
       continue;
     }
+    // a default agent setup wrote and the project renamed or dropped in step 7 stays gone (설계서 4.4); other missing files are refilled.
+    // An agent switched OFF was handled above.
+    if (/^\.claude\/agents\/[^/]+\.md$/.test(to) && installed[to] && !existsSync(curPath)) { plan.skip.push({ to, reason: '사용자가 지움' }); continue; }
     const cur = existsSync(curPath) ? readFileSync(curPath) : null;
     const src = readFileSync(from, 'utf8');
     let content = readFileSync(from);
@@ -196,29 +228,49 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     } else if (rel === GATE_CONFIG) {
       content = json({ ...JSON.parse(src), prefixes: answers.approvalPrefixes });
     } else if (rel === MODEL_TABLE) {
-      content = setPlannerRow(src, answers.planner.effort);
+      content = setPmRow(src, pm);
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
     if (cur && !merged) {
-      // setup wrote this file and it changed since: the user's edit, not a conflict to approve (설계서 14.3절)
-      if (installed[to] && installed[to] !== sha(cur)) { plan.skip.push({ to, reason: '사용자가 고침' }); continue; }
+      // setup wrote this file and it changed since: the user's edit, overwritten only when its path is approved, never a conflict (설계서 4.4)
+      if (installed[to] && installed[to] !== sha(cur)) {
+        const notice = rel === MODEL_TABLE && !hasPmRow(cur.toString('utf8'), pm)
+          ? `${MODEL_TABLE}는 사용자가 고친 파일이라 건너뛰었다. \`product-manager | 기획\` 행이 없거나 고른 값 ${pm.model}/${pm.effort}와 다르다. 0.5.1에서 올리는 중이면 agent-author의 "0.5.1 프로젝트 옮기기"대로 표를 직접 옮긴다.`
+          : undefined;
+        // listed only when the kit has something new since the record
+        plan.copy.push({ from, to, content, edited: true, listed: sha(content) !== installed[to], notice });
+        continue;
+      }
       plan.conflict.push(to);
     }
     plan.copy.push({ from, to, content });
   }
+  plan.retire = RETIRED.filter((p) => existsSync(join(target, p))).map((path) => {
+    const recorded = installed[path];
+    return { path, state: !recorded ? 'untracked' : recorded === sha(readFileSync(join(target, path))) ? 'unchanged' : 'modified' };
+  });
   return plan;
 }
 
-// plan.copy also holds conflicting files; they are written only when their path is in opts.approve.
+// plan.copy also holds conflicting and project-edited files; they are written only when their path is in opts.approve.
+// A retired file the project edited or setup never recorded is deleted only when approved, the same way.
 export function applyInstall(plan, opts = { approve: [] }) {
   const approve = (opts.approve ?? []).map((a) => a.replaceAll('\\', '/'));
   const written = [];
   const conflicts = [];
+  const edited = [];
+  const notices = [...(plan.notices ?? [])];
   const skipped = [...plan.skip];
   const files = readRecord(plan.target);
   for (const c of plan.copy) {
     if (agentOff(plan.target, c.to)) { skipped.push({ to: c.to, reason: '에이전트 OFF' }); continue; }
     if (plan.conflict.includes(c.to) && !approve.includes(c.to)) { conflicts.push(c.to); continue; }
+    if (c.edited && !approve.includes(c.to)) {
+      skipped.push({ to: c.to, reason: '사용자가 고침' });
+      if (c.listed) edited.push(c.to);
+      if (c.notice) notices.push(c.notice);
+      continue;
+    }
     const p = join(plan.target, c.to);
     mkdirSync(dirname(p), { recursive: true });
     try {
@@ -231,11 +283,20 @@ export function applyInstall(plan, opts = { approve: [] }) {
     written.push(c.to);
     files[c.to] = sha(c.content);
   }
-  if (written.length) {
+  const retired = [];
+  for (const { path, state } of plan.retire ?? []) {
+    if (state !== 'unchanged' && !approve.includes(path)) { conflicts.push(path); continue; }
+    unlinkSync(join(plan.target, path));
+    const dir = dirname(join(plan.target, path));
+    if (readdirSync(dir).length === 0) rmdirSync(dir); // only the now-empty folder, never recursive
+    delete files[path];
+    retired.push(path);
+  }
+  if (written.length || retired.length) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped, conflicts };
+  return { written, skipped, conflicts, edited, retired, notices };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.
@@ -289,15 +350,22 @@ function verify(target) {
   const claudeDir = join(target, '.claude');
   const checks = existsSync(claudeDir) ? walk(claudeDir).filter((f) => f.endsWith('.check.mjs')).map((f) => [`.claude/${f}`]) : [];
   checks.push(['.claude/scripts/model-selection.mjs', 'check']);
-  let failed = 0;
+  let failed = 0, passed = 0;
   console.log('| 명령 | 결과 |\n| --- | --- |');
+  // every agent on the installed roster passes the role checker (설계서 4.4의 4); a switched-off one has no role file to check
+  let agents = [];
+  try { agents = [...new Set(readRoster(target).map((r) => r.agent))]; } catch (error) { failed++; console.log(`| \`docs/harness/agents.md\` | ❌ ${error.message.replaceAll('|', '\\|')} |`); }
+  for (const name of agents) {
+    if (!existsSync(join(target, '.claude/agents', name + '.md')) && existsSync(join(target, '.claude/agents', name + '.md.agent-toggle-off'))) continue;
+    checks.push(['.claude/scripts/agent-definition.mjs', '--agent', name]);
+  }
   for (const args of checks) {
     const r = spawnSync(process.execPath, args, { cwd: target, encoding: 'utf8' });
     const last = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').pop()?.replaceAll('|', '\\|') ?? '';
-    if (r.status !== 0) failed++;
+    if (r.status !== 0) failed++; else passed++;
     console.log(`| \`node ${args.join(' ')}\` | ${r.status === 0 ? '✅' : '❌'} ${last} |`);
   }
-  console.log(`verify: ${checks.length - failed} passed, ${failed} failed`);
+  console.log(`verify: ${passed} passed, ${failed} failed`);
   return failed ? 1 : 0;
 }
 
@@ -326,13 +394,18 @@ function main(argv) {
     const answers = JSON.parse(readFileSync(opt('--answers'), 'utf8'));
     if (!MODES.includes(answers.coordinatorPermissionMode)) throw new Error(`coordinatorPermissionMode는 ${MODES.join(', ')} 중 하나다`);
     if (!Array.isArray(answers.approvalPrefixes)) throw new Error('answers에 approvalPrefixes 배열이 있어야 한다');
-    if (!PLANNER_EFFORTS.includes(answers.planner?.effort)) throw new Error(`planner.effort는 ${PLANNER_EFFORTS.join(', ')} 중 하나다`);
+    if (answers.planner) throw new Error('planner.effort는 pm.model과 pm.effort로 바뀌었다. answers에서 planner를 지우고 pm을 쓴다');
+    const pm = { ...PM_DEFAULT, ...answers.pm };
+    if (!PM_MODELS.includes(pm.model)) throw new Error(`pm.model은 ${PM_MODELS.join(', ')} 중 하나다`);
+    if (!PM_EFFORTS.includes(pm.effort)) throw new Error(`pm.effort는 ${PM_EFFORTS.join(', ')} 중 하나다`);
     const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
     if (answers.codex && r.conflicts.length) {
       r.skipped.push({ to: '.codex/agents/', reason: '설치 충돌 해결 뒤 역할 동기화' });
     } else if (answers.codex) {
-      const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3));
+      // a default agent the project removed has no Markdown to sync from
+      const names = readdirSync(join(TEMPLATE, '.claude/agents')).filter(f => f.endsWith('.md')).map(f => f.slice(0, -3))
+        .filter((n) => ['', '.agent-toggle-off'].some((off) => existsSync(join(target, '.claude/agents', n + '.md' + off))));
       const agents = syncAgents(target, names, approve);
       r.written.push(...agents.written);
       r.skipped.push(...agents.skipped);

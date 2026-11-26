@@ -33,7 +33,7 @@
 - **담지 않는 것:** 값, 표, 이력, 장문 예시, 특정 작업 전용 절차. 그것은 가리켜진 문서가 소유한다.
 - 예산은 `/context`의 실제 토큰으로 잰다(한글은 바이트당 토큰 비율이 달라 bytes는 근사다). 출발점은 다른 런타임과 공유하면 13KiB 안팎, 단독이어도 20KiB 이하다. T0 1만 토큰은 모든 턴에 곱해진다([principles.md §1](principles.md)).
 - `.claude/rules/*.md`는 `paths:` frontmatter가 없으면 `CLAUDE.md`처럼 항상 로드된다. 쪼개도 T0는 줄지 않는다. 특정 경로에서만 필요한 규칙은 `paths:`를 달거나 그 폴더의 `CLAUDE.md`로 내린다(그 폴더 파일을 읽을 때만 로드). 항상 필요한 규칙은 발동 조건과 금지만 적고 상세는 문서로 내린다.
-- Codex를 선택하면 설치 시 기본 에이전트, 팀 구성 시 추가·수정한 에이전트의 `.claude/agents/<이름>.md`에서 `.codex/agents/<이름>.toml`을 생성한다. 양쪽이 쓰는 스킬은 원본 `.claude/skills/<이름>`에 두고 `.agents/skills/<이름>/SKILL.md`는 frontmatter와 "본문은 원본 경로를 읽는다" 한 줄만 둔다. 저장소 안에는 정션을 두지 않는다. git과 새 워크트리가 재현하지 못한다.
+- Codex를 선택하면 설치 시 기본 에이전트, 에이전트 단위 구성(setup 7단계)에서 추가·수정한 에이전트의 `.claude/agents/<이름>.md`에서 `.codex/agents/<이름>.toml`을 생성한다. 양쪽이 쓰는 스킬은 원본 `.claude/skills/<이름>`에 두고 `.agents/skills/<이름>/SKILL.md`는 frontmatter와 "본문은 원본 경로를 읽는다" 한 줄만 둔다. 저장소 안에는 정션을 두지 않는다. git과 새 워크트리가 재현하지 못한다.
 
 **범위 모드(하네스가 있는 저장소의 새 모듈):** 그 폴더의 `CLAUDE.md` 또는 `paths:`를 단 `.claude/rules/<모듈>.md` 하나와 루트 라우팅 표의 한 줄만 만든다. 루트 설정과 훅은 상속하고 건드리지 않는다. 검증은 V1과 V4만 한다.
 
@@ -65,8 +65,8 @@
 
 기본은 **인라인 직접 처리**다. 에이전트와 스킬은 같은 절차가 반복된 증거와 독립 책임이 생긴 뒤에 만든다([principles.md §5](principles.md)).
 
-- Orca 틀을 깔았으면 팀과 팀원은 7단계([team-composition.md](team-composition.md))에서 지난 작업과 미배정 문서·절을 근거로 추천하고, 사용자가 고른 것만 만든다. 나중에 추가할 때도 agent-author가 프로젝트의 `docs/harness/templates/agent.md`를 읽고 같은 기준으로 문서 담당을 제안한다.
-- Orca를 쓰지 않으면 이 스킬은 팀과 에이전트를 만들지 않는다.
+- Orca 틀을 깔았으면 에이전트에 더할 스킬과 새 에이전트는 7단계([agent-units.md](agent-units.md))에서 지난 작업과 미배정 문서·절을 근거로 추천하고, 사용자가 고른 것만 만든다. 나중에 추가할 때도 agent-author가 프로젝트의 `docs/harness/templates/agent.md`를 읽고 같은 기준으로 문서 담당을 제안한다.
+- Orca를 쓰지 않으면 이 스킬은 에이전트를 만들지 않는다.
 
 ## 6. 측정과 성장 규칙
 

@@ -26,7 +26,7 @@ export function check(text, { roundCap = 2 } = {}) {
     if (!fenced) lines.push(raw);
   }
   const heading = (l) => /^(#{1,6})\s+(.*)$/.exec(l);
-  // "## 검증", "## 5. 검증 (완료 기준)", "## §D 검증", team-lead "## 팀 전체 검증" — not "### 교차 검증 범위"
+  // "## 검증", "## 5. 검증 (완료 기준)", "## §D 검증", old integrated reports' "## 팀 전체 검증" — not "### 교차 검증 범위"
   const isVerify = (t) => /^(?:§?[A-Z\d]{1,3}[.)]?\s+)?(?:팀 전체 |재검 (?:\S+ ){0,3})?검증/.test(t);
   if (!lines.some((l) => { const h = heading(l); return h && isVerify(h[2]); })) return { ...out, error: '검증 절 없음' };
   let level = 0; // >0 while inside a verification section opened by a heading of that level

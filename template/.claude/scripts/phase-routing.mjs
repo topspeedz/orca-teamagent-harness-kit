@@ -2,14 +2,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { readRoster } from './roster.mjs';
 
 function intake(args) {
   const { values } = parseArgs({ args, options: {
     ids: { type: 'string' }, delegated: { type: 'boolean' },
   } });
   if (values.ids === undefined) {
-    if (values.delegated) return { route: 'delegated', first: 'product-manager', reviewer: 'product-manager', approvals: ['계획·실행'] };
-    return { route: 'new', first: 'product-manager', reviewer: 'planner', approvals: ['묶음', '설계', '계획·실행'] };
+    if (values.delegated) return { route: 'delegated', first: 'product-manager', approvals: ['계획·실행'] };
+    return { route: 'new', first: 'product-manager', approvals: ['묶음', '설계', '계획·실행'] };
   }
   const ids = [...new Set(values.ids.split(',').map(id => id.trim()))];
   if (!ids.every(id => /^BL-\d{4}$/.test(id))) throw new Error('지정 ID 형식: BL-####');
@@ -33,36 +34,22 @@ function intake(args) {
     }
   }
   if (issues.length) throw new Error(issues.join('\n'));
-  return { route: 'specified', ids, first: 'planner', reviewer: 'product-manager', approvals: ['설계', '계획·실행'] };
+  return { route: 'specified', ids, first: 'product-manager', approvals: ['설계', '계획·실행'] };
 }
 
-function teamRoute(args) {
-  const { values } = parseArgs({ args, options: {
-    team: { type: 'string' }, count: { type: 'string' }, complex: { type: 'boolean' },
-  } });
-  // --count is still accepted from older callers and decides nothing: a Task count alone does not call for a lead.
-  if (!values.team) throw new Error('사용법: phase-routing.mjs team --team <팀> [--complex]');
-  const rows = readFileSync('docs/harness/team-org.md', 'utf8').split(/\r?\n/)
-    .filter(line => line.trim().startsWith('|'))
-    .map(line => line.trim().split('|').slice(1, -1).map(cell => cell.replaceAll('`', '').trim()));
-  const header = rows.find(row => row.includes('팀장이 되는 에이전트') && row.includes('팀'));
-  const team = header && rows.find(row => row[header.indexOf('팀')] === values.team);
-  if (!team) throw new Error('팀 명단에서 실행 팀을 찾을 수 없음: ' + values.team);
-  const lead = team[header.indexOf('팀장이 되는 에이전트')];
-  const group = team[header.indexOf('구분')];
-  if ((group && group !== '실행팀') || !/^[a-z0-9][a-z0-9_-]*$/i.test(lead))
-    throw new Error('명시된 팀장이 있는 실행 팀만 배정할 수 있음: ' + values.team);
-  const file = join('.claude/agents', lead + '.md');
+function agentRoute(args) {
+  const { values } = parseArgs({ args, options: { agent: { type: 'string' } } });
+  if (!values.agent) throw new Error('사용법: phase-routing.mjs agent --agent <이름>');
+  if (!readRoster().some(row => row.agent === values.agent)) throw new Error('명단에서 에이전트를 찾을 수 없음: ' + values.agent);
+  const file = join('.claude/agents', values.agent + '.md');
   const active = existsSync(file) && !existsSync(file + '.agent-toggle-off');
-  // The coordinator assigns members directly. A lead is for a Task the plan left to be split inside the team (--complex).
-  const route = !active ? 'wait' : values.complex ? 'lead' : 'direct';
-  return { team: values.team, lead, route };
+  return { agent: values.agent, route: active ? 'direct' : 'wait' };
 }
 
 try {
   const [command, ...args] = process.argv.slice(2);
-  if (!['intake', 'team'].includes(command)) throw new Error('사용법: phase-routing.mjs intake 또는 team');
-  console.log(JSON.stringify(command === 'intake' ? intake(args) : teamRoute(args)));
+  if (!['intake', 'agent'].includes(command)) throw new Error('사용법: phase-routing.mjs intake 또는 agent');
+  console.log(JSON.stringify(command === 'intake' ? intake(args) : agentRoute(args)));
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

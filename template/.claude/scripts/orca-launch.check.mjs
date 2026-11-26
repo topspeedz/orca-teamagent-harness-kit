@@ -2,40 +2,42 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tabTitle, parseAssignLine, parseOverrideLine, verifyAssignment, workerStartArgs, coordinatorCommand, main } from './orca-launch.mjs';
 import { choices, parseTable, TABLE_PATH } from './model-selection.mjs';
 import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH } from './coordinator-settings.mjs';
+import { readRoster } from './roster.mjs';
 
 let passed = 0;
 const t = (fn) => { fn(); passed++; };
 
-const row = { line: 15, agent: 'qa-inspector', units: ['흐름 검증'], runtime: 'claude', model: 'opus', effort: 'medium', note: '', matched: 'exact' };
-const spec = (assign, ...more) => ['[역할: qa-inspector]', 'Task: 흐름 검증', assign, ...more].join('\n');
-const ok = spec('배정: qa-inspector / 흐름 검증 (claude opus/medium)');
-const verify = (p) => verifyAssignment({ spec: ok, agent: 'qa-inspector', unit: '흐름 검증', row, overrideReason: null, lead: false, ...p });
+const row = { line: 15, agent: 'verifier', units: ['흐름 검증'], runtime: 'claude', model: 'opus', effort: 'medium', note: '', matched: 'exact' };
+const spec = (assign, ...more) => ['[역할: verifier]', 'Task: 흐름 검증', assign, ...more].join('\n');
+const ok = spec('배정: verifier / 흐름 검증 (claude opus/medium)');
+const verify = (p) => verifyAssignment({ spec: ok, agent: 'verifier', unit: '흐름 검증', row, overrideReason: null, ...p });
 
 // 1. tab title
 t(() => assert.equal(
-  tabTitle({ bracket: 'BL-0012', agent: 'qa-inspector', model: 'opus', effort: 'medium', does: '결제 흐름 검증' }),
-  '[BL-0012 - qa-inspector] 결제 흐름 검증 opus/medium'));
+  tabTitle({ bracket: 'BL-0012', agent: 'verifier', model: 'opus', effort: 'medium', does: '결제 흐름 검증' }),
+  '[BL-0012 - verifier] 결제 흐름 검증 opus/medium'));
 
 // 2. tab title without effort
 t(() => assert.equal(
-  tabTitle({ bracket: 'BL-0012', agent: 'qa-inspector', model: 'haiku', effort: null, does: '결제 흐름 검증' }),
-  '[BL-0012 - qa-inspector] 결제 흐름 검증 haiku'));
+  tabTitle({ bracket: 'BL-0012', agent: 'verifier', model: 'haiku', effort: null, does: '결제 흐름 검증' }),
+  '[BL-0012 - verifier] 결제 흐름 검증 haiku'));
 
 // 3. assign line: five values, unit with spaces, no-effort form, missing line
 t(() => {
-  assert.deepEqual(parseAssignLine('배정: qa-inspector / 재검 (claude sonnet/medium)'),
-    { agent: 'qa-inspector', unit: '재검', runtime: 'claude', model: 'sonnet', effort: 'medium' });
-  assert.deepEqual(parseAssignLine('x\n배정: code-reviewer / 보안·돈이 걸린 변경 리뷰 (claude opus/high)\ny'),
-    { agent: 'code-reviewer', unit: '보안·돈이 걸린 변경 리뷰', runtime: 'claude', model: 'opus', effort: 'high' });
-  assert.deepEqual(parseAssignLine('배정: planner / 설계 (claude haiku)'),
-    { agent: 'planner', unit: '설계', runtime: 'claude', model: 'haiku', effort: null });
+  assert.deepEqual(parseAssignLine('배정: verifier / 재검 (claude sonnet/medium)'),
+    { agent: 'verifier', unit: '재검', runtime: 'claude', model: 'sonnet', effort: 'medium' });
+  assert.deepEqual(parseAssignLine('x\n배정: verifier / 보안·돈이 걸린 변경 리뷰 (claude opus/high)\ny'),
+    { agent: 'verifier', unit: '보안·돈이 걸린 변경 리뷰', runtime: 'claude', model: 'opus', effort: 'high' });
+  assert.deepEqual(parseAssignLine('배정: product-manager / 설계 (claude haiku)'),
+    { agent: 'product-manager', unit: '설계', runtime: 'claude', model: 'haiku', effort: null });
   assert.equal(parseAssignLine('no assignment here'), null);
 });
 
@@ -44,7 +46,7 @@ t(() => assert.deepEqual(verify({}), []));
 
 // 5. effort differs from the table → one reason carrying both values
 t(() => {
-  const r = verify({ spec: spec('배정: qa-inspector / 흐름 검증 (claude opus/high)') });
+  const r = verify({ spec: spec('배정: verifier / 흐름 검증 (claude opus/high)') });
   assert.equal(r.length, 1, r.join('\n'));
   assert.match(r[0], /opus\/high/);
   assert.match(r[0], /opus\/medium/);
@@ -52,7 +54,7 @@ t(() => {
 
 // 6. override: only one side → fail; both → spec values win
 t(() => {
-  const s = spec('배정: qa-inspector / 흐름 검증 (claude opus/high)', '사용자 예외: 이번만 high로 띄워줘');
+  const s = spec('배정: verifier / 흐름 검증 (claude opus/high)', '사용자 예외: 이번만 high로 띄워줘');
   assert.equal(parseOverrideLine(s), '이번만 high로 띄워줘');
   assert.equal(parseOverrideLine(ok), null);
   assert.ok(verify({ spec: s }).length > 0);
@@ -60,16 +62,8 @@ t(() => {
   assert.deepEqual(verify({ spec: s, overrideReason: '이번만 high로 띄워줘' }), []);
 });
 
-// 7. lead needs the lead role line
-t(() => {
-  const lead = { unit: '리드', lead: true, row: { ...row, agent: '*', units: ['리드'] } };
-  assert.ok(verify({ ...lead, spec: spec('배정: qa-inspector / 리드 (claude opus/medium)') }).length > 0);
-  const good = '[역할: qa-inspector · 리드]\n배정: qa-inspector / 리드 (claude opus/medium)';
-  assert.deepEqual(verify({ ...lead, spec: good }), []);
-});
-
 // 8. no assignment line → fail
-t(() => assert.ok(verify({ spec: '[역할: qa-inspector]\nTask: 흐름 검증' }).length > 0));
+t(() => assert.ok(verify({ spec: '[역할: verifier]\nTask: 흐름 검증' }).length > 0));
 
 // 9. worker-start args: spec path is one element, model/effort from the table, no effort when null
 t(() => {
@@ -91,17 +85,31 @@ const ta = async (fn) => { await fn(); passed++; };
 const TABLE = [
   '| 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |',
   '| --- | --- | --- | --- | --- | --- |',
-  '| `coordinator` | 실행 감독 | claude | opus | high | |',
-  '| `qa-inspector` | 흐름 검증 | claude | opus | medium | |',
-  '| `code-reviewer` | 리뷰 | codex | gpt-6.1-sol | high | |',
-  '| `*` | 리드 | claude | sonnet | high | |',
+  '| `coordinator` | 실행 감독 | claude | opus | high | 고정 |',
+  '| `verifier` | 리뷰 | codex | gpt-6.1-sol | high | 고정 |',
+  '| `verifier` | 흐름 검증 | claude | opus | medium | 고정 |',
+  '| `frontend` | 구현 | claude | opus | medium | 고정 |',
   '| `*` | 기본 | claude | sonnet | medium | |',
 ].join('\n');
+const ROSTER = ['| 에이전트 | 맡는 단위 | 스킬 | 편집 범위 |', '| --- | --- | --- | --- |',
+  '| `verifier` | 검증 | `qa-verification` | 리포트만 |', '| `frontend` | 화면 | `frontend` | web/ |'].join('\n');
+// readRoster reads the disk, so the in-memory roster files are written to a temp folder for it
+const ROSTER_FILES = ['docs/harness/agents.md', 'docs/harness/team-org.md'];
+const roster = (fs) => () => {
+  const dir = mkdtempSync(join(tmpdir(), 'roster-'));
+  try {
+    for (const p of ROSTER_FILES.filter((x) => fs[x] !== undefined)) {
+      mkdirSync(dirname(join(dir, p)), { recursive: true });
+      writeFileSync(join(dir, p), fs[p]);
+    }
+    return readRoster(dir);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+};
 const keep = { permissionMode: 'default', plugins: { 'p@p': 'keep' }, skills: { coordinator: 'keep' } };
 const files = (over = {}) => ({
-  [TABLE_PATH]: TABLE, [SETTINGS_PATH]: '{}', [KEEP_PATH]: JSON.stringify(keep),
-  'qa.md': ok, 'lead.md': '[역할: qa-inspector · 리드]\n배정: qa-inspector / 리드 (claude sonnet/high)', 'coord.md': '[역할: coordinator]',
-  'codex.md': '[역할: code-reviewer]\nTask: T09 리뷰\n배정: code-reviewer / 리뷰 (codex gpt-6.1-sol/high)', ...over,
+  [TABLE_PATH]: TABLE, [SETTINGS_PATH]: '{}', [KEEP_PATH]: JSON.stringify(keep), [ROSTER_FILES[0]]: ROSTER,
+  'qa.md': ok, 'coord.md': '[역할: coordinator]',
+  'codex.md': '[역할: verifier]\nTask: T09 리뷰\n배정: verifier / 리뷰 (codex gpt-6.1-sol/high)', ...over,
 });
 const inventory = (skills) => () => JSON.stringify({ type: 'system', subtype: 'init', plugins: [{ source: 'p@p' }], skills });
 const val = (a, f) => (a.includes(f) ? a[a.indexOf(f) + 1] : undefined);
@@ -125,10 +133,11 @@ function fake({ runs = [], fileOver = {}, skills = ['coordinator'], hookLines = 
     read: (p) => { if (fs[p] === undefined) throw new Error(`ENOENT ${p}`); return fs[p]; },
     run: inventory(skills),
     hookLines,
+    roster: roster(fs),
   };
   return { calls, deps, names: () => calls.map((a) => (a[0] === 'orchestration' ? a[1] : a.slice(0, 2).join(' '))) };
 }
-const workerArgv = ['worker', '--agent', 'qa-inspector', '--unit', '흐름 검증', '--spec-file', 'qa.md', '--bracket', 'BL-0012', '--does', '결제 흐름 검증'];
+const workerArgv = ['worker', '--agent', 'verifier', '--unit', '흐름 검증', '--spec-file', 'qa.md', '--bracket', 'BL-0012', '--does', '결제 흐름 검증'];
 const coordArgv = ['coordinator', '--phase', 'phase-a', '--spec-file', 'coord.md', '--does', '결제 개선', '--backlog', 'BL-0001,BL-0002'];
 async function captureStderr(fn) {
   const orig = console.error;
@@ -139,7 +148,7 @@ async function captureStderr(fn) {
 
 // 10. worker: assignment differs from the table → code 1, orca never called
 await ta(async () => {
-  const f = fake({ fileOver: { 'qa.md': spec('배정: qa-inspector / 흐름 검증 (claude opus/high)') } });
+  const f = fake({ fileOver: { 'qa.md': spec('배정: verifier / 흐름 검증 (claude opus/high)') } });
   const { code } = await main(workerArgv, f.deps);
   assert.equal(code, 1);
   assert.equal(f.calls.length, 0);
@@ -153,7 +162,7 @@ await ta(async () => {
   const ws = f.calls.find((a) => a[1] === 'worker-start');
   assert.equal(val(ws, '--model'), 'opus');
   assert.equal(val(ws, '--effort'), 'medium');
-  assert.equal(out.title, tabTitle({ bracket: 'BL-0012', agent: 'qa-inspector', model: 'opus', effort: 'medium', does: '결제 흐름 검증' }));
+  assert.equal(out.title, tabTitle({ bracket: 'BL-0012', agent: 'verifier', model: 'opus', effort: 'medium', does: '결제 흐름 검증' }));
   assert.deepEqual(out.requested, { runtime: 'claude', model: 'opus', effort: 'medium' });
   assert.deepEqual(out.applied, { model: 'opus', effort: 'medium' });
   assert.equal(out.matched, true);
@@ -162,16 +171,6 @@ await ta(async () => {
   const rn = f.calls.find((a) => a[0] === 'terminal' && a[1] === 'rename');
   assert.equal(val(rn, '--terminal'), 'term_w');
   assert.equal(val(rn, '--title'), out.title);
-});
-
-// 12. worker --lead → looks up (*, 리드)
-await ta(async () => {
-  const f = fake();
-  const argv = ['worker', '--agent', 'qa-inspector', '--spec-file', 'lead.md', '--bracket', 'phase-a', '--does', '검증 팀 리드', '--lead'];
-  const { code, out } = await main(argv, f.deps);
-  assert.equal(code, 0, JSON.stringify(out));
-  const ws = f.calls.find((a) => a[1] === 'worker-start');
-  assert.deepEqual([val(ws, '--model'), val(ws, '--effort')], ['sonnet', 'high']);
 });
 
 // 13. coordinator: run-list already has the phase → code 1, no run-create
@@ -238,7 +237,7 @@ await ta(async () => {
   assert.ok(!c.includes('--effort'), c);
 });
 
-const codexArgv = ['worker', '--agent', 'code-reviewer', '--unit', '리뷰', '--spec-file', 'codex.md', '--bracket', 'BL-0012', '--does', '리뷰'];
+const codexArgv = ['worker', '--agent', 'verifier', '--unit', '리뷰', '--spec-file', 'codex.md', '--bracket', 'BL-0012', '--does', '리뷰'];
 
 // 19. codex row + --spec-file → a temp spec: original spec, blank line, then the six lines
 await ta(async () => {
@@ -332,8 +331,8 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
   let n = 0;
   const inbox = [];
   const fs = files({
-    'a.md': '[역할: qa-inspector]\nTask: T01 로그인 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
-    'b.md': '[역할: qa-inspector]\nTask: T02 결제 흐름\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    'a.md': '[역할: verifier]\nTask: T01 로그인 흐름\n배정: verifier / 흐름 검증 (claude opus/medium)',
+    'b.md': '[역할: verifier]\nTask: T02 결제 흐름\n배정: verifier / 흐름 검증 (claude opus/medium)',
     ...fileOver,
   });
   const refuse = (code, message, data = {}) => ({ ok: false, error: { code, message, data } });
@@ -377,6 +376,7 @@ function fakeDag({ fileOver = {}, dispatchStatus = 'completed' } = {}) {
     now: () => T0,
     run: inventory(['coordinator']),
     hookLines: () => RULES,
+    roster: roster(fs),
   };
   const count = (name) => calls.filter((a) => a[1] === name).length;
   return { calls, deps, tasks, fs, inbox, count, map: () => JSON.parse(fs['orca-tasks.json']), call: (name) => calls.findLast((a) => a[1] === name) };
@@ -405,20 +405,10 @@ async function approve(f, nodes, edges = [], version = 'v1', drawing = {}) {
   return result.out.approval;
 }
 const node = (id, more = {}) => ({ id, bl: 'BL-0012', role: row.agent, unit: '흐름 검증', agent: 'claude', model: 'opus', effort: 'medium', ...more });
-await ta(async () => {
-  const rules = TABLE.replace('흐름 검증 | claude | opus | medium', '흐름 검증 | claude | 복잡도 |')
-    + '\n\n| 복잡도 | model | effort |\n| --- | --- | --- |\n| 3 | opus | medium |';
-  const f = fakeDag({ fileOver: { [TABLE_PATH]: rules } });
-  await approve(f, [node('T01', { complexity: 3 })]);
-  const changed = node('T01', { complexity: 3, effort: 'high' });
-  f.fs['dag.json'] = JSON.stringify({ nodes: [changed], edges: [] });
-  assert.equal((await main(['review', ...reviewArgs('v2')], f.deps)).code, 1);
-  await approve(f, [{ ...changed, overrideReason: 'T01은 opus/high로 승인' }], [], 'v2');
-});
 const runArgs = ['exec-run', '--phase', 'phase-a', ...M];
 async function execRun(f, edges = []) {
   const ids = ['T01', 'T02', 'T03', 'T04', 'T05'].map(id => node(id));
-  ids.push(node('T09', { role: 'code-reviewer', unit: '리뷰', agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' }));
+  ids.push(node('T09', { role: 'verifier', unit: '리뷰', agent: 'codex', model: 'gpt-6.1-sol', effort: 'high' }));
   await approve(f, ids, edges.map(([from, to]) => ({ from, to })));
   return main([...runArgs, '--approval', approval], f.deps);
 }
@@ -548,44 +538,6 @@ await ta(async () => {
   assert.equal((await main(go('T01'),f.deps)).code, 0);
 });
 
-// Team launch uses the current approval, including the permitted internal assignments on the parent.
-await ta(async () => {
-  const f = fakeDag();
-  const member = { role: 'code-reviewer', unit: '리뷰', agent: 'codex', model: 'gpt-6.1-sol', effort: null, overrideReason: 'effort 생략' };
-  const planner = { role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' };
-  const nodes = [node('T01', { unit: '리드', model: 'sonnet', effort: 'high', members: [planner, member] }), node('T02')];
-  f.fs['a.md'] = '[역할: qa-inspector · 리드]\nTask: T01 QA 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)';
-  await approve(f, nodes);
-  await main([...runArgs,'--approval',approval], f.deps);
-  f.fs[TABLE_PATH] = TABLE.replace('opus | medium','sonnet | medium');
-  const direct = [...workerArgv, '--approval',approval,'--id','T02'];
-  f.fs['qa.md'] = f.fs['b.md'];
-  const a = await main(direct, f.deps);
-  assert.equal(a.code, 0, JSON.stringify(a.out));
-  assert.equal(val(f.call('worker-start'),'--run'), f.map().run);
-  assert.deepEqual(a.out.applied, { model: 'opus', effort: 'medium' });
-  assert.equal((await main(direct, f.deps)).code, 1);
-  assert.equal((await main(reg('T02','b.md'), f.deps)).code, 1);
-  assert.equal((await main(reg('T01','a.md','--lead'), f.deps)).code, 0);
-  assert.equal((await main(go('T01'), f.deps)).code, 0);
-  f.fs['planner.md'] = '[역할: planner]\nTask: T01-P QA 내부 분해\n배정: planner / 계획 (claude sonnet/medium)\n보고: 배정한 QA 팀장';
-  const decomposition = await main(['worker','--approval',approval,'--parent','T01','--id','T01-P','--agent','planner',
-    '--unit','계획','--spec-file','planner.md','--bracket','BL-0012','--does','QA 내부 분해'], f.deps);
-  assert.equal(decomposition.code, 0, JSON.stringify(decomposition.out));
-  assert.equal(f.map().direct['T01-P'].parent, 'T01');
-  f.fs['member.md'] = '[역할: code-reviewer]\nTask: T01-A 코드 리뷰\n배정: code-reviewer / 리뷰 (codex gpt-6.1-sol)\n사용자 예외: effort 생략';
-  const child = ['worker','--approval',approval,'--parent','T01','--id','T01-A','--agent','code-reviewer','--unit','리뷰',
-    '--spec-file','member.md','--bracket','BL-0012','--does','코드 리뷰','--override-reason','effort 생략'];
-  assert.equal((await main(child.slice(0,-2), f.deps)).code, 1);
-  assert.equal((await main([...child, '--run','run_other'], f.deps)).code, 1);
-  const b = await main(child, f.deps);
-  assert.equal(b.code, 0, JSON.stringify(b.out));
-  assert.equal(b.out.requested.runtime, 'codex');
-  assert.equal(val(f.call('worker-start'),'--effort'), undefined);
-  assert.ok(readFileSync(val(f.call('worker-start'),'--spec-file'),'utf8').endsWith(RULES + '\n'));
-  assert.equal((await main(child.map(x => x === 'code-reviewer' ? 'another-role' : x), f.deps)).code, 1);
-});
-
 // Old Runs keep their registered values. An unregistered Task needs its own historical approval.
 await ta(async () => {
   const f = await registered();
@@ -594,9 +546,10 @@ await ta(async () => {
   delete old.review;
   delete old.tasks.T02;
   f.fs[M[1]] = JSON.stringify(old);
-  f.fs[TABLE_PATH] = 'unavailable';
   assert.equal((await main(runArgs, f.deps)).out.existing, true);
+  // launching reads the table to tell a fixed row from a formula row; the rest of an old Run does not
   assert.equal((await main(go('T01'), f.deps)).code, 0);
+  f.fs[TABLE_PATH] = 'unavailable';
   f.tasks.get(old.tasks.T01.orca).status = 'completed';
   assert.equal((await main(go('T01'), f.deps)).code, 1);
   assert.equal((await main(go('T01','--retry'), f.deps)).code, 1);
@@ -613,8 +566,7 @@ await ta(async () => {
 
 await ta(async () => {
   const f = fakeDag();
-  for (const bad of [{ id: 'T01', bl: 'BL-0001' }, node('T01',{ bl: ['BL-0001','bad'] }), node('T01',{ kind:'approval' }),
-    node('T01',{ members: [node('child')] })]) {
+  for (const bad of [{ id: 'T01', bl: 'BL-0001' }, node('T01',{ bl: ['BL-0001','bad'] }), node('T01',{ kind:'approval' })]) {
     f.fs['plan.md'] = 'plan';
     f.fs['dag.json'] = JSON.stringify({ nodes: [bad, node('T02')], edges: [] });
     assert.equal((await main(['review', ...reviewArgs('v1')], f.deps)).code, 1);
@@ -627,27 +579,6 @@ await ta(async () => {
   f.fs[approval] = JSON.stringify(staged);
   assert.equal((await main([...runArgs,'--approval',approval], f.deps)).code, 1);
   assert.equal(f.count('run-create'), 0);
-});
-
-await ta(async () => {
-  const f = fakeDag();
-  await approve(f, [node('T01'),node('T02')]);
-  await main([...runArgs, '--approval',approval], f.deps);
-  const v2 = await approve(f, [node('T01'),node('T02')], [], 'v2');
-  await main(['reapprove', ...M, '--id','T01','--approval',v2], f.deps);
-  const direct = (id,file,version=v2) => ['worker','--agent',row.agent,'--unit','흐름 검증','--spec-file',file,
-    '--bracket','phase-a','--does','검증','--approval',version,'--id',id];
-  assert.equal((await main(direct('T01','a.md',approval), f.deps)).code, 1);
-  const call = f.deps.orca;
-  f.deps.orca = args => args[1] === 'worker-start'
-    ? { stdout: JSON.stringify({ ok:false, error:{ code:'invalid_argument', message:'refused' } }) } : call(args);
-  assert.equal((await main(direct('T01','a.md'), f.deps)).code, 1);
-  assert.equal(f.map().direct.T01, undefined);
-  f.deps.orca = call;
-  const receipts = await Promise.all([main(direct('T01','a.md'), f.deps), main(direct('T02','b.md'), f.deps)]);
-  assert.ok(receipts.every(r => r.code === 0));
-  assert.deepEqual(Object.keys(f.map().direct).sort(), ['T01','T02']);
-  assert.equal(f.count('worker-start'), 2);
 });
 
 // 28. exec-run creates the execution Run once and keeps it in the map
@@ -704,7 +635,7 @@ await ta(async () => {
 
 // 30. register: an assignment that differs from the table → code 1, nothing created
 await ta(async () => {
-  const f = fakeDag({ fileOver: { 'a.md': '[역할: qa-inspector]\nTask: T01 x\n배정: qa-inspector / 흐름 검증 (claude opus/high)' } });
+  const f = fakeDag({ fileOver: { 'a.md': '[역할: verifier]\nTask: T01 x\n배정: verifier / 흐름 검증 (claude opus/high)' } });
   await execRun(f);
   const { code, out } = await main(reg('T01', 'a.md'), f.deps);
   assert.equal(code, 1);
@@ -747,7 +678,7 @@ await ta(async () => {
   assert.equal(val(c, '--model'), 'opus');
   assert.ok(!c.includes('--spec-file'));
   assert.ok(!c.includes('--display-name') && !c.includes('--task-title'));
-  assert.equal(out.title, '[BL-0012 - qa-inspector] 흐름 검증 opus/medium');
+  assert.equal(out.title, '[BL-0012 - verifier] 흐름 검증 opus/medium');
   assert.equal(f.map().tasks.T01.dispatch, 'ctx_new');
   assert.equal(f.map().tasks.T01.started, T0);
 });
@@ -850,9 +781,9 @@ await ta(async () => {
 // 42. launchable: ready Tasks that fit the free slots and touch nothing a running Task edits or holds
 await ta(async () => {
   const f = fakeDag({ fileOver: {
-    'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
-    'd.md': '[역할: qa-inspector]\nTask: T04 D\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
-    'e.md': '[역할: qa-inspector]\nTask: T05 E\n배정: qa-inspector / 흐름 검증 (claude opus/medium)',
+    'c.md': '[역할: verifier]\nTask: T03 C\n배정: verifier / 흐름 검증 (claude opus/medium)',
+    'd.md': '[역할: verifier]\nTask: T04 D\n배정: verifier / 흐름 검증 (claude opus/medium)',
+    'e.md': '[역할: verifier]\nTask: T05 E\n배정: verifier / 흐름 검증 (claude opus/medium)',
   } });
   await execRun(f, [['T03','T05']]);
   await main(reg('T01', 'a.md', '--edits', 'web/character.js'), f.deps);            // running
@@ -885,7 +816,7 @@ await ta(async () => {
 
 // 45. pull: a pending Task's dependencies become its real inputs; it goes ready only when those are all completed, and the map keeps why
 await ta(async () => {
-  const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)' } });
+  const f = fakeDag({ fileOver: { 'c.md': '[역할: verifier]\nTask: T03 C\n배정: verifier / 흐름 검증 (claude opus/medium)' } });
   await execRun(f, [['T01','T03'],['T02','T03']]);
   await main(reg('T01', 'a.md'), f.deps);
   await main(reg('T02', 'b.md'), f.deps);
@@ -926,7 +857,7 @@ await ta(async () => {
 
 // 49. launchable lists waiting Tasks as pull candidates: the unfinished Tasks each waits on and its spec's 먼저 읽을 것 lines
 await ta(async () => {
-  const f = fakeDag({ fileOver: { 'c.md': '[역할: qa-inspector]\nTask: T03 C\n배정: qa-inspector / 흐름 검증 (claude opus/medium)\n\n먼저 읽을 것:\n- web/stage.js\n- 메모 T03.memo.md\n\n편집 범위: tests/c.spec.mjs' } });
+  const f = fakeDag({ fileOver: { 'c.md': '[역할: verifier]\nTask: T03 C\n배정: verifier / 흐름 검증 (claude opus/medium)\n\n먼저 읽을 것:\n- web/stage.js\n- 메모 T03.memo.md\n\n편집 범위: tests/c.spec.mjs' } });
   await execRun(f, [['T01','T03'],['T02','T03']]);
   await main(reg('T01', 'a.md'), f.deps);
   await main(reg('T02', 'b.md'), f.deps);
@@ -950,7 +881,8 @@ t(() => {
 });
 
 const projectTable = [
-  TABLE, '| code-reviewer | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정 |', '',
+  // v2 cases score the 흐름 검증 row, so it is a formula row here
+  TABLE.replace('흐름 검증 | claude | opus | medium | 고정 |', '흐름 검증 | claude | opus | medium | |'), '| verifier | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정 |', '',
   '| Claude | Codex | 메모 |', '| --- | --- | --- |', '| haiku | gpt-6.2-sol/low | |',
   ...['sonnet','opus','fable'].flatMap(model => ['low','medium','high','xhigh','max'].map(effort => {
     const target = model === 'sonnet' ? 'gpt-6.2-sol' : 'gpt-6.2-astra';
@@ -966,7 +898,7 @@ function v2Row(agent = 'claude', mode = 'auto') {
   const r = assessRouting(v2Input, agent, projectChoices.codex);
   return { agent, model: r.model, effort: r.effort, base: r.claude, recommended: r.claude, routing: { ...r, mode } };
 }
-const assign = (id, row, role = 'qa-inspector', unit = '흐름 검증') => `[역할: ${role}${unit === '리드' ? ' · 리드' : ''}]\nTask: ${id} 검증\n배정: ${role} / ${unit} (${row.agent} ${row.model}${row.effort ? '/' + row.effort : ''})`;
+const assign = (id, row, role = 'verifier', unit = '흐름 검증') => `[역할: ${role}]\nTask: ${id} 검증\n배정: ${role} / ${unit} (${row.agent} ${row.model}${row.effort ? '/' + row.effort : ''})`;
 const preflight = (f, id, input, failureDispatches) => {
   const spec = f.fs[f.map().tasks[id]?.spec] ?? Object.values(f.fs).find(body => /^Task:\s*(\S+)/m.exec(body)?.[1] === id);
   const specHash = createHash('sha256').update(spec.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trimEnd()).digest('hex');
@@ -978,7 +910,7 @@ const preflight = (f, id, input, failureDispatches) => {
 await ta(async () => {
   const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable } });
   const auto = node('T01', v2Row('codex')), manual = node('T02', v2Row('claude','manual'));
-  const fixed = node('T03', { fixed: true, role: 'code-reviewer', unit: '보안·돈이 걸린 변경 리뷰', model: 'fable', effort: 'xhigh' });
+  const fixed = node('T03', { fixed: true, role: 'verifier', unit: '보안·돈이 걸린 변경 리뷰', model: 'fable', effort: 'xhigh' });
   await approve(f, [auto, manual, fixed], [], 'v1', v2Drawing);
   const snapshot = JSON.parse(f.fs[approval]);
   assert.equal(snapshot.tasks.T02.routing.mode, 'manual');
@@ -1045,40 +977,6 @@ await ta(async () => {
   assert.notEqual(launched.out.routing.specHash, launched.out.routing.launchSpecHash);
 });
 
-// A lead's manual setting does not lock its delegated member. A settled failed member can retry its own immutable Task.
-await ta(async () => {
-  const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable }, dispatchStatus: 'failed' });
-  const member = { role: 'code-reviewer', unit: '일반 변경 리뷰', ...v2Row() };
-  const lead = node('T01', { ...v2Row('claude','manual'), unit: '리드', members: [member] });
-  await approve(f, [lead], [], 'v1', v2Drawing);
-  await main([...runArgs, '--approval', approval], f.deps);
-  f.fs['a.md'] = assign('T01', lead, lead.role, lead.unit);
-  await main(reg('T01','a.md','--lead'), f.deps);
-  assert.equal((await main(go('T01'), f.deps)).code, 0);
-  f.fs['m.md'] = assign('M01', member, member.role, member.unit);
-  const args = ['worker','--approval',approval,'--parent','T01','--id','M01','--agent',member.role,
-    '--unit',member.unit,'--spec-file','m.md','--bracket','BL-0012','--does','리뷰'];
-  const checked = preflight(f,'M01');
-  f.fs['m.md'] += '\n추가 통합 검증 조건';
-  assert.equal((await main([...args,...checked], f.deps)).code, 1);
-  const first = await main([...args,...preflight(f,'M01')], f.deps);
-  assert.equal(first.code, 0, JSON.stringify(first.out));
-  assert.equal(first.out.routing.decision, 'reuse');
-  assert.equal((await main([...args,'--retry'], f.deps)).code, 1);
-  f.tasks.get(first.out.task).status = 'failed';
-  const input = { scores: { C: 3, U: 3, R: 2, V: 3, F: 1 }, evidence: { ...evidence, F: '첫 기동에서 확인된 판단 실패' } };
-  for (const ids of [undefined, ['다른-Dispatch'], [first.out.dispatch, first.out.dispatch]]) {
-    assert.equal((await main([...args,'--retry',...preflight(f,'M01',input,ids)], f.deps)).code, 1);
-  }
-  const retry = await main([...args,'--retry',...preflight(f,'M01',input,[first.out.dispatch])], f.deps);
-  assert.equal(retry.code, 0, JSON.stringify(retry.out));
-  assert.equal(retry.out.requested.effort, 'max');
-  assert.equal(val(f.call('worker-start'),'--task'), first.out.task);
-  assert.equal(retry.out.routing.number, 2);
-  assert.deepEqual(retry.out.routing.failureDispatches, [first.out.dispatch]);
-  assert.equal(retry.out.routing.specHash, first.out.routing.specHash);
-});
-
 // A runner or hook failure counts only if a turn started and the coordinator identifies a worker failure.
 await ta(async () => {
   const f = fakeDag({ fileOver: { [TABLE_PATH]: projectTable }, dispatchStatus: 'failed' });
@@ -1142,8 +1040,68 @@ await ta(async () => {
   }
 });
 
+// ---- A formula row (메모 not `고정`) launches only with the Task's scores ----
+const FORMULA = TABLE.replace('| `frontend` | 구현 | claude | opus | medium | 고정 |', '| `frontend` | 구현 | claude | 복잡도 | | |')
+  + '\n| `product-manager` | 기획 | claude | fable | xhigh | 고정 |'
+  + '\n\n| 복잡도 | model | effort |\n| --- | --- | --- |\n| 3 | opus | medium |';
+const NEEDS_SCORES = /산정 행은 점수가 필요함: T01 \(frontend, 구현\)/;
+
+// Approval review: a formula-row Task without routing is refused, with or without routingVersion 2 (complexity alone is not enough).
+await ta(async () => {
+  for (const drawing of [{}, v2Drawing]) {
+    const f = fakeDag({ fileOver: { [TABLE_PATH]: FORMULA, 'plan.md': 'phase-a 실행 계획' } });
+    f.fs['dag.json'] = JSON.stringify({ nodes: [node('T01', { role: 'frontend', unit: '구현', complexity: 3 })], edges: [], ...drawing });
+    const r = await main(['review', ...reviewArgs('v1')], f.deps);
+    assert.equal(r.code, 1);
+    assert.match(r.out.error, NEEDS_SCORES);
+  }
+});
+
+// worker --map: an approval with no routing for the Task, on a row that is not fixed, does not launch.
+await ta(async () => {
+  const f = fakeDag({ fileOver: { 'a.md': '[역할: frontend]\nTask: T01 화면\n배정: frontend / 구현 (claude opus/medium)' } });
+  await approve(f, [node('T01', { role: 'frontend', unit: '구현' })]);
+  await main([...runArgs, '--approval', approval], f.deps);
+  assert.equal((await main(reg('T01', 'a.md'), f.deps)).code, 0);
+  f.fs[TABLE_PATH] = FORMULA;
+  const r = await main(go('T01'), f.deps);
+  assert.equal(r.code, 1);
+  assert.match(r.out.error, NEEDS_SCORES);
+  assert.equal(f.count('worker-start'), 0);
+});
+
+// Ad-hoc worker on a formula row: no --assessment → refused (also with only --override-reason); with one → the formula's model/effort.
+await ta(async () => {
+  const argv = ['worker', '--agent', 'frontend', '--unit', '구현', '--spec-file', 'fe.md', '--bracket', 'BL-0012', '--does', '화면'];
+  const fe = '[역할: frontend]\nTask: 화면\n배정: frontend / 구현 (claude sonnet/medium)';
+  const scores = { input: { scores: { C: 1, U: 1, R: 1, V: 1, F: 0 }, evidence }, reason: '화면 하나의 국소 변경' };
+  const f = fake({ fileOver: { [TABLE_PATH]: FORMULA, 'fe.md': fe, 'fe-x.md': fe + '\n사용자 예외: 이번만 띄워줘', 'as.json': JSON.stringify(scores) } });
+  const refusal = /산정 행은 점수가 필요함 — --assessment <JSON>을 지정한다/;
+  let r = await main(argv, f.deps);
+  assert.equal(r.code, 1);
+  assert.match(r.out.error, refusal);
+  r = await main([...argv.map(a => (a === 'fe.md' ? 'fe-x.md' : a)), '--override-reason', '이번만 띄워줘'], f.deps);
+  assert.equal(r.code, 1);
+  assert.match(r.out.error, refusal);
+  assert.equal(f.calls.length, 0);
+  r = await main([...argv, '--assessment', 'as.json'], f.deps);
+  assert.equal(r.code, 0, JSON.stringify(r.out));
+  assert.deepEqual(r.out.requested, { runtime: 'claude', model: 'sonnet', effort: 'medium' });
+  const ws = f.calls.find((a) => a[1] === 'worker-start');
+  assert.deepEqual(['--model', '--effort'].map(k => val(ws, k)), ['sonnet', 'medium']);
+});
+
+// Ad-hoc worker on a fixed row (product-manager 기획) → the table's values, no --assessment needed.
+await ta(async () => {
+  const f = fake({ fileOver: { [TABLE_PATH]: FORMULA, 'pm.md': '[역할: product-manager]\nTask: 기획\n배정: product-manager / 기획 (claude fable/xhigh)' } });
+  const r = await main(['worker', '--agent', 'product-manager', '--unit', '기획', '--spec-file', 'pm.md', '--bracket', 'phase-a', '--does', '기획'], f.deps);
+  assert.equal(r.code, 0, JSON.stringify(r.out));
+  assert.deepEqual(r.out.requested, { runtime: 'claude', model: 'fable', effort: 'xhigh' });
+});
+
 // ---- Task kinds from the drawing's rounds ----
-const T = (id, more) => node(id, more);
+const T = (id, more) => node(id, { role: 'verifier', ...more });
+const BUILD = { role: 'frontend', unit: '구현' };
 const E = (from, to) => ({ from, to });
 async function reviewError(nodes, edges, drawing = {}) {
   const f = fakeDag();
@@ -1162,8 +1120,8 @@ await ta(async () => {
   for (const row of Object.values(record(plain).tasks))
     for (const k of ['kind', 'round', 'conditional', 'afterFix']) assert.equal(k in row, false);
   // the row exactly as the function built it before rounds existed: values and key order
-  assert.equal(JSON.stringify(record(plain).tasks.T02), JSON.stringify({ agent: 'qa-inspector', unit: '흐름 검증', runtime: 'claude',
-    model: 'opus', effort: 'medium', overrideReason: null, bl: 'BL-0012', deps: ['T01'], members: [] }));
+  assert.equal(JSON.stringify(record(plain).tasks.T02), JSON.stringify({ agent: 'verifier', unit: '흐름 검증', runtime: 'claude',
+    model: 'opus', effort: 'medium', overrideReason: null, bl: 'BL-0012', deps: ['T01'] }));
 });
 // 51. rounds mark kind and round; conditional: true is kept
 await ta(async () => {
@@ -1227,12 +1185,13 @@ await ta(async () => {
 });
 
 // ---- skip: close a planned Task that has nothing to do ----
-const planSpec = (id, what) => `[역할: qa-inspector]\nTask: ${id} ${what}\n배정: qa-inspector / 흐름 검증 (claude opus/medium)`;
+const planSpec = (id, what, role = 'verifier', unit = '흐름 검증') => `[역할: ${role}]\nTask: ${id} ${what}\n배정: ${role} / ${unit} (claude opus/medium)`;
+const built = (id, what) => planSpec(id, what, BUILD.role, BUILD.unit);
 const skip = (id, reason = '문서 영향 없음') => ['skip', ...M, '--id', id, '--reason', reason];
 // T01 → D1(conditional) → P1, plus the extra edges given
 async function skipPlan(edges = [], drawing = {}, nodes = []) {
-  const f = fakeDag({ fileOver: { 'd.md': planSpec('D1', '문서 동기화'), 'p.md': planSpec('P1', '배포 점검') } });
-  await approve(f, [T('T01'), T('D1', { conditional: true }), T('P1'), ...nodes], [E('T01', 'D1'), E('D1', 'P1'), ...edges], 'v1', drawing);
+  const f = fakeDag({ fileOver: { 'a.md': built('T01', '로그인 흐름'), 'b.md': built('T02', '결제 흐름'), 'd.md': planSpec('D1', '문서 동기화'), 'p.md': planSpec('P1', '배포 점검') } });
+  await approve(f, [T('T01', BUILD), T('D1', { conditional: true }), T('P1'), ...nodes], [E('T01', 'D1'), E('D1', 'P1'), ...edges], 'v1', drawing);
   await main([...runArgs, '--approval', approval], f.deps);
   return f;
 }
@@ -1285,7 +1244,7 @@ await ta(async () => {
 await ta(async () => {
   // P1 also waits on T02: while T02 is unfinished, skipping D1 promotes nothing
   const both = async () => {
-    const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+    const f = await skipPlan([E('T02', 'P1')], {}, [T('T02', BUILD)]);
     for (const [id, file] of [['T01', 'a.md'], ['T02', 'b.md'], ['D1', 'd.md'], ['P1', 'p.md']]) await main(reg(id, file), f.deps);
     f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
     return f;
@@ -1309,7 +1268,7 @@ await ta(async () => {
 });
 // 59. fix and recheck Tasks can be skipped without the conditional mark; a verify Task cannot
 await ta(async () => {
-  const f = await skipPlan([], { rounds: [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }] }, [T('Q1'), T('F1'), T('R1')]);
+  const f = await skipPlan([], { rounds: [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }] }, [T('Q1'), T('F1', BUILD), T('R1')]);
   await refused(f, skip('Q1', '결함 없음'), /건너뛸 수 있는 Task가 아님/);
   for (const id of ['F1', 'R1']) {
     const { code, out } = await main(skip(id, '결함 없음'), f.deps);
@@ -1351,6 +1310,35 @@ await ta(async () => {
   assert.deepEqual(again.out, { id: 'D1', skipped: true, existing: true, promoted: [] });
   assert.deepEqual([f.count('task-create'), f.count('task-update'), f.fs['orca-tasks.json']], before);
 });
+// 61b. one conditional 시험 갱신 Task per building agent: the one that received failures launches, the other is skipped,
+// and end verification waits on both under the existing rules
+await ta(async () => {
+  const f = fakeDag({ fileOver: {
+    [TABLE_PATH]: `${TABLE}\n| \`frontend\` | 시험 갱신 | claude | opus | medium | 고정 |\n| \`backend\` | 구현, 시험 갱신 | claude | opus | medium | 고정 |`,
+    [ROSTER_FILES[0]]: `${ROSTER}\n| \`backend\` | 서버 | \`backend\` | api/ |`,
+    'fe.md': built('T01', '화면'), 'be.md': planSpec('T02', '서버', 'backend', '구현'),
+    'u1.md': planSpec('U1', '시험 갱신', 'frontend', '시험 갱신'), 'u2.md': planSpec('U2', '시험 갱신', 'backend', '시험 갱신'),
+    'q.md': planSpec('Q1', '끝 검증'),
+  } });
+  const update = { unit: '시험 갱신', conditional: true };
+  await approve(f, [T('T01', BUILD), T('T02', { role: 'backend', unit: '구현' }), T('U1', { ...update, role: 'frontend' }), T('U2', { ...update, role: 'backend' }), T('Q1')],
+    [E('T01', 'U1'), E('T02', 'U2'), E('U1', 'Q1'), E('U2', 'Q1')]);
+  assert.equal((await main([...runArgs, '--approval', approval], f.deps)).code, 0);
+  for (const [id, file] of [['T01', 'fe.md'], ['T02', 'be.md'], ['U1', 'u1.md'], ['U2', 'u2.md'], ['Q1', 'q.md']]) {
+    const r = await main(reg(id, file), f.deps);
+    assert.equal(r.code, 0, JSON.stringify(r.out));
+  }
+  const status = (id, s) => { f.tasks.get(f.map().tasks[id].orca).status = s; };
+  status('T01', 'completed'); status('T02', 'completed'); status('U1', 'ready');
+  const launched = await main(go('U1'), f.deps);
+  assert.equal(launched.code, 0, JSON.stringify(launched.out));
+  const skipped = await main(skip('U2', '실패 없음'), f.deps);
+  assert.equal(skipped.code, 0, JSON.stringify(skipped.out));
+  assert.deepEqual(skipped.out.promoted, []);
+  status('U1', 'completed'); status('Q1', 'ready');
+  assert.equal((await main(go('Q1'), f.deps)).code, 0);
+  assert.equal(f.count('worker-start'), 2);
+});
 // 62. 8. a map with no approval record is refused before Orca is touched
 await ta(async () => {
   const f = fakeDag();
@@ -1374,7 +1362,7 @@ await ta(async () => {
 });
 // 64. register leaves a new Task pending while an input is unfinished
 await ta(async () => {
-  const f = await skipPlan([E('T02', 'P1')], {}, [T('T02')]);
+  const f = await skipPlan([E('T02', 'P1')], {}, [T('T02', BUILD)]);
   await main(reg('T01', 'a.md'), f.deps); f.tasks.get(f.map().tasks.T01.orca).status = 'completed';
   await main(reg('T02', 'b.md'), f.deps);
   await main(skip('D1'), f.deps);
@@ -1516,16 +1504,14 @@ await ta(async () => {
 const LEDGER = (rows, decisions = []) => ['## 결함 원장', '', '| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |', '| --- | --- | --- | --- | --- | --- |',
   ...rows, '', '## 결정', '', ...decisions, ''].join('\n');
 const H1 = '| H-1 | Q1 | High | 관찰 | 1 | 열림 |', M1 = '| M-1 | Q1 | Medium | 관찰 | 1 | 열림 |';
-const LEAD_Q1 = { unit: '리드', model: 'sonnet', effort: 'high', members: [{ role: 'planner', unit: '계획', agent: 'claude', model: 'sonnet', effort: 'medium' }] };
 const FIX_NO_IDS = '수정 Task의 결함 ID 줄이 없음', POST_FIX = '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함', NO_LEDGER = '장부를 읽을 수 없음';
-// T01 → Q1(verify) → F1(fix) → R1(recheck); with lead, Q1 is a team lead that launches planner members itself
-// with q2, a second verify Task Q2 hangs off T01 beside Q1 (not behind F1)
-async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '', q2 = false } = {}) {
-  const f = fakeDag({ fileOver: {
-    'q.md': lead ? '[역할: qa-inspector · 리드]\nTask: Q1 검증 팀장\n배정: qa-inspector / 리드 (claude sonnet/high)' : planSpec('Q1', '흐름 검증'),
-    'q2.md': planSpec('Q2', '추가 검증'), 'f.md': planSpec('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
+// T01 → Q1(verify) → F1(fix) → R1(recheck)
+// with q2 (true, or the Q2 node's extra fields), a second verify Task Q2 hangs off T01 beside Q1 (not behind F1); verify2 is added to its spec
+async function roundPlan({ ledger = LEDGER([H1, M1]), q1 = {}, r1 = {}, rounds = true, fix = '', recheck = '', q2 = false, verify2 = '' } = {}) {
+  const f = fakeDag({ fileOver: { 'a.md': built('T01', '로그인 흐름'), 'q.md': planSpec('Q1', '흐름 검증'),
+    'q2.md': planSpec('Q2', '추가 검증') + verify2, 'f.md': built('F1', '결함 수정') + fix, 'r.md': planSpec('R1', '재검') + recheck } });
   if (ledger !== null) f.fs['ledger.md'] = ledger;
-  await approve(f, [T('T01'), T('Q1', { ...(lead ? LEAD_Q1 : {}), ...q1 }), T('F1'), T('R1', r1), ...(q2 ? [T('Q2')] : [])],
+  await approve(f, [T('T01', BUILD), T('Q1', q1), T('F1', BUILD), T('R1', r1), ...(q2 ? [T('Q2', q2 === true ? {} : q2)] : [])],
     [E('T01', 'Q1'), E('Q1', 'F1'), E('F1', 'R1'), ...(q2 ? [E('T01', 'Q2')] : [])], 'v1',
     rounds ? { rounds: [{ n: 1, verify: q2 ? ['Q1', 'Q2'] : ['Q1'], fix: 'F1', recheck: 'R1' }] } : {});
   await main([...runArgs, '--approval', approval], f.deps);
@@ -1533,10 +1519,9 @@ async function roundPlan({ ledger = LEDGER([H1, M1]), lead = false, q1 = {}, r1 
   const launch = async (args) => { const r = await main(args, f.deps); assert.equal(r.code, 0, JSON.stringify(r.out)); };
   await launch(reg('T01', 'a.md'));
   done('T01');
-  await launch(reg('Q1', 'q.md', ...(lead ? ['--lead'] : [])));
+  await launch(reg('Q1', 'q.md'));
   if (q2) await launch(reg('Q2', 'q2.md'));
-  return { f, done, launch, member: (id, file) => ['worker', '--approval', approval, '--parent', 'Q1', '--id', id, '--agent', 'planner',
-    '--unit', '계획', '--spec-file', file, '--bracket', 'BL-0012', '--does', '검증 분해'] };
+  return { f, done, launch };
 }
 // T01 and Q1 done, F1 registered and ready
 async function atFix(opts) {
@@ -1592,12 +1577,11 @@ await ta(async () => {
   const { f } = await atFix({ fix: '\n결함 ID: H-1', ledger: null });
   await refusedLaunch(f, go('F1'), NO_LEDGER);
 });
-// 76. 6. before any fix round, the verify Q1 and its members launch without `결함 ID:`
+// 76. 6. before any fix round, the verify Tasks Q1 and Q2 launch without `결함 ID:`
 await ta(async () => {
-  const { f, launch, member } = await roundPlan({ lead: true });
+  const { f, launch } = await roundPlan({ q2: true });
   await launch(go('Q1'));
-  f.fs['m1.md'] = '[역할: planner]\nTask: Q1-A 검증 분해\n배정: planner / 계획 (claude sonnet/medium)';
-  await launch(member('Q1-A', 'm1.md'));
+  await launch(go('Q2'));
   assert.equal(f.count('worker-start'), 2);
 });
 // 77. 7. after F1 launched, R1 needs both `결함 ID:` and `수정 diff:`
@@ -1610,16 +1594,14 @@ await ta(async () => {
   await launch(go('R1'));
   assert.equal(f.count('worker-start'), 3);
 });
-// 78. 8. after F1 launched, a new member of the verify lead Q1 without `결함 ID:` is refused; with both lines it launches
+// 78. 8. after F1 launched, the second verify Task Q2 without `결함 ID:` is refused; with both lines it launches
 await ta(async () => {
-  const { f, launch, member } = await atRecheck({ lead: true });
-  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n수정 diff: _workspace/fix.diff';
-  await refusedLaunch(f, member('Q1-B', 'm2.md'), POST_FIX);
-  assert.equal(f.map().direct?.['Q1-B'], undefined);
-  f.fs['m3.md'] = '[역할: planner]\nTask: Q1-C 재검 분해\n배정: planner / 계획 (claude sonnet/medium)\n결함 ID: H-1\n수정 diff: _workspace/fix.diff';
-  await launch(member('Q1-C', 'm3.md'));
+  const { f } = await atRecheck({ q2: true, verify2: '\n수정 diff: _workspace/fix.diff' });
+  await refusedLaunch(f, go('Q2'), POST_FIX);
+  const { launch } = await atRecheck({ q2: true, verify2: '\n결함 ID: H-1\n수정 diff: _workspace/fix.diff' });
+  await launch(go('Q2'));
 });
-// 79. 9. a `전 범위 검증 승인` decision for the Task (or the member's parent), or afterFix on the governing row, lets 7 and 8 pass
+// 79. 9. a `전 범위 검증 승인` decision for the Task, or afterFix on its row, lets 7 and 8 pass
 await ta(async () => {
   const wide = (id) => LEDGER([H1, M1], [`- ${id} | 전 범위 검증 승인 | 전체를 다시 봐 주세요`]);
   await (async () => { const { launch } = await atRecheck({ ledger: wide('R1') }); await launch(go('R1')); })();
@@ -1628,28 +1610,26 @@ await ta(async () => {
   await (async () => { const { f } = await atRecheck({ ledger: wide('T01') }); await refusedLaunch(f, go('R1'), POST_FIX); })();
   // a decision line with no answer does not count
   await (async () => { const { f } = await atRecheck({ ledger: LEDGER([H1], ['- R1 | 전 범위 검증 승인 |']) }); await refusedLaunch(f, go('R1'), POST_FIX); })();
-  for (const opts of [{ ledger: wide('Q1') }, { q1: { afterFix: '고친 빌드 전체 재검' } }]) {
-    const { f, launch, member } = await atRecheck({ lead: true, ...opts });
-    f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
-    await launch(member('Q1-B', 'm2.md'));
+  for (const opts of [{ q2: true, ledger: wide('Q2') }, { q2: { afterFix: '고친 빌드 전체 재검' } }]) {
+    const { launch } = await atRecheck(opts);
+    await launch(go('Q2'));
   }
 });
 // 80. 10. an approval without kind refuses none of the above, even with no ledger
 await ta(async () => {
-  const { f, launch, member } = await atFix({ rounds: false, lead: true, ledger: null });
+  const { f, launch } = await atFix({ rounds: false, q2: true, ledger: null });
   assert.equal('kind' in JSON.parse(f.fs[approval]).tasks.F1, false);
   await launch(go('F1'));
   f.tasks.get(f.map().tasks.F1.orca).status = 'completed';
   await launch(reg('R1', 'r.md'));
   await launch(go('R1'));
-  f.fs['m2.md'] = '[역할: planner]\nTask: Q1-B 재검 분해\n배정: planner / 계획 (claude sonnet/medium)';
-  await launch(member('Q1-B', 'm2.md'));
+  await launch(go('Q2'));
 });
 // full tests in the completion criteria: AGENTS.md marks them in `## 명령`
 const AGENTS = ['# 공통 지침', '', '## 명령', '', '- `npm test` — 저장소 전체 (전체 테스트)', '- `npm run lint` — 린트', '',
   '## 기술 스택', '', '- `npm run e2e` (전체 테스트) 이 절의 표시는 보지 않는다'].join('\n');
-const criteria = (...lines) => ['[역할: qa-inspector]', 'Task: T01 로그인 흐름', '금지: npm test 를 돌리지 않는다', '배정: qa-inspector / 흐름 검증 (claude opus/medium)', '', ...lines].join('\n');
-// 81. 11. a marked command inside `완료 기준:` (up to 검증 환경값 / 막히면: / 보고:) → register, direct launch refused
+const criteria = (...lines) => ['[역할: verifier]', 'Task: T01 로그인 흐름', '금지: npm test 를 돌리지 않는다', '배정: verifier / 흐름 검증 (claude opus/medium)', '', ...lines].join('\n');
+// 81. 11. a marked command inside `완료 기준:` (up to 검증 환경값 / 막히면: / 보고:) → register refused
 await ta(async () => {
   for (const spec of [criteria('완료 기준: npm test 통과'), criteria('완료 기준:', '- npm run lint 통과', '- npm test 통과', '보고: 리포트')]) {
     const f = fakeDag({ fileOver: { 'AGENTS.md': AGENTS, 'a.md': spec } });
@@ -1659,11 +1639,6 @@ await ta(async () => {
     assert.equal(code, 1, JSON.stringify(out));
     assert.equal(out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
     assert.equal(f.count('task-create'), before);
-    f.fs['qa.md'] = spec;
-    const direct = await main([...workerArgv, '--approval', approval, '--id', 'T01'], f.deps);
-    assert.equal(direct.code, 1, JSON.stringify(direct.out));
-    assert.equal(direct.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
-    assert.equal(f.count('worker-start'), 0);
   }
 });
 // 82. 12. the same command only on `금지:`, after the region, or marked outside `## 명령` → registered
@@ -1696,25 +1671,14 @@ await ta(async () => {
     if (code) assert.equal(r.out.error, '완료 기준에 전체 테스트 명령이 있음: npm test');
   }
 });
-// fix Task F1 launched directly (no --parent), with its own approved row
-const directFix = (file) => ['worker', '--agent', 'qa-inspector', '--unit', '흐름 검증', '--spec-file', file, '--bracket', 'BL-0012', '--does', '결함 수정',
-  '--approval', approval, '--id', 'F1'];
-// 85. a fix Task launched directly starts the fix round: a following verify launch without the two lines is refused
+// 85. launching the fix Task starts the fix round: a following verify launch without the two lines is refused
 await ta(async () => {
   const { f, done, launch } = await roundPlan({ q2: true, fix: '\n결함 ID: H-1' });
   await launch(go('Q1'));
   done('Q1');
-  await launch(directFix('f.md'));
-  assert.ok(f.map().direct.F1.dispatch);
+  await launch(reg('F1', 'f.md'));
+  await launch(go('F1'));
   await refusedLaunch(f, go('Q2'), POST_FIX);
-});
-// 86. a direct launch without --parent whose own row is a fix and has no `결함 ID:` line is refused
-await ta(async () => {
-  const { f, done, launch } = await roundPlan();
-  await launch(go('Q1'));
-  done('Q1');
-  await refusedLaunch(f, directFix('f.md'), FIX_NO_IDS);
-  assert.equal(f.map().direct?.F1, undefined);
 });
 // 87. worker --map --retry: a verify Task retried after the fix round started, with no decision line, is refused
 await ta(async () => {
@@ -1748,9 +1712,10 @@ await ta(async () => {
   const rounds = [{ n: 1, verify: 'Q1', fix: 'F1', recheck: 'R1' }, { n: 2, verify: 'R1', fix: 'F2', recheck: 'R2' }, { n: 3, fix: 'F3' }];
   const reason = '사용자가 3회차 수정을 승인함';
   assert.match(await reviewError(chain.map(id => T(id)), edges, { rounds }), /수정 Task 사슬이 2단을 넘음: F3/);
-  const f = fakeDag({ fileOver: Object.fromEntries(chain.map(id => [`${id}.md`, planSpec(id, '작업')])) });
+  const builds = id => id === 'T01' || id.startsWith('F');
+  const f = fakeDag({ fileOver: Object.fromEntries(chain.map(id => [`${id}.md`, builds(id) ? built(id, '작업') : planSpec(id, '작업')])) });
   f.fs['ledger.md'] = LEDGER([H1]);
-  await approve(f, chain.map(id => T(id, id === 'F3' ? { afterFix: reason } : {})), edges, 'v1', { rounds });
+  await approve(f, chain.map(id => T(id, { ...(builds(id) ? BUILD : {}), ...(id === 'F3' ? { afterFix: reason } : {}) })), edges, 'v1', { rounds });
   assert.equal(JSON.parse(f.fs[approval]).tasks.F3.afterFix, reason);
   await main([...runArgs, '--approval', approval], f.deps);
   for (const id of chain) {
@@ -1770,6 +1735,89 @@ await ta(async () => {
   await approve(f, [T('T01', { conditional: true }), T('Q1'), T('F1', { conditional: true })], edges, 'v1', rounds);
   const tasks = JSON.parse(f.fs[approval]).tasks;
   assert.deepEqual([tasks.T01.conditional, tasks.F1.conditional], [true, true]);
+});
+
+// ---- the lead, member and direct launch paths are gone ----
+// 91. --lead and --parent are unknown options
+await ta(async () => {
+  for (const extra of [['--lead'], ['--parent', 'T01']]) {
+    const f = fake();
+    const { code, out } = await main([...workerArgv, ...extra], f.deps);
+    assert.equal(code, 1, JSON.stringify(out));
+    assert.match(out.error, new RegExp(`Unknown option '${extra[0]}'`));
+    assert.equal(f.calls.length, 0);
+  }
+});
+// 92. a DAG node with members is refused at review, on a Task node and on an approval node
+await ta(async () => {
+  assert.match(await reviewError([T('T01', { members: [T('child')] }), T('T02')], []), /팀 내부 배정\(members\)은 없어졌습니다/);
+  assert.match(await reviewError([T('T01'), { id: 'A1', kind: 'approval', members: [] }], [E('T01', 'A1')]), /팀 내부 배정\(members\)은 없어졌습니다/);
+});
+// 93. in an execution Run, worker without --map is refused: with --approval --id, with --id alone, or with a spec carrying an approval marker
+await ta(async () => {
+  const f = fakeDag();
+  await execRun(f);
+  f.fs['qa.md'] = f.fs['a.md'];
+  for (const extra of [['--approval', approval, '--id', 'T01'], ['--id', 'T01']]) {
+    const { code, out } = await main([...workerArgv, ...extra], f.deps);
+    assert.equal(code, 1, JSON.stringify(out));
+    assert.match(out.error, /register한 Task를 worker --map --id로 띄운다/);
+  }
+  f.fs['qa.md'] = ok + '\n\n실행 승인: ' + f.map().review + ' T01';
+  assert.match((await main(workerArgv, f.deps)).out.error, /register한 Task를 worker --map --id로 띄운다/);
+  assert.equal(f.count('worker-start'), 0);
+});
+// 94. a map that holds old direct launches stops worker and register
+await ta(async () => {
+  for (const [key, value] of [['direct', { T05: { task: 'task_9', dispatch: 'ctx_9' } }], ['previousDirect', [{ id: 'T05' }]]]) {
+    const f = await registered();
+    f.fs['orca-tasks.json'] = JSON.stringify({ ...f.map(), [key]: value });
+    for (const args of [go('T01'), reg('T03', 'a.md')]) {
+      const { code, out } = await main(args, f.deps);
+      assert.equal(code, 1, JSON.stringify(out));
+      assert.match(out.error, /옛 직접 기동 기록이 있는 Run입니다. 새 Run에서 계획을 다시 승인하세요/);
+    }
+    assert.equal(f.count('worker-start'), 0);
+  }
+});
+// 95. approval rows carry no members key
+await ta(async () => {
+  const f = fakeDag();
+  await approve(f, [node('T01'), node('T02')]);
+  for (const r of Object.values(JSON.parse(f.fs[approval]).tasks)) assert.equal('members' in r, false);
+});
+// 96. an approval file written by 0.5.1 (rows with members: [], its own hash intact) stops the coordinator with the existing message
+await ta(async () => {
+  const f = fakeDag();
+  await approve(f, [node('T01')]);
+  const record = JSON.parse(f.fs[approval]);
+  for (const r of Object.values(record.tasks)) r.members = [];
+  record.review = createHash('sha256').update(JSON.stringify([record.version, record.planHash, record.dagHash, record.tasks, null])).digest('hex');
+  f.fs[approval] = JSON.stringify(record);
+  const g = fake({ fileOver: f.fs });
+  const { code, out } = await main([...coordArgv, '--approval', approval, ...reviewArgs('v1')], g.deps);
+  assert.equal(code, 1, JSON.stringify(out));
+  assert.equal(out.error, '현재 계획·DAG와 실행 승인 버전이 다름');
+  assert.equal(g.calls.length, 0);
+});
+// 97. a project with only the old roster (team-org.md) stops worker and register with the setup guidance
+await ta(async () => {
+  const old = { [ROSTER_FILES[0]]: undefined, [ROSTER_FILES[1]]: '| 팀 | 팀장이 되는 에이전트 |' };
+  const f = fake({ fileOver: old });
+  const a = await main(workerArgv, f.deps);
+  assert.equal(a.code, 1, JSON.stringify(a.out));
+  assert.match(a.out.error, /setup을 다시 돌려 새 구조로 옮기세요/);
+  assert.equal(f.calls.length, 0);
+  const g = await registered();
+  Object.assign(g.fs, old);
+  const creates = g.count('task-create');
+  for (const args of [go('T01'), reg('T03', 'a.md')]) {
+    const { code, out } = await main(args, g.deps);
+    assert.equal(code, 1, JSON.stringify(out));
+    assert.match(out.error, /setup을 다시 돌려 새 구조로 옮기세요/);
+  }
+  assert.equal(g.count('task-create'), creates);
+  assert.equal(g.count('worker-start'), 0);
 });
 
 // wait: the model is woken only by mail it has to act on
@@ -1820,7 +1868,7 @@ await ta(async () => {
     assert.deepEqual(ids(r), ['lost']);
     assert.deepEqual(f.calls[1], ['orchestration', 'inbox', '--terminal', 'run:run_1', '--limit', '5', '--full', '--json']);
   });
-  // three empty waits in a row come back as idle; a team lead's inbox takes no --run
+  // three empty waits in a row come back as idle; a dispatch inbox takes no --run
   await ta(async () => {
     const f = fakeWait([[], [], []]);
     const r = await main(['wait', '--inbox', 'dispatch:ctx_7', '--state', 's.json'], f.deps);

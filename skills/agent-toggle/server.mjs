@@ -161,7 +161,7 @@ const server = http.createServer(async (req, res) => {
       return res.writeHead(200, {'Content-Type':type + '; charset=utf-8'}).end(readFileSync(new URL('.' + url.pathname, import.meta.url)))
     }
     if (req.method === 'GET' && url.pathname === '/team-structure.html') {
-      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="agent-toggle-token" content="' + token + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>팀 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
+      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="agent-toggle-token" content="' + token + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>에이전트 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
     }
     if (req.method !== 'GET' || url.pathname !== '/') return res.writeHead(404).end()
     function row({name, state, reason, engine, scope}) {

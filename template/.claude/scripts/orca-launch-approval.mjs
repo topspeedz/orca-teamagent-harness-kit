@@ -7,13 +7,14 @@ const digest = ({ version, planHash, dagHash, tasks, legacyRun, routingVersion }
 const validVersion = v => /^v[1-9]\d*$/.test(v);
 const required = (value, message) => { if (!value) throw new Error(message); };
 
-// Project the drawing onto executable Tasks. Groups expand to their members,
+// Project the drawing onto executable Tasks. Groups expand to their nodes,
 // human checkpoints pass through their prerequisites, and review loops are not prerequisites.
 function assignments(dag) {
   const nodes = new Map(), groups = new Map(), incoming = new Map();
-  const routed = dag.routingVersion === 2 || dag.nodes.some(n => n.routing || n.members?.some(m => m.routing));
+  const routed = dag.routingVersion === 2 || dag.nodes.some(n => n.routing);
   for (const node of dag.nodes) {
     required(typeof node.id === 'string' && /^[\w-]+$/.test(node.id) && !(node.id in {}) && !nodes.has(node.id), '중복 또는 잘못된 DAG 노드 ID');
+    required(!('members' in node), `${node.id}의 팀 내부 배정(members)은 없어졌습니다. 일마다 Task 하나로 나눠 다시 그리세요`);
     nodes.set(node.id, node);
     incoming.set(node.id, []);
   }
@@ -64,17 +65,14 @@ function assignments(dag) {
     const deps = [...new Set(incoming.get(id).flatMap(visit))].sort();
     const n = nodes.get(id);
     if (n.kind === 'approval' || n.kind === 'milestone') {
-      required(![n.role, n.unit, n.agent, n.model, n.effort, n.members, n.overrideReason, n.routing].some(Boolean), `${id}의 비실행 노드에 배정이 있음`);
+      required(![n.role, n.unit, n.agent, n.model, n.effort, n.overrideReason, n.routing].some(Boolean), `${id}의 비실행 노드에 배정이 있음`);
     } else {
       const bl = Array.isArray(n.bl) ? n.bl : String(n.bl ?? '').trim().split(/[,\s·]+/);
       required(bl.length && bl.every(value => typeof value === 'string' && /^BL-\d{4}$/.test(value)), `${id}의 BL-#### 확인 필요`);
       required(n.afterFix === undefined || (typeof n.afterFix === 'string' && n.afterFix !== ''), `${id}의 afterFix는 빈 문자열이 아닌 사유`);
       // New fields only when present, so a drawing without them keeps its review hash.
-      tasks[id] = { ...normalized(n), bl: n.bl, deps, members: (n.members ?? []).map(normalized),
+      tasks[id] = { ...normalized(n), bl: n.bl, deps,
         ...(n.conditional === true ? { conditional: true } : {}), ...(n.afterFix ? { afterFix: n.afterFix } : {}) };
-      required(!tasks[id].members.length || n.unit === '리드', `${id}의 팀 내부 배정은 팀장 Task에서만 가능함`);
-      const keys = tasks[id].members.map(m => JSON.stringify([m.agent, m.unit]));
-      required(new Set(keys).size === keys.length, `${id}의 팀 내부 배정 중복`);
     }
     visiting.delete(id);
     frontier.set(id, tasks[id] ? [id] : deps);
@@ -123,7 +121,7 @@ export function reviewPlan(o, io) {
   const drawing = JSON.parse(dag);
   required(drawing.routingVersion == null || drawing.routingVersion === 2, '지원하지 않는 DAG routingVersion');
   const record = { version: o.version, planHash: hash(io.read(o.plan)), dagHash: hash(dag), tasks: assignments(drawing) };
-  if (drawing.routingVersion === 2 || Object.values(record.tasks).some(t => [t, ...t.members].some(a => a.routing))) record.routingVersion = 2;
+  if (drawing.routingVersion === 2 || Object.values(record.tasks).some(t => t.routing)) record.routingVersion = 2;
   if (o['legacy-map']) {
     const map = JSON.parse(io.read(o['legacy-map']));
     required(map.run && !map.approval && resolve(dirname(o['legacy-map'])) === resolve(dirname(o.dag)), '이전 Run의 대응표가 필요함');

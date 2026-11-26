@@ -10,6 +10,8 @@ const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 // A row whose model cell is this word takes model/effort from the complexity table (and the Codex table on codex).
 export const BY_COMPLEXITY = '복잡도';
+// A row the user fixed (메모 `고정`) launches with its own values; every other row needs the Task's scores.
+export const isFixed = (row) => row.note.startsWith('고정');
 const HEADER = ['에이전트', '작업 단위', '런타임', 'model', 'effort', '메모'];
 const COMPLEXITY_HEADER = ['복잡도', 'model', 'effort'];
 const CODEX_HEADER = ['Claude', 'Codex', '메모'];
@@ -176,7 +178,7 @@ function main(argv) {
       const found = bl && matchRow(rows, agent, unit)?.row.model === BY_COMPLEXITY ? backlogComplexity(readFileSync(arg('--backlog') ?? 'docs/backlog.md', 'utf8'), bl.split(',').map((x) => x.trim())) : null;
       r = lookup(rows, agent, unit, { complexity: found?.value ?? arg('--complexity'), rules: parsed });
       // DAG card fields: the BL dims, and whether the row is one the user fixed (메모 `고정`)
-      if (r) Object.assign(r, found && r.complexity ? { dims: found.dims } : {}, { fixed: r.note.startsWith('고정') });
+      if (r) Object.assign(r, found && r.complexity ? { dims: found.dims } : {}, { fixed: isFixed(r) });
     } catch (e) { console.error(`model-selection: ${e.message}`); return 1; }
     if (!r) { console.error(`model-selection: (${agent}, ${unit})에 맞는 줄이 없음`); return 1; }
     console.log(rest.includes('--json') ? JSON.stringify(r) : `${fmt(r)} (${r.matched}${r.complexity ? `, 복잡도 ${r.complexity}` : ''})`);

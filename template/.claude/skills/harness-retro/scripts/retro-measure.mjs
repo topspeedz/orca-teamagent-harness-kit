@@ -188,7 +188,12 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     out.push(`| ${label} | ${pv(plan, k)} | ${pv(act.v, k)} |`);
   out.push(`| 슬롯 수 | ${pv(plan, 'slots')} | - |`, '', '| 지표 | 값 |', '| --- | --- |');
   const l = led.v;
-  out.push(`| 수정 루프 | ${l?.fixLoops ?? NA} |`,
+  const mt = Object.values(mp.v?.tasks ?? {});
+  const started = mt.filter((x) => x.dispatch).length + mt.reduce((n, x) => n + (x.previous?.length ?? 0), 0);
+  // a comma-joined bl ("BL-0001, BL-0002", as the approval accepts) is its separate items; an empty one is none
+  const items = new Set(mt.flatMap((x) => [x.bl ?? []].flat().flatMap((b) => String(b).split(',')).map((b) => b.trim()).filter(Boolean)));
+  out.push(`| 워커 기동 수 | ${mp.v ? started : NA} |`, `| 항목당 워커 수 | ${items.size ? (started / items.size).toFixed(1) : NA} |`,
+    `| 수정 루프 | ${l?.fixLoops ?? NA} |`,
     `| 수정 라운드(결함 원장) | ${df?.rounds ?? NA} |`, `| 제기된 High | ${df ? df.high : NA} |`,
     `| 확정 · 인용 · 기각 · 열림 | ${df ? [df.confirmed, df.cited, df.dismissed, df.open].join(' · ') : NA} |`,
     `| High가 아닌데 수정에 든 결함 | ${df ? df.lowerFixed : NA} |`, `| 건너뛴 Task | ${df?.skipped ?? NA} |`,
@@ -197,7 +202,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const rd = act.v?.readyDelay;
   out.push(`| 준비→기동 지연 합(분) | ${rd ? rd.sum : NA} |`, `| 준비→기동 지연 최대(분) | ${rd ? (rd.at ? `${rd.max} (${rd.at})` : 0) : NA} |`);
   // Coordinator sessions = those that ran exec-run or register; one row each, never summed (a second phase's
-  // coordinator in the same window is a different session). Workers and leads get the same notices.
+  // coordinator in the same window is a different session). Workers get the same notices.
   const files = sessionFiles(arg('--sessions'), Number(arg('--days')) || 7);
   const coord = files.map((f) => ({ name: basename(f).slice(0, 8), ...wakes(readFileSync(f, 'utf8')) })).filter((w) => w.coordinator);
   if (!coord.length) out.push(`| 코디네이터가 깬 턴 수 | ${NA} |`, `| 도구 호출 없이 끝난 깸 수 (heartbeat만 든 깸의 근사) | ${NA} |`);

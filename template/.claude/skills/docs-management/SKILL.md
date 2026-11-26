@@ -1,11 +1,13 @@
 ---
 name: docs-management
-description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTATION_INDEX.md, 코드 지도 CODEBASE_MAP.md)의 규칙과 초기화·동기화·감사 절차, 문서 양식. doc-steward가 문서 Task를 받으면 로드한다. '문서 초기화', '문서 동기화', '문서 반영', '문서 감사', '정합성 점검'. 백로그 형식(backlog-management), 설계서와 계획서(plan-orchestrate, phase-planning), 하네스 문서(harness-retro), 코드 리뷰와 QA(change-review, qa-verification)에는 쓰지 않는다."
+description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTATION_INDEX.md, 코드 지도 CODEBASE_MAP.md)의 규칙과 초기화·동기화·감사 절차, 문서 양식, 문서별 담당. 모든 에이전트가 자기 문서를 쓰거나 고칠 때, doc-steward가 문서 Task를 받으면 로드한다. '문서 초기화', '문서 동기화', '문서 반영', '문서 감사', '정합성 점검'. 백로그 형식(backlog-management), 설계서와 계획서(plan-orchestrate, phase-planning), 하네스 문서(harness-retro), 코드 리뷰와 QA(change-review, qa-verification)에는 쓰지 않는다."
 ---
 
 # docs-management
 
-제품의 지금 상태를 담는 live 문서의 정본 규칙이다. 팀이 남기는 리포트, 설계서, 계획서, phase 사본은 그때의 기록이고, 지금 상태는 `docs/`에 둔다. 역할 정의에 지정된 작성자가 해당 문서·절을 처음 쓰고 갱신한다. `doc-steward`는 색인을 관리하고, 구현·테스트 근거와 문서의 정합성을 확인해 발견한 결함을 지정 작성자에게 넘긴다.
+제품의 지금 상태를 담는 live 문서의 정본 규칙이다. 워커가 남기는 리포트, 설계서, 계획서, phase 사본은 그때의 기록이고, 지금 상태는 `docs/`에 둔다. 역할 정의에 지정된 작성자가 해당 문서·절을 처음 쓰고 갱신한다. `doc-steward`는 색인을 관리하고, 구현·테스트 근거와 문서의 정합성을 확인해 발견한 결함을 지정 작성자에게 넘긴다.
+
+모든 에이전트가 자기 문서를 쓸 때 이 파일을 읽는다. 만든 에이전트가 제품의 사실을 바꾸면 같은 Task에서 자기 문서를 고친다. 그 지식이 그 컨텍스트에 있으므로 다른 역할에 넘겨 나중에 쓰게 하지 않는다. 이때는 아래 규칙, 양식, 담당, ID와 상태 값을 따르고, 작업 단위별 절차 파일과 `## 리포트`·`## 오류 처리`·`## 하지 않는 것`은 `doc-steward`의 문서 Task에 적용된다.
 
 성공 기준은 하나다. 다른 에이전트가 이 문서만 읽고 정확하게 구현하고 검증할 수 있다. 문서를 많이 쓰는 것은 기준이 아니다.
 
@@ -54,9 +56,25 @@ description: "제품 live 문서(docs/의 번호 폴더 12개, 색인 DOCUMENTAT
 - 이 프로젝트에 없는 영역(예: 화면이 없는 도구의 `docs/03-ui-ux/`)은 색인에 `해당 없음`으로 적고 만들지 않는다.
 - 다른 경로에 이미 문서가 있으면 옮기거나 지우지 않는다. 색인의 정본 문서 칸에 그 경로를 적는다. 번호 폴더로 옮길지는 사용자 결정이므로 리포트의 `## 인박스 후보`에 한 줄로 올린다.
 - 문서의 머리에는 `docs/harness/templates/live-doc.md`에 따라 읽는 시점, 역할과 소유 범위, 문서·절별 지정 작성자, 마지막으로 갱신한 phase를 적는다. 양식에서 별도 머리 표를 지정하면 그 형식을 따른다.
-- PRD와 SRS의 작성자는 `product-manager`이고 요구사항 검토는 `planner`가 맡는다. 미배정 절은 근거를 리포트에 남기고 코디네이터를 통해 담당 지정을 요청한다. 색인의 배정 대기 표에서 미배정과 해당 없음을 구분한다.
+- 문서·절마다 담당 에이전트는 아래 담당 표와 역할 파일의 `## 문서 책임` 표를 따른다. 미배정 절은 근거를 리포트에 남기고 코디네이터를 통해 담당 지정을 요청한다. 색인의 배정 대기 표에서 미배정과 해당 없음을 구분한다.
 - 30KB를 넘는 문서는 주제별로 나눈다. 원래 파일에는 나눈 파일을 가리키는 표를 남긴다. 예: 화면이 많으면 `docs/03-ui-ux/screens/<화면 ID>.md`.
-- `docs/` 안에서 이 역할의 것이 아닌 곳은 고치지 않고 가리키기만 한다: `docs/backlog.md`와 `docs/backlog-archive.md`(기획), `docs/harness/`(하네스), `docs/superpowers/`(`planner`의 설계서와 계획서), `docs/history/`(코디네이터의 phase 사본).
+- `docs/` 안에서 이 역할의 것이 아닌 곳은 고치지 않고 가리키기만 한다: `docs/backlog.md`와 `docs/backlog-archive.md`(기획), `docs/harness/`(하네스), `docs/superpowers/`(`product-manager`의 설계서와 계획서), `docs/history/`(코디네이터의 phase 사본).
+
+## 문서 담당
+
+문서마다 그 지식을 가진 에이전트가 담당이다. 기본 배정은 아래 표이고, 문서·절의 범위는 각 역할 파일의 `## 문서 책임` 표가 정본이다. 프로젝트가 에이전트나 스킬을 더하면 `agent-author`가 문서 담당도 함께 등록한다. 담당이 없는 문서는 색인의 `작성자 배정 대기`에 남는다.
+
+| 문서 | 담당 |
+| --- | --- |
+| PRD, SRS, 백로그, WBS, 제품·범위 결정 기록 | `product-manager` |
+| UI 명세와 화면 문서 | `frontend` |
+| 아키텍처 | `backend`(서버와 데이터 구조), `frontend`(화면 쪽 구조와 계약) |
+| API와 데이터 계약, 코드 지도, 운영 절차 | `backend` |
+| 테스트 케이스, 요구사항 추적표 | `verifier` |
+| 하네스 변경 이력 | `harness-engineer` |
+| 문서 색인, 문서 사이의 연결 | `doc-steward` |
+
+- `doc-steward`는 전체를 본다. 코드, 테스트와 문서가 맞는지, 색인과 연결이 맞는지 확인하고 색인과 연결은 직접 고친다. 내용이 틀렸으면 담당 에이전트에게 돌려보낸다.
 
 ## ID와 상태 값
 

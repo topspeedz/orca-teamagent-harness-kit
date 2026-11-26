@@ -7,7 +7,7 @@
 
 ## 계획과 기동 직전의 배정
 
-PM은 BL의 수락 기준을 쓸 때 C·U·R·V의 값과 근거를 남긴다. Planner는 각 실행 Task와 팀원이 실제로 내릴 판단, 변경 범위, 완료 검사를 보고 점수를 좁힌다. BL을 직접 지정한 경우도 같다. PM·Planner 자신을 승인 전에 띄우는 단계는 기존 역할 표를 사용한다.
+PM이 수락 기준을 쓸 때 C·U·R·V의 값과 근거를 남기고, 계획에서 Task마다 좁힌다. BL을 직접 지정한 경우도 같다. 승인 전에 띄우는 PM의 기획 세션은 아래 배정 표의 `product-manager / 기획` 고정 행을 사용한다.
 
 | 축 | 0 | 1 | 2 | 3 |
 | --- | --- | --- | --- | --- |
@@ -21,11 +21,11 @@ PM은 BL의 수락 기준을 쓸 때 C·U·R·V의 값과 근거를 남긴다. P
 2. 모델은 조건을 순서대로 본다. `C=0, R≤1, V=0, U≤1, F=0`이면 Haiku, `C=3, R=3`이면 Fable, `C=3 또는 R=3 또는 (C≥2 이고 R≥2)`이면 Opus, 나머지는 Sonnet이다.
 3. effort 점수는 `E = 2U + V + F + (C=3이면 2)`다. 0~1 low, 2~4 medium, 5~7 high, 8~10 xhigh다. 11~13은 `U=3, V≥2, (C=3 또는 F=2)`일 때 max이고 그 밖에는 xhigh다. Haiku 워커는 effort를 생략한다. Codex이면 아래 치환표를 적용한다.
 4. 해석이 둘 이상 가능한 축에는 대안 점수와 근거를 붙인다. 가능한 해석이 실제 모델·effort를 바꿀 때만 Haiku 분류기를 한 번 호출한다. Haiku는 짧은 축별 근거를 보고 허용된 점수 중에서 고른다. 최종 조합은 같은 식으로 계산한다. 분류가 실패하면 최초 점수와 실패 사유를 남긴다.
-5. DAG에서 Task·팀원별로 추천값과 기동 직전 재평가 위임 여부를 검토한다. 사용자가 직접 지정한 값은 추천과 같아도 고정한다. 승인된 런타임 안에서 자동 배정만 재평가한다. 고정 해제나 런타임·범위 변경에는 새 DAG 승인 절차를 쓴다. 위임 기록이 없는 기존 승인 파일은 당시 배정으로 재개한다.
+5. DAG에서 Task별로 추천값과 기동 직전 재평가 위임 여부를 검토한다. 사용자가 직접 지정한 값은 추천과 같아도 고정한다. 승인된 런타임 안에서 자동 배정만 재평가한다. 고정 해제나 런타임·범위 변경에는 새 DAG 승인 절차를 쓴다. 위임 기록이 없는 기존 승인 파일은 당시 배정으로 재개한다.
 
 ## 복잡도 기본표
 
-BL 규모와 RICE에는 기존 1·2·3·5·8·13을 쓴다. 구형 계획 및 표 기반 직접 기동의 `model-selection.mjs lookup --bl`과 `--complexity`는 아래 표를 사용한다.
+BL 규모와 RICE에는 기존 1·2·3·5·8·13을 쓴다. `model-selection.mjs lookup`에 BL이나 복잡도 값을 넘겨 조회할 때는 아래 표를 사용한다. 산정 행의 워커 기동에는 쓰이지 않는다. 기동은 점수가 있어야 한다.
 
 | 복잡도 | model | effort |
 | --- | --- | --- |
@@ -66,19 +66,15 @@ Claude의 모든 model/effort 조합을 Codex 값으로 바꾼다. 형식 검사
 | 에이전트 | 작업 단위 | 런타임 | model | effort | 메모 |
 | --- | --- | --- | --- | --- | --- |
 | `coordinator` | 실행 감독 | claude | opus | high | 고정(사용자 결정 2026-11-22). 100만 토큰 창 전제 |
-| `product-manager` | 요구사항 정리 | claude | opus | max | PRD·SRS 작성 |
-| `product-manager` | 수락 기준, 항목화, 묶음 선정 | claude | opus | high | 수락 기준 작성·백로그 항목화·묶음 선정 |
-| `product-manager` | 계획 대조 | claude | opus | medium | 승인 범위·수락 기준과 계획 대조 |
-| `product-manager` | 장부 정리, 완료 처리 | claude | opus | medium | 백로그 완료·보관 |
-| `planner` | 요구사항 검토 | claude | opus | high | PM의 요구사항을 원문과 대조하고 계획 가능성 검토 |
-| `planner` | 설계 | claude | fable | max | 기술 설계 |
-| `planner` | 계획 | claude | fable | max | 실행 계획·DAG 작성 |
-| `qa-inspector` | 흐름 검증 | claude | 복잡도 | | 끝 QA. 결함을 처음 찾는 단계 |
-| `qa-inspector` | 재검 | claude | 복잡도 | | 재현 테스트가 없는 결함의 재현 확인만 한다 |
-| `code-reviewer` | 중간 변경 리뷰 | claude | 복잡도 | | phase 중간, 뒤 Task가 쌓이기 전 묶음 리뷰 |
-| `code-reviewer` | 일반 변경 리뷰 | claude | 복잡도 | | 끝 리뷰 |
-| `code-reviewer` | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정(사용자 결정 2026-11-22) |
-| `harness-engineer` | 회고, 구조 변경 | claude | opus | high | |
-| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | fable | high | 동기화는 장부의 `## 라이브 문서 확인`에 행이 있을 때만. 초기화와 감사는 사용자가 요청할 때만 |
-| `*` | 리드 | claude | opus | high | 팀장으로 띄울 때 |
-| `*` | 기본 | claude | 복잡도 | | 표에 없는 조합(사용자 결정 2026-11-22: 복잡도를 따름) |
+| `product-manager` | 기획 | claude | fable | xhigh | 고정(setup에서 사용자가 정한다). 요구에서 계획까지 한 세션 |
+| `product-manager` | 완료 처리 | claude | 복잡도 | | 백로그 완료·보관 |
+| `research` | 조사 | claude | 복잡도 | | |
+| `frontend` | 구현, 결함 수정, 시험 갱신 | claude | 복잡도 | | |
+| `backend` | 구현, 결함 수정, 시험 갱신 | claude | 복잡도 | | |
+| `verifier` | 중간 변경 리뷰 | claude | 복잡도 | | 코드를 읽는 검토만 |
+| `verifier` | 끝 검증 | claude | 복잡도 | | 읽기와 실행. 영역마다 Task 하나 |
+| `verifier` | 재검 | claude | 복잡도 | | 재현 테스트가 없는 결함의 재현 확인만 |
+| `verifier` | 보안·돈이 걸린 변경 리뷰 | claude | fable | xhigh | 고정(사용자 결정 2026-11-22) |
+| `harness-engineer` | 회고, 구조 변경 | claude | 복잡도 | | |
+| `doc-steward` | 문서 초기화, 문서 동기화, 문서 감사 | claude | 복잡도 | | 동기화는 장부의 `## 라이브 문서 확인`에 행이 있을 때만 |
+| `*` | 기본 | claude | 복잡도 | | 표에 없는 조합 |

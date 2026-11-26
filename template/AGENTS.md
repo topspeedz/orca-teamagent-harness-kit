@@ -23,15 +23,29 @@ Claude와 Codex가 함께 읽는 공통 규칙이다. 값, 표, 이력, 긴 예�
 
 ## 하네스
 
-**역할 계층.** 사용자 세션이 창구다. 창구는 설문과 승인, 요청 분류, 기획 팀과 코디네이터 기동, 최종 보고를 맡는다. 팀장 없는 운영팀의 `product-manager`가 PRD·SRS와 백로그를 쓰고 `planner`가 기술 설계·계획을 작성한다. 창구가 둘을 각각 기동하고, `plan-orchestrate`의 조건이 맞을 때 상대 산출물을 검토시킨다. 코디네이터는 창구가 띄운 별도 터미널에서 계획대로 워커를 띄우고, 보고를 정산하고, 장부를 갱신한다. 팀장은 팀 spec 하나를 팀원 Task로 나누고 감독한다. 계층은 코디네이터 아래 두 단까지이고, 팀원은 워커를 띄우지 않는다. Orca 워커로 시작됐다면 spec의 첫 줄과 "먼저 읽을 것"대로 역할 파일을 읽고 그 역할로만 행동한다.
+**역할 계층.** 사용자 세션이 창구다. 창구는 설문과 승인, 요청 분류, PM 기획 세션과 코디네이터 기동, 최종 보고를 맡는다. 팀은 두지 않는다.
+
+```
+창구
+├ product-manager     PM. 요구·백로그·설계·계획 (스킬)
+└ 코디네이터
+    ├ research        조사. 세션 안 서브에이전트로 나눠 조사
+    ├ frontend        UX · UI · 개발 · 테스트 코드 (스킬)
+    ├ backend         데이터베이스 · 백엔드 · 성능 · 보안 (스킬)
+    ├ verifier        코드 리뷰 · QA(유닛 테스트, 브라우저 확인) (스킬)
+    ├ doc-steward
+    └ harness-engineer
+```
+
+`product-manager` 한 세션이 요구사항 정리부터 설계, 계획, 계획 대조까지 잇는다. 코디네이터는 창구가 띄운 별도 터미널에서 계획의 Task를 명단(`docs/harness/agents.md`)의 에이전트에게 직접 배정하고, 보고를 정산하고, 장부를 갱신한다. 코디네이터 아래의 에이전트는 모두 같은 층이고 워커를 띄우지 않는다. Orca 워커로 시작됐다면 spec의 첫 줄과 "먼저 읽을 것"대로 역할 파일을 읽고 그 역할로만 행동한다.
 
 **규모별 경로.**
 
 | 요청 | 경로 |
 | --- | --- |
 | 단순 질문, BL 지정이 없는 한 파일의 작은 수정 | 창구가 직접 한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. |
-| 지정 BL 또는 한 phase 위임 | 창구가 `plan-orchestrate`의 해당 접수 경로를 따른다. 지정 ID는 Planner, 묶음 선정 위임은 PM부터 시작한다. |
-| 승인된 실행 팀 배정 | 코디네이터가 팀원에게 직접 배정한다. 계획이 팀 내부 분해를 맡긴 Task만 팀장 경유, 팀장 에이전트가 OFF인 팀은 배정 대기다. |
+| 지정 BL 또는 한 phase 위임 | 창구가 `plan-orchestrate`의 해당 접수 경로를 따른다. 지정 ID는 PM의 설계, 묶음 선정 위임은 PM의 묶음 선정부터 시작한다. |
+| 승인된 계획의 Task | 코디네이터가 그 Task의 에이전트에게 직접 배정한다. 에이전트가 OFF면 배정 대기다. |
 | 요구사항이 흐릿한 큰 작업 | 설문부터 시작하는 전체 흐름(`plan-orchestrate`)을 탄다. |
 
 **작업별 라우팅.**
@@ -40,13 +54,12 @@ Claude와 Codex가 함께 읽는 공통 규칙이다. 값, 표, 이력, 긴 예�
 | --- | --- |
 | 큰 작업 요청 | `plan-orchestrate` 스킬 |
 | 실행 감독 | `coordinator` 스킬 |
-| 팀장으로 뜬 워커 | `team-lead` 스킬과 자기 팀 스킬 |
-| 요구사항 정리, 항목화, 우선순위 | `requirements-write`, `backlog-management`. 상대 검토는 `product-review` |
+| 요구사항 정리, 항목화, 우선순위 | `requirements-write`, `backlog-management`. 검토와 계획 대조는 `product-review` |
 | 백로그 | `backlog-management` 스킬 |
 | 모델 배정 | `docs/harness/model-selection.md` |
-| 팀 구성 | `docs/harness/team-org.md` |
+| 에이전트 명단 | `docs/harness/agents.md` |
 | 제품 문서(요구사항, 설계, 계약, 테스트, 운영) | `docs/DOCUMENTATION_INDEX.md` |
-| 팀과 에이전트 추가 | 플러그인 스킬 `orca-teamagent-harness-kit:agent-author`, 작성 양식 `docs/harness/templates/` |
+| 에이전트와 스킬 추가 | 플러그인 스킬 `orca-teamagent-harness-kit:agent-author`, 작성 양식 `docs/harness/templates/` |
 
 ## Compact Instructions
 

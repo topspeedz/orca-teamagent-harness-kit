@@ -82,9 +82,9 @@ const LEDGER = `# 장부: x
 
 | Task | 에이전트 | 배정(요청과 적용) | 재시도(원인) | 질문 | 리포트 경로 |
 | --- | --- | --- | --- | --- | --- |
-| T1 | planner | 요청 a · 적용 a | 0 | 없음 | r1 |
-| T2 | qa-inspector | 요청 a · 적용 a | 1 (리포트 검사 실패) | 1 | r2 |
-| T3 | code-reviewer | 요청 a · 적용 a | 2 (기동 실패) | 없음 | r3 |
+| T1 | product-manager | 요청 a · 적용 a | 0 | 없음 | r1 |
+| T2 | verifier | 요청 a · 적용 a | 1 (리포트 검사 실패) | 1 | r2 |
+| T3 | verifier | 요청 a · 적용 a | 2 (기동 실패) | 없음 | r3 |
 
 ## 결정
 
@@ -201,6 +201,18 @@ t('CLI: prints all sections, approximation note, missing inputs as 측정 불가
   assert.match(bySession.stdout, /\| 코디네이터가 깬 턴 수 \(세션 abcdef12\) \| 2 \|/);
   assert.match(bySession.stdout, /heartbeat만 든 깸의 근사, 세션 abcdef12\) \| 1 \|/);
   assert.doesNotMatch(bySession.stdout, /세션 99999999/);
+});
+
+t('CLI: worker counts from the map; no bl → 측정 불가', () => {
+  const script = fileURLToPath(new URL('./retro-measure.mjs', import.meta.url));
+  const run = (m) => { writeFileSync(join(root, 'wm.json'), JSON.stringify(m)); return spawnSync(process.execPath, [script, '--map', join(root, 'wm.json')], { encoding: 'utf8' }).stdout; };
+  const out = run({ tasks: { T1: { bl: 'BL-1', dispatch: 'd1', previous: ['p1'] }, T2: { bl: 'BL-1', dispatch: 'd2' }, T3: { bl: 'BL-2', dispatch: 'd3' }, T4: { bl: 'BL-2' } } });
+  assert.match(out, /\| 워커 기동 수 \| 4 \|/);
+  assert.match(out, /\| 항목당 워커 수 \| 2\.0 \|/);
+  assert.match(run({ tasks: { T1: { dispatch: 'd1' } } }), /\| 항목당 워커 수 \| 측정 불가 \|/);
+  // a comma-joined bl is its separate items; an empty one is none
+  assert.match(run({ tasks: { T1: { bl: 'BL-1, BL-2', dispatch: 'd1' }, T2: { bl: 'BL-3', dispatch: 'd2' } } }), /\| 항목당 워커 수 \| 0\.7 \|/);
+  assert.match(run({ tasks: { T1: { bl: '', dispatch: 'd1' } } }), /\| 항목당 워커 수 \| 측정 불가 \|/);
 });
 
 t('CLI: defect rows with --map, without --map, and with an unreadable severity', () => {

@@ -1,27 +1,27 @@
 ---
 name: phase-planning
-description: "phase의 일을 Task로 나누고 계획서의 DAG 절을 쓰는 지식. planner가 설계서와 계획서를 쓸 때, 팀장이 팀 안에서 Task를 나눌 때 로드한다. '작업 나눠줘', 'DAG 짜줘', '병렬로 돌릴 수 있게 계획', '임계 경로', '분할선'. 계획부터 실행까지의 단계 진행(plan-orchestrate), 워커 기동과 감독(coordinator, team-lead)에는 쓰지 않는다."
+description: "phase의 일을 Task로 나누고 계획서의 DAG 절을 쓰는 지식. product-manager가 설계서와 계획서를 쓸 때 로드한다. '작업 나눠줘', 'DAG 짜줘', '병렬로 돌릴 수 있게 계획', '임계 경로', '분할선'. 계획부터 실행까지의 단계 진행(plan-orchestrate), 워커 기동과 감독(coordinator)에는 쓰지 않는다."
 ---
 
 # phase-planning
 
-작업을 Task로 나누는 지식의 정본이다. planner와 팀장이 같은 두 문서를 읽는다. 다른 스킬은 이 규칙을 옮겨 적지 않고 이 스킬을 가리킨다.
+작업을 Task로 나누는 지식의 정본이다. 계획을 쓰는 `product-manager`가 두 문서를 읽는다. 다른 스킬은 이 규칙을 옮겨 적지 않고 이 스킬을 가리킨다.
 
 ## 언제 무엇을 읽나
 
 | 시점 | 읽을 문서 | 거기서 정하는 것 |
 | --- | --- | --- |
-| 설계에서 팀과 흐름의 모양을 고를 때 | [references/workflow-patterns.md](references/workflow-patterns.md) | 어느 패턴으로 일을 잇고 나눌지, 어느 팀을 띄울지 |
+| 설계에서 흐름의 모양을 고를 때 | [references/workflow-patterns.md](references/workflow-patterns.md) | 어느 패턴으로 일을 잇고 나눌지, 어느 에이전트를 띄울지 |
 | 계획에서 Task를 나누고 의존을 적을 때 | [references/parallel-rules.md](references/parallel-rules.md) | 의존, 산출물, 예상 시간, 분할선, 합치기와 나누기 |
 | 계획 승인을 받기 전 | [references/parallel-rules.md](references/parallel-rules.md) | 임계 경로와 병렬도 수치가 규칙에 맞는지 |
-| 팀장이 팀 안의 Task를 나눌 때 | 두 문서 모두 | 팀원 Task의 의존과 폭. 한 팀 동시 4명 이하 |
+| 같은 에이전트의 Task를 여럿 둘 때 | [references/parallel-rules.md](references/parallel-rules.md) | 편집 범위가 겹치지 않는 일 단위. 같은 에이전트의 동시 워커는 4명 이하 |
 | Task에 배정을 붙일 때 | `docs/harness/model-selection.md` | 에이전트와 작업 단위 |
 
 ## 배정
 
-- 설계에서 팀·의존과 책임을 정하고, 계획에서 역할·작업 단위·완료 검사가 정해질 때 Task별로 평가한다. BL을 직접 지정했거나 예전 BL에 모델 근거가 없으면 수락 기준·설계에서 근거를 채운다. 여러 BL의 근거 중 이 역할이 직접 책임지는 것만 사용한다. 팀장의 조율·통합과 팀원의 구현·검증을 각각 평가한다.
+- 설계에서 에이전트·의존과 책임을 정하고, 계획에서 역할·작업 단위·완료 검사가 정해질 때 Task별로 평가한다. BL을 직접 지정했거나 예전 BL에 모델 근거가 없으면 수락 기준·설계에서 근거를 채운다. 여러 BL의 근거 중 이 역할이 직접 책임지는 것만 사용한다.
 - `docs/harness/model-selection.md`의 척도로 다음 형식의 입력을 작성한다. 예를 들어 `{"scores":{"C":2,"U":1,"R":2,"V":1,"F":0},"evidence":{"C":"UI와 저장소의 계약","U":"빈 값 동작 확인","R":"공용 저장 형식","V":"단위 검사 있음","F":"첫 시도"}}`. 두 해석이 모두 근거가 있을 때만 `"ambiguities":[{"axis":"V","value":2,"evidence":"기존 데이터에서만 발생해 통합 재현이 필요할 수 있음"}]`처럼 붙인다.
-- 역할마다 `node .claude/scripts/model-routing.mjs plan --agent <역할> --unit <단위> --input <근거.json>`을 실행한다. 출력의 배정·점수·근거를 해당 노드나 팀원에 반영하고 계획서에는 배정과 핵심 근거를 적는다. 표의 고정 역할은 입력 없이 조회할 수 있다.
+- 역할마다 `node .claude/scripts/model-routing.mjs plan --agent <역할> --unit <단위> --input <근거.json>`을 실행한다. 출력의 배정·점수·근거를 해당 노드에 반영하고 계획서에는 배정과 핵심 근거를 적는다. 표의 고정 역할은 입력 없이 조회할 수 있다.
 - 표에 맞는 작업 단위가 없으면 임의로 정하지 않고 계획서 끝의 `## 사용자 결정 필요`에 추천 하나와 함께 올린다.
 - spec에는 한 줄로 옮긴다: `배정: <에이전트> / <작업 단위> (<런타임> <model>/<effort>)`.
 
@@ -55,17 +55,17 @@ Task마다 아래 항목을 모두 적는다. 빈 칸을 두지 않는다. 없�
 - 슬롯 수: <브리프의 슬롯 수>
 - 최대 동시 Task 수: <값>
 - 검증 워커 ÷ 구현 워커: <검증 워커 수> ÷ <구현 워커 수> = <값> (0.5를 넘으면 이유: <한 줄>)
-- 계획 대조: 켬 또는 끔 · <근거 Task와 점수>
 
 ## 리스크
 | 리스크 | 닿는 항목과 Task | 영향 | 완화 |
 | --- | --- | --- | --- |
 ```
 
+- Task는 직함별 단계가 아니라 일 단위로 나눈다. 한 항목의 설계, 구현, 테스트 코드는 한 Task다.
 - 의존은 산출물 의존만 적는다. 사유를 한 줄로 적을 수 없으면 의존이 아니다.
 - 예상 시간 세 값(low, likely, high)은 분 단위다. 병렬도 수치는 likely로 센다.
 - 웨이브 표기(W1, W2)를 덧붙여도 읽기용일 뿐이다. 기동은 준비된 Task 단위다([parallel-rules.md](references/parallel-rules.md)).
-- 검증 워커에는 리뷰, QA, 재검과 함께 교차 검토(PM, Planner)와 문서 확인도 센다. 0.5를 넘으면 Planner가 이유를 적는다. 창구가 계획 승인 질문에 비율과 이유를 싣는다.
+- 검증 워커에는 리뷰, QA, 재검과 함께 문서 확인도 센다. 0.5를 넘으면 PM이 이유를 적는다. 창구가 계획 승인 질문에 비율과 이유를 싣는다.
 - 끝에 임계 경로와 병렬도 수치가 없으면 계획 승인 질문에 폭을 숫자로 넣을 수 없다. 계획은 끝난 것이 아니다.
 - 입력은 승인된 묶음이다(브리프의 `## 백로그 항목`). `### 항목과 Task` 표는 묶음의 항목마다 한 줄이다. 빈 줄이 있으면 계획은 끝난 것이 아니다. 같은 결과를 내는 Task(리뷰, QA, 수정 포함)는 같은 백로그 ID를 쓴다. 요구사항과 수락 기준은 다시 쓰지 않고 ID로 가리킨다.
 - `## 리스크`의 출처는 불확실성이 5 이상인 항목, 외부 의존, 사용자 결정 대기다. 없으면 "없음"이라고 쓴다.
@@ -79,15 +79,15 @@ Task마다 아래 항목을 모두 적는다. 빈 칸을 두지 않는다. 없�
 
 | 파일 | 스킬 | 담는 것 |
 | --- | --- | --- |
-| `_workspace/_run/<phase>/dag.json` | `dag-swimlane` | Task마다 노드 하나, 의존마다 연결 하나, 팀마다 레인 하나 |
+| `_workspace/_run/<phase>/dag.json` | `dag-swimlane` | Task마다 노드 하나, 의존마다 연결 하나, 에이전트마다 레인 하나 |
 | `_workspace/_run/<phase>/waterfall.json` | `waterfall-timeline` | Task마다 low, likely, high와 그 근거, 선행 Task |
 
 - 스윔레인 입력의 워커 노드마다 런타임(`agent`: `claude` 또는 `codex`), `model`, `effort`를 적는다. 값은 배정 줄과 같아야 한다. 사용자는 승인 화면에서 배정을 보고 고친다.
-- 새 실행 승인 DAG 루트에 `routingVersion: 2`를 적는다. Task와 각 팀원에 위 `plan`의 출력을 병합해 고정 단계 또는 `routing.mode`와 평가 원본을 보존한다. `model-selection.mjs choices`의 출력을 DAG의 `choices`로 넣어 승인 당시 치환표를 고정한다. 기존 BL 규모를 표시할 때만 별도로 `complexity`·`dims`를 쓴다.
-- 승인에 쓰는 워커 노드에는 계획 Task와 같은 `id`, `bl`, `role`(역할명), `unit`, `agent`(런타임), `model`, `effort`(없으면 null)를 쓴다. 팀 내부 분해를 맡기는 노드는 승인 받을 Planner·팀원 배정을 `members`에 같은 역할·작업 단위·런타임·모델·effort로 싣고 승인 화면에서 함께 보여 준다. 6·7단계 PM 정산·문서 확인·회고 배정도 포함한다.
+- 새 실행 승인 DAG 루트에 `routingVersion: 2`를 적는다. Task에 위 `plan`의 출력을 병합해 고정 단계 또는 `routing.mode`와 평가 원본을 보존한다. `model-selection.mjs choices`의 출력을 DAG의 `choices`로 넣어 승인 당시 치환표를 고정한다. 기존 BL 규모를 표시할 때만 별도로 `complexity`·`dims`를 쓴다.
+- 승인에 쓰는 워커 노드에는 계획 Task와 같은 `id`, `bl`, `role`(역할명), `unit`, `agent`(런타임), `model`, `effort`(없으면 null)를 쓴다. 6·7단계 PM 정산·문서 확인·회고 배정도 포함한다.
 - 사람 승인은 `kind: approval`, 그 밖의 비실행 이정표는 `kind: milestone`으로 명시한다. 두 종류에는 모델 배정을 적지 않는다.
 - 수정 Task가 있는 계획은 스윔레인 입력에 `rounds`를 반드시 적는다. 계획 검토(`orca-launch.mjs review`)가 이것으로 검증, 수정, 재검 Task를 가른다. 노드 id는 모든 회차를 통틀어 한 번만 나오고, `n`은 정수다.
-- 수정, 재검, 시험 갱신, 문서 동기화, 회고 Task의 노드에는 `conditional: true`를 붙인다. 조건이 맞지 않으면 코디네이터가 워커 없이 `skip`으로 닫는다. `skip`은 이 표시가 있거나 `rounds`의 수정·재검 Task에만 쓸 수 있다.
+- 수정, 재검, 시험 갱신, 문서 동기화, 회고 Task의 노드에는 `conditional: true`를 붙인다. 조건이 맞지 않으면 코디네이터가 워커 없이 `skip`으로 닫는다. `skip`은 이 표시가 있거나 `rounds`의 수정·재검 Task에만 쓸 수 있다. 시험 갱신 Task는 구현하는 에이전트마다 하나씩 둔다([병렬 규칙](references/parallel-rules.md) 6). 실패를 받은 것만 뜨고 나머지는 `skip`으로 닫힌다.
 - 재검이 아닌 검증 Task를 수정 Task 뒤에 꼭 두어야 하면 그 노드에 `afterFix`로 사유를 적고 계획서에도 사유를 쓴다. 없으면 계획 검토가 거부한다.
 - 필드 형식은 각 스킬의 입력 절이 정본이다. 여기에 옮겨 적지 않는다.
 - 계획 승인 전에는 모든 노드의 상태를 대기로 둔다. 실행 중의 상태는 장부에서 가져온다.

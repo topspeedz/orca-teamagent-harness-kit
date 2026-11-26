@@ -9,22 +9,14 @@ export function applyChoices(dag, documents) {
   if (dag.routingVersion !== 2 || !Array.isArray(documents)) throw new Error('v2 DAG와 선택 문서 배열이 필요합니다');
   const drawing = createHash('sha256').update(JSON.stringify(dag)).digest('hex');
   const result = structuredClone(dag);
-  const entries = new Map();
-  for (const node of result.nodes) {
-    entries.set(node.id, { row: node });
-    for (const member of node.members ?? []) {
-      const key = [node.id, member.role, member.unit].map(s => encodeURIComponent(s).replaceAll('~', '%7E')).join('~');
-      entries.set(key, { row: member, parent: node.id });
-    }
-  }
+  const entries = new Map(result.nodes.map(node => [node.id, node]));
   const codex = dag.choices?.codex ?? {};
   const applied = new Set();
   let skipped = 0;
   for (const { id, data } of documents) {
     if (data?.drawing !== drawing) { skipped++; continue; }
-    const { row, parent } = entries.get(id) ?? {};
+    const row = entries.get(id);
     if (!row?.routing || row.fixed || applied.has(id)) throw new Error('고정·중복 또는 대상이 없는 선택: ' + id);
-    if (parent !== data.parentId || (parent && (row.role !== data.role || row.unit !== data.unit))) throw new Error('팀원 선택 ID 불일치: ' + id);
     if (!['manual', 'auto'].includes(data.mode) || typeof data.codex !== 'boolean') throw new Error('위임·런타임 선택 확인 필요: ' + id);
     const efforts = Object.hasOwn(dag.choices.claude, data.model) && dag.choices.claude[data.model];
     if (!efforts || !(efforts.length ? efforts.includes(data.effort) : data.effort === null)) throw new Error('선택할 수 없는 모델·effort: ' + id);

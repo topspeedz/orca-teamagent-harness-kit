@@ -29,32 +29,22 @@ nav button:hover{background:#242b27;color:var(--ink)}
 .with-workflow .branch{flex:1;display:flex;align-items:flex-start;justify-content:center;padding-top:0}
 .with-workflow .branch::before,.with-workflow .branch::after{display:none}
 .root{position:relative;background:#232429;border:1px solid #55565d;padding:10px 20px;border-radius:9px;font-weight:650}
-.root:after,.branch:after,.reports:before{content:"";position:absolute;width:1px;background:#777980;height:18px;left:50%;top:100%}
+.root:after,.branch:after{content:"";position:absolute;width:1px;background:#777980;height:18px;left:50%;top:100%}
 .branches{display:flex;padding-top:18px}.branch{position:relative;padding:18px 8px 0}.branch:after{top:0}.branch:before{content:"";position:absolute;top:0;left:0;right:0;border-top:1px solid #777980}
 .branch:first-child:before{left:50%}.branch:last-child:before{right:50%}
-.group{display:grid;gap:10px;text-align:center;width:348px;padding:16px;border:1.4px solid var(--panel-stroke);border-radius:15px;background:var(--panel-fill)}
-.group{--panel-fill:color-mix(in srgb,var(--tone) 18%,#101012);--panel-stroke:color-mix(in srgb,var(--tone) 63%,#101012);--lead-fill:color-mix(in srgb,var(--tone) 34%,#101012);--card-fill:color-mix(in srgb,var(--tone) 14%,#101012);--card-stroke:color-mix(in srgb,var(--tone) 43%,#101012);--tag-bg:color-mix(in srgb,var(--tone) 7%,#101012);--tag-stroke:var(--card-stroke);border-top:3px solid var(--tone)}
-.group h3{margin:0;font-size:25px;font-weight:400;color:var(--tone)}
-.team-heading h3{line-height:32px}
-.team-heading small{display:block;margin-top:4px;font-size:13px;line-height:18px;font-weight:400;color:#aeb6b1}
-.members{display:grid;gap:12px}
-.independent-roles{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),348px));gap:12px;--tone:#bfc7c3;--card-fill:#242828;--card-stroke:#525a56;--tag-bg:#1c1f1e;--tag-stroke:#464d49}
+.independent-roles{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),348px));gap:12px}
 .independent-roles h3{grid-column:1/-1;margin:0;font-size:18px}
-.reports{position:relative;margin-top:8px}
-.reports:before{top:-18px}
-.node{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;overflow:hidden;min-width:0;width:100%;text-align:left;border:1px solid var(--card-stroke);border-radius:10px;background:var(--card-fill);color:var(--ink);padding:16px;transition:filter .12s}
+.node{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;overflow:hidden;min-width:0;width:100%;text-align:left;border:1px solid var(--card-stroke);border-radius:10px;background:var(--card-fill);color:var(--ink);padding:16px;transition:filter .12s;--card-fill:color-mix(in srgb,var(--tone) 14%,#101012);--card-stroke:color-mix(in srgb,var(--tone) 43%,#101012);--tag-bg:color-mix(in srgb,var(--tone) 7%,#101012);--tag-stroke:var(--card-stroke)}
+.branch>.node{width:348px}
 .node strong{font-size:16.5px;font-weight:600;overflow-wrap:anywhere}
 .node small{color:var(--tone);font-size:14px}
 .node .summary{color:#c0c7c4;font-size:15px;line-height:22px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.node.lead{background:var(--lead-fill);border:2px solid var(--tone);padding-right:44px}
-.ribbon{position:absolute;top:10px;right:-24px;width:82px;transform:rotate(45deg);text-align:center;font-size:12px;color:#171719;background:var(--tone)}
 .node:hover,.node:focus-visible{filter:brightness(1.25)}
 .role-tags,.skill-tags{display:flex;flex-wrap:wrap;gap:6px}
 .card-footer{display:flex;align-items:flex-end;flex-wrap:wrap;gap:6px;width:100%;margin-top:auto;padding-top:8px}
 .card-footer .role-tags{flex:1 1 130px}.card-footer i{font-style:normal;border:1px solid var(--card-stroke);border-radius:5px;padding:2px 5px}
 .configs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;margin-left:auto}
 .config-pair{display:inline-flex;gap:2px;color:var(--tone);font:12px/1.6 Consolas,monospace}
-.lead .card-footer{width:calc(100% + 28px)}
 .role-tags i{background:var(--tag-bg);border-color:var(--tag-stroke);color:var(--tone);font-family:inherit;font-size:12px;font-style:normal;line-height:21px;padding:0 7px;overflow-wrap:anywhere}
 .skill-tags{gap:4px;max-width:100%}
 .skill-tag{display:inline-block;background:#3a3324;color:#e2c98a;border-radius:4px;padding:2px 7px;font:400 12px/1.5 "DM Mono",monospace;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}

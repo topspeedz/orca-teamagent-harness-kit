@@ -5,10 +5,10 @@
   const preview = document.getElementById('node-preview');
   const dialog = document.getElementById('node-dialog');
   const fields = dialog.querySelector('dl');
-  const names = { id: 'Task ID', sub: '작업 내용', lane: '레인', col: '슬롯', row: '행', bl: '백로그', status: '상태', kind: '종류', write: '외부 쓰기', agent: '런타임', role: '역할', unit: '작업 단위', model: '모델', effort: 'effort', base: '기준값', recommended: '추천', why: '추천 근거', fixed: '고정 배정', complexity: '복잡도', dims: '차원별 점수', members: '팀 내부 배정', overrideReason: '사용자 예외' };
+  const names = { id: 'Task ID', sub: '작업 내용', lane: '레인', col: '슬롯', row: '행', bl: '백로그', status: '상태', kind: '종류', write: '외부 쓰기', agent: '런타임', role: '역할', unit: '작업 단위', model: '모델', effort: 'effort', base: '기준값', recommended: '추천', why: '추천 근거', fixed: '고정 배정', complexity: '복잡도', dims: '차원별 점수', overrideReason: '사용자 예외' };
   let active;
   function showPreview(card) {
-    // Opens when the two lines are cut off, or when the card carries rounds/team members (hover lines).
+    // Opens when the two lines are cut off, or when the card carries rounds (hover lines).
     const extra = hover[card.dataset.index] ?? [];
     if (dialog.open || (!extra.length && ![...card.querySelectorAll('.node-copy > *')].some(el => el.scrollWidth > el.clientWidth))) return;
     active = card;

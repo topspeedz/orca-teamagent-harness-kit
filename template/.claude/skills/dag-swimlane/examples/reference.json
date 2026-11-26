@@ -1,15 +1,15 @@
 {
   "title": "샘플 DAG",
   "heading": "샘플 기능 — 작업 DAG (스윔레인)",
-  "sub": "<b>샘플:</b> 레인 = 팀, 열 = 순서. <b>같은 열 = 병렬</b>. 화살표 = 선행 의존. 가로로 스크롤해서 보세요.",
+  "sub": "<b>샘플:</b> 레인 = 에이전트, 열 = 순서. <b>같은 열 = 병렬</b>. 화살표 = 선행 의존. 가로로 스크롤해서 보세요.",
   "aria": "같은 열은 병렬: PM 뒤 T1∥T2, T3∥T5∥ADR, T4∥T6∥T7, T8, 검증 3종 병렬, 수정, 보고, 회고 순.",
   "columns": ["BL 정리", "웨이브 ①", "웨이브 ②", "웨이브 ③", "웨이브 ④", "검증 (병렬)", "수정", "보고", "회고"],
   "lanes": [
-    { "id": "plan", "name": "기획 팀", "roles": ["product-manager"], "tone": "plan" },
-    { "id": "dev", "name": "개발 팀", "roles": ["developer", "· 리드 경유"], "tone": "dev" },
-    { "id": "verify", "name": "검증 팀", "roles": ["DR · CR · QA"], "tone": "verify" },
+    { "id": "plan", "name": "기획", "roles": ["product-manager"], "tone": "plan" },
+    { "id": "dev", "name": "프론트엔드", "roles": ["frontend"], "tone": "dev" },
+    { "id": "verify", "name": "검증", "roles": ["verifier"], "tone": "verify" },
     { "id": "coord", "name": "코디네이터", "tone": "coord" },
-    { "id": "harness", "name": "하네스 팀", "tone": "harness" }
+    { "id": "harness", "name": "하네스", "tone": "harness" }
   ],
   "nodes": [
     { "id": "pm", "lane": "plan", "col": 0, "title": "BL 정리", "sub": "BL-0001~0012", "status": "done", "agent": "claude", "model": "opus", "effort": "medium" },
