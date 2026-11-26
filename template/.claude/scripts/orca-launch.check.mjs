@@ -1774,7 +1774,8 @@ await ta(async () => {
 
 // wait: the model is woken only by mail it has to act on
 {
-  const msg = (id, type, extra = {}) => ({ id, type, from_handle: 'dispatch:ctx_1', subject: id, body: 'b', created_at: '2026-01-02T00:00:10Z', payload: '{}', ...extra });
+  const at = (seconds) => new Date(Date.UTC(2000, 0, 2, 0, 0, seconds)).toISOString();
+  const msg = (id, type, extra = {}) => ({ id, type, from_handle: 'dispatch:ctx_1', subject: id, body: 'b', created_at: at(10), payload: '{}', ...extra });
   const done = (id, dispatchId, at) => msg(id, 'worker_done', { created_at: at, payload: JSON.stringify({ dispatchId }) });
   const fakeWait = (batches, inbox = []) => {
     const fs = {}, calls = [];
@@ -1786,7 +1787,7 @@ await ta(async () => {
       },
       read: (p) => { if (!(p in fs)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return fs[p]; },
       write: (p, text) => { fs[p] = text; },
-      now: () => '2026-01-02T00:00:00.000Z',
+      now: () => at(0),
     } };
   };
   const W = ['wait', '--inbox', 'run:run_1', '--state', 's.json'];
@@ -1802,19 +1803,19 @@ await ta(async () => {
     const r = await main(W, f.deps);
     assert.equal(r.code, 0, JSON.stringify(r.out));
     assert.deepEqual(ids(r), ['m1']);
-    assert.deepEqual(r.out.messages[0], { id: 'm1', type: 'question', from: 'dispatch:ctx_1', subject: 'm1', body: 'b', payload: {}, at: '2026-01-02T00:00:10Z' });
+    assert.deepEqual(r.out.messages[0], { id: 'm1', type: 'question', from: 'dispatch:ctx_1', subject: 'm1', body: 'b', payload: {}, at: at(10) });
     assert.equal(f.calls.length, 2);
     assert.deepEqual(f.calls[0], ['orchestration', 'check', '--wait', '--types', 'worker_done,escalation,question,status', '--timeout-ms', '1800000', '--run', 'run_1', '--json']);
   });
   // mail already handed over is not handed over again, and a worker's resend of worker_done is dropped
   await ta(async () => {
-    const f = fakeWait([[done('d1', 'ctx_9', '2026-01-02T00:00:10Z')], [done('d1', 'ctx_9', '2026-01-02T00:00:10Z'), done('d2', 'ctx_9', '2026-01-02T00:00:13Z'), msg('m2', 'status')]]);
+    const f = fakeWait([[done('d1', 'ctx_9', at(10))], [done('d1', 'ctx_9', at(10)), done('d2', 'ctx_9', at(13)), msg('m2', 'status')]]);
     assert.deepEqual(ids(await main(W, f.deps)), ['d1']);
     assert.deepEqual(ids(await main(W, f.deps)), ['m2']);
   });
   // a timeout looks once at the inbox for mail another check took; older mail than the first wait is left alone
   await ta(async () => {
-    const f = fakeWait([[]], [msg('old', 'worker_done', { created_at: '2026-01-01T23:59:00Z' }), msg('lost', 'escalation')]);
+    const f = fakeWait([[]], [msg('old', 'worker_done', { created_at: at(-60) }), msg('lost', 'escalation')]);
     const r = await main(W, f.deps);
     assert.deepEqual(ids(r), ['lost']);
     assert.deepEqual(f.calls[1], ['orchestration', 'inbox', '--terminal', 'run:run_1', '--limit', '5', '--full', '--json']);

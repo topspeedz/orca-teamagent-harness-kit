@@ -102,6 +102,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | `defect-ledger.mjs` | 리포트의 `## 결함` 표를 장부의 `## 결함 원장`에 옮긴다. 증거가 없는 High는 Medium으로 기록하고, 이미 있는 행은 다시 쓰지 않는다 |
 | `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
 | `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정하고, 그 Task의 산출물 파일이 실제로 있는지 확인한다 |
+| `test-ledger.mjs` | 전체 테스트의 결과 JSON(vitest, jest)을 테스트 케이스 장부의 최근 결과와 추적표의 `구현됨`·`검증됨`에 옮긴다. 실행 결과에 없는 케이스는 그대로 두고 목록으로 낸다 |
 | `coordinator-settings.mjs` | allowlist를 읽어 코디네이터 전용 설정 파일을 생성한다 |
 | `browser/launch.cjs`, `browser/probe-fps.cjs` | 화면 캡처, 3D·WebGL 실측, 로그인이 필요한 검증을 Playwright MCP 밖에서 돌리는 런처와 GPU 실측 스크립트. 비밀값은 dotenv 파일에서만 읽고 로그에서 가린다 |
 

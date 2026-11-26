@@ -104,6 +104,7 @@ Domain teams such as development or design are not included. Step 7 of `setup` r
 | `defect-ledger.mjs` | Copies the report's `## 결함` table into the ledger's `## 결함 원장`. A High row with no evidence is recorded as Medium, and an existing row is never rewritten |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
+| `test-ledger.mjs` | Copies the JSON result of the full test run (vitest, jest) into the latest-result column of the test case ledger and switches `구현됨`/`검증됨` in the traceability matrix. A case missing from the run keeps its result and is listed |
 | `coordinator-settings.mjs` | Reads the allowlist and generates the coordinator-only settings file |
 | `browser/launch.cjs`, `browser/probe-fps.cjs` | A launcher and a GPU probe for work that stays outside Playwright MCP: screenshot batches, 3D and WebGL measurement, and checks that need a login. Secrets are read only from a dotenv file and masked in logs |
 
