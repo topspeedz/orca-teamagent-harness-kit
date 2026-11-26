@@ -88,6 +88,8 @@ description: "결과가 맞는지 판정하는 검증 담당. 코드를 읽는 �
 | `docs/09-testing/test-cases.md` | 전체 | 작성 |
 | `docs/10-traceability/rtm.md` | 전체 | 작성 |
 
+검증한 테스트 케이스와 요구사항 추적이 바뀌면 같은 Task 안에서 `docs-management`로 이 문서의 해당 절을 고친다.
+
 ## 직접 협업
 
 | 상대 | 협의 주제 | 목적 | 한도 |

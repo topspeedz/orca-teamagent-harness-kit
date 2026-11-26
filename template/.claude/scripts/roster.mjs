@@ -15,7 +15,7 @@ export function readRoster(root = '.') {
     }
     throw new Error(missing);
   }
-  const lines = readFileSync(file, 'utf8').replace(/^﻿/, '').split(/\r?\n/);
+  const lines = readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/);
   const start = lines.findIndex(l => l.startsWith('|') && cells(l).join('|') === header);
   if (start < 0) throw new Error(missing);
   const rows = [];
