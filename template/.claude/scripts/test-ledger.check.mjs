@@ -23,7 +23,7 @@ const CASES = `# 테스트 케이스 장부
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | TC-CART-001 | 담기 | 높음 | FR-001 | 없음 | 요약 | 담긴다 | \`tests/cart.test.ts\` › \`adds a line\` | 미실행 |
 | TC-CART-002 | 빼기 | 높음 | FR-001 | 없음 | 요약 | 빠진다 | \`tests/cart.test.ts\` › \`removes a line\` | 통과 (old-phase) |
-| TC-CART-003 | 합계 | 보통 | FR-002 | 없음 | 요약 | 맞다 | \`tests/total.test.ts\` › \`sums\` | 미실행 |
+| TC-CART-003 | 합계 | 보통 | FR-002 | 없음 | 요약 | 맞다 | \`tests/total.test.ts\` › \`sums the lines and …\` | 미실행 |
 | TC-CART-004 | 이름이 바뀐 테스트 | 보통 | FR-003 | 없음 | 요약 | 맞다 | \`tests/cart.test.ts\` › \`renamed since\` | 통과 (old-phase) |
 | TC-CART-005 | 손으로 | 보통 | FR-004 | 없음 | 절차 | 보인다 | 손으로 한다 — 아래 절차 | 통과 (old-phase) |
 `;
@@ -49,7 +49,7 @@ const RESULTS = {
       { title: 'adds a line', fullName: 'cart adds a line', status: 'failed' },
       { title: 'removes a line', fullName: 'cart removes a line', status: 'passed' },
     ] },
-    { name: '/repo/tests/total.test.ts', assertionResults: [{ title: 'sums', fullName: 'total sums', status: 'passed' }] },
+    { name: '/repo/tests/total.test.ts', assertionResults: [{ title: 'sums the lines and the shipping fee', fullName: 'total sums the lines and the shipping fee', status: 'passed' }] },
   ],
 };
 
@@ -70,6 +70,7 @@ function world() {
 const cell = (text, id, i) => text.split('\n').find((l) => l.startsWith(`| ${id} `)).split('|')[i].trim();
 
 // results go into the 최근 결과 column; a test that is not in the run keeps what it had; a hand-run case is left alone
+// a name the ledger cut short with an ellipsis (TC-CART-003) is found by the part before it
 {
   const w = world();
   const { code, out } = w.run('--command', 'npm test');
