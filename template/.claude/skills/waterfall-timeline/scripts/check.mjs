@@ -36,26 +36,27 @@ assert(ph.includes('class="uw"') && fh.includes('class="uw"')); // ✋ wait = ve
 const px=structuredClone(prog);px.tasks.forEach(t=>t.title="K9 · "+t.title);assert(renderProgress(px).includes("class=\"uw\"")); // stage-prefixed ✋ titles count as waits
 assert(ph.includes('uwait') && fh.includes('사용자 대기 15분') && fh.includes('= 작업 ')); // ✋ 설계 승인 10:05–10:20 = dashed, excluded from work time
 console.log('PASS: progress clock axis, now line, finished run (no now line, axis ends at last end), day change, validation, escaping');
-// from-orca.mjs: measured rows, ledger match, rework row, leader hold, approval states, scheduling → valid progress input.
+// from-orca.mjs: measured rows, ledger match, rework row, approval states, scheduling → valid progress input.
 const {fromOrca,ledgerMap}=await import('./from-orca.mjs');
 const plan={...structuredClone(source),title:'예제'};plan.tasks.find(t=>t.id==='UI').bl='BL-0001';
 const T=(id,spec,c,d)=>({id,spec,created_at:c,completed_at:d});
 const orcaTasks=[
-  T('task_a0','[역할: planner] 설계 등급: A','2026-10-31 00:00:00','2026-10-31T00:30:00Z'), // before the plan → own row
-  T('task_a1','[역할: planner] 계약 확인 등급: A','2026-10-31 00:40:00','2026-10-31T01:00:00Z'), // no BL → ledger match
-  T('task_a2','[역할: storefront-dev] UI · BL-0001 — 화면 등급: A','2026-10-31 01:05:00','2026-10-31T01:40:00Z'),
-  T('task_a3','[역할: storefront-dev] UI-FIX · BL-0001 — 수정 등급: B','2026-10-31 01:45:00','2026-10-31T01:50:00Z'),
-  T('task_a4','[역할: storefront-dev · 리드] 묶음 (BL-0001~0001) 등급: S','2026-10-31 01:02:00',null),
+  T('task_a0','[역할: product-manager] 설계 등급: A','2026-10-31 00:00:00','2026-10-31T00:30:00Z'), // before the plan → own row
+  T('task_a1','[역할: product-manager] 계약 확인 등급: A','2026-10-31 00:40:00','2026-10-31T01:00:00Z'), // no BL → ledger match
+  T('task_a2','[역할: frontend] UI · BL-0001 — 화면 등급: A','2026-10-31 01:05:00','2026-10-31T01:40:00Z'),
+  T('task_a3','[역할: frontend] UI-FIX · BL-0001 — 수정 등급: B','2026-10-31 01:45:00','2026-10-31T01:50:00Z'),
+  T('task_a4','[역할: verifier] 점검 등급: S','2026-10-31 01:02:00','2026-10-31T01:30:00Z'), // not in the plan rows → role lane
+  T('task_a6','[역할: frontend] 화면 다듬기 등급: B','2026-10-31 01:03:00','2026-10-31T01:30:00Z'),
+  T('task_a7','[역할: research] 조사 등급: B','2026-10-31 01:04:00','2026-10-31T01:30:00Z'),
   {...T('task_a5','[역할: visual-analyst] 상주 등급: A','2026-10-31 01:10:00',null),status:'ready'}, // failed dispatch → no row
 ];
-const fo=fromOrca({plan,orcaTasks,now:Date.parse('2026-10-31T02:00:00Z'),ledger:ledgerMap('| PLAN | — | planner | task_a1 / ctx_x |')});
+const fo=fromOrca({plan,orcaTasks,now:Date.parse('2026-10-31T02:00:00Z'),ledger:ledgerMap('| PLAN | — | product-manager | task_a1 / ctx_x |')});
 const row=(re)=>fo.tasks.find(t=>re.test(t.title));
 assert.equal(row(/^설계/).status,'done');
 assert.equal(row(/^PLAN /).start,'2026-10-31T09:40+09:00');
 assert.match(row(/^UI ↻ UI-FIX/).title,/수정/);
-assert.equal(row(/리더$/).status,'run');
+assert.equal(row(/^점검/).lane,'verify'); assert.equal(row(/^화면 다듬기/).lane,'dev'); assert.equal(row(/^조사/).lane,'plan');
 assert(row(/^DATA /).status==='wait' && Date.parse(row(/^DATA /).start)>=Date.parse('2026-10-31T02:00:00Z'));
-assert(Date.parse(row(/^QA /).start)>=Date.parse(row(/리더$/).end),'QA waits for the running bundle report');
 assert(row(/APPROVE|✋/).title.includes('미정'));
 assert(!row(/상주/),'failed (ready, uncompleted) Task is not drawn as running');
 renderProgress(fo); // must satisfy progress validation
@@ -65,15 +66,15 @@ assert(mg.tasks.length===prog.tasks.length*2 && mg.tasks[0].title.startsWith('K1
 assert.throws(()=>merge([],{title:'x'}),/required/);
 console.log('PASS: merge stage prefix, waits kept');
 // No plan: measured rows only + patch.tasks (✋ gates, remaining estimates).
-{const np=fromOrca({orcaTasks:[{id:'task_x',status:'completed',created_at:'2026-11-08 00:00:00',completed_at:'2026-11-08T00:10:00Z',spec:'[역할: docs-curator] 수집 A'}],now:Date.parse('2026-11-08T00:20:00Z'),title:'np',patch:{tasks:[{title:'✋ 승인',lane:'coord',status:'done',start:'2026-11-07T23:50+00:00',end:'2026-11-07T23:55+00:00'}]}});
+{const np=fromOrca({orcaTasks:[{id:'task_x',status:'completed',created_at:'2026-11-08 00:00:00',completed_at:'2026-11-08T00:10:00Z',spec:'[역할: doc-steward] 수집 A'}],now:Date.parse('2026-11-08T00:20:00Z'),title:'np',patch:{tasks:[{title:'✋ 승인',lane:'coord',status:'done',start:'2026-11-07T23:50+00:00',end:'2026-11-07T23:55+00:00'}]}});
 assert(np.tasks.length===2 && np.tasks[0].title==='✋ 승인' && np.tasks[1].status==='done'); renderProgress(np);}
 // Tasks registered all at once: start = latest dep completion (not created_at); member rows named from display_name.
 {const t0='2026-11-08 00:00:00';const rs=fromOrca({orcaTasks:[
- {id:'task_a',status:'completed',created_at:t0,completed_at:'2026-11-08T00:10:00Z',deps:'[]',spec:'[역할: qa-inspector] A'},
- {id:'task_b',status:'completed',created_at:t0,completed_at:'2026-11-08T00:30:00Z',deps:'["task_a"]',spec:'[역할: qa-inspector] B'},
+ {id:'task_a',status:'completed',created_at:t0,completed_at:'2026-11-08T00:10:00Z',deps:'[]',spec:'[역할: verifier] A'},
+ {id:'task_b',status:'completed',created_at:t0,completed_at:'2026-11-08T00:30:00Z',deps:'["task_a"]',spec:'[역할: verifier] B'},
  {id:'task_c',parent_id:'task_b',status:'completed',created_at:'2026-11-08 00:12:00',completed_at:'2026-11-08T00:20:00Z',spec:'[역할: unity-gameplay-engineer]\nTask: B-1',display_name:'[unity-gameplay-engineer - B-1] 칩 고침 (BL-0001,BL-...'}],
  now:Date.parse('2026-11-08T00:40:00Z'),title:'rs'});
 const row=(re)=>rs.tasks.find((t)=>re.test(t.title));
 assert.equal(row(/^B \(/).start,'2026-11-08T09:10+09:00'); assert.equal(row(/^A \(/).start,'2026-11-08T09:00+09:00');
 assert.equal(row(/B-1/).title,'B-1 칩 고침 (unity-gameplay-engineer)'); assert.equal(row(/B-1/).start,'2026-11-08T09:12+09:00'); renderProgress(rs);}
-console.log('PASS: from-orca measured/ledger/rework/leader/approval/scheduling');
+console.log('PASS: from-orca measured/ledger/rework/role lanes/approval/scheduling');

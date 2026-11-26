@@ -29,7 +29,7 @@ try {
   put('orca-tasks.json', { run: 'run_a', tasks: {
     T01: { orca: 'task_b', previous: [{ orca: 'task_old' }] }, T02: { orca: 'task_a' }, T03: { orca: 'task_c' },
   } });
-  const task = { spec: '[역할: qa-inspector] BL-0001', run_id: 'run_a', created_at: '2026-10-31 00:00:00' };
+  const task = { spec: '[역할: verifier] BL-0001', run_id: 'run_a', created_at: '2026-10-31 00:00:00' };
   put('capture.json', { result: { tasks: [
     { ...task, id: 'task_a', status: 'dispatched', created_at: '2026-10-31 00:25:00' },
     { ...task, id: 'task_b', status: 'completed', started_at: '2026-10-31 00:10:00', completed_at: '2026-10-31T00:20:00Z' },

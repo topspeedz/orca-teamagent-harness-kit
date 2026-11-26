@@ -80,9 +80,7 @@ function routingRows(r) {
     ['라우터 추천', r.claude + ' → ' + AGENT[r.runtime].name + ' · ' + pairOf(r.model, r.effort)]);
   return rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
 }
-// Member choices survive reordering within a team. The launch record identifies them by parent, role and unit.
-const memberKey = (id, m) => [id, m.role, m.unit].map(k => encodeURIComponent(k).replaceAll('~', '%7E')).join('~');
-function pickForm(n, choices, id, parent) {
+function pickForm(n, choices, id) {
   const open = `<div xmlns="http://www.w3.org/1999/xhtml" class="pick${n.fixed ? ' fixed' : ''}"`;
   if (n.fixed) return `${open}><div class="fx">${esc(pairOf(n.model, n.effort))} (고정)</div></div>`;
   const r = n.routing, defaultPair = r ? (r.mode === 'manual' ? n.base : '') : n.base;
@@ -94,11 +92,9 @@ function pickForm(n, choices, id, parent) {
   const codex = n.agent === 'codex';
   const attrs = `data-node="${esc(id)}" data-base="${esc(n.base)}" data-codex="${codex}"`;
   if (r) {
-    const member = parent ? ` data-parent="${esc(parent)}" data-role="${esc(n.role)}" data-unit="${esc(n.unit)}"` : '';
-    const title = parent ? parent + ' · ' + n.role + ' · ' + n.unit : n.title;
-    return `${open} ${attrs} data-recommended="${esc(n.recommended)}"${member}><div class="cplx">${esc(scoreLine(r))}</div>`
+    return `${open} ${attrs} data-recommended="${esc(n.recommended)}"><div class="cplx">${esc(scoreLine(r))}</div>`
       + `<div>Haiku · ${esc(haikuLabels[r.haiku.status])}</div><div>추천 <b>${esc(n.recommended)}</b></div>`
-      + `<select aria-label="${esc(title)} 배정" disabled=""><option value=""${defaultPair === '' ? ' selected' : ''}>추천 사용 · 기동 직전 재평가</option>${groups}</select>`
+      + `<select aria-label="${esc(n.title)} 배정" disabled=""><option value=""${defaultPair === '' ? ' selected' : ''}>추천 사용 · 기동 직전 재평가</option>${groups}</select>`
       + `<label><input type="checkbox"${codex ? ' checked=""' : ''} disabled=""/> ${Object.keys(choices.codex).length ? 'Codex로 실행' : 'Codex 치환표 없음'}</label><div class="cx"></div></div>`;
   }
   const cx = n.complexity != null ? `복잡도 ${n.complexity}${n.dims ? ` (${n.dims})` : ''}` : 'BL 없음 · 모델 표 값';
@@ -151,7 +147,7 @@ const PICK_JS = `(async () => {
         tag.querySelector('.ef').textContent = ${JSON.stringify(EFFORT)}[effort] || '';
         tag.querySelector('rect').setAttribute('width', effort ? 50 : 22);
       }
-      const label = p.dataset.parent ? [p.dataset.parent, p.dataset.role, p.dataset.unit].join(' · ') : p.dataset.node;
+      const label = p.dataset.node;
       if (changed) diff.push(adaptive ? label + ' · ' + (manual ? '직접 지정' : '기동 재평가') + ' · ' + p.querySelector('.cx').textContent
         : label + ': ' + shown(p.dataset.base, was) + ' → ' + chosen);
     }
@@ -189,7 +185,6 @@ const PICK_JS = `(async () => {
       sync();
       const [model, effort = null] = pair(p, s).split('/'), body = { model, effort, codex: c.checked, at: Date.now() };
       if (p.dataset.recommended) Object.assign(body, { mode: s.value ? 'manual' : 'auto', drawing });
-      if (p.dataset.parent) Object.assign(body, { parentId: p.dataset.parent, role: p.dataset.role, unit: p.dataset.unit });
       if (p.dataset.recommended) remember(p.dataset.node, body);
       if (!db) return;
       queue = queue.then(() => db.doc('choices/' + p.dataset.node).set(body)).catch(() => readOnly(download ? '자동 저장에 실패했습니다. 변경한 배정은 선택 파일로 저장하세요.' : '저장 실패: 이 화면에 쓰기 권한이 없거나 연결이 끊겼습니다.'));
@@ -280,13 +275,13 @@ export function render(input, actual = []) {
     if (!Number.isInteger(n.col) || n.col < 0 || n.col >= columns.length) fail(`node ${n.id}: col out of range`);
     if (!STATUS[n.status]) fail(`node ${n.id}: status must be done|run|wait`);
     if (!n.title || !n.sub) fail(`node ${n.id}: title and sub are both required (2-line card)`);
+    if (n.members) fail(`node ${n.id}: members는 없어졌습니다 — 작업마다 에이전트 하나에 직접 배정합니다`);
     const k = `${n.lane}/${n.col}`;
     const i = autoRow.get(k) ?? 0;
     autoRow.set(k, i + 1);
     n.row ??= i;
     n.pick = !!(choices && AGENT[n.agent]);
     if (AGENT[n.agent] && (choices || adaptive || n.routing)) preparePick(n, n.id);
-    for (const m of n.members ?? []) if (m.routing || adaptive) preparePick(m, memberKey(n.id, m));
     ents.set(n.id, n);
   }
 
@@ -392,7 +387,7 @@ export function render(input, actual = []) {
     + '.pick .cplx,.pick .cx,.pick .fx{font:12px var(--mono)}.pick .fx{font-size:13px;color:var(--fg);padding:4px 6px;border:1px dashed var(--line);border-radius:4px}'
     + '.pick select{width:100%;height:26px;font:13px var(--mono);color:var(--fg);background:var(--node);border:1px solid var(--line);border-radius:4px}.pick select:focus-visible,.pick input:focus-visible{outline:2px solid var(--pick-line);outline-offset:1px}'
     + '.pick label{display:flex;flex-wrap:wrap;align-items:center;gap:4px;color:var(--fg)}.pick .why{font-size:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}'
-    + '.pick[data-recommended] .cx{overflow-wrap:anywhere;color:var(--fg)}.member-evidence{margin:4px 0 12px}.member-evidence dt{font-weight:600}.member-evidence dd{margin:0 0 6px;white-space:pre-wrap}.notes .pick b{display:inline}'
+    + '.pick[data-recommended] .cx{overflow-wrap:anywhere;color:var(--fg)}.notes .pick b{display:inline}'
     + '.pick-diff{margin:0 0 12px;font-size:14px}.pick-diff ul{margin:4px 0 0;padding-left:18px;font:13px var(--mono)}</style>');
   out.push(`<h1>${esc(spec.heading ?? spec.title)}</h1>`);
   if (spec.sub) out.push(`<p class="sub">${spec.sub}</p>`);
@@ -442,12 +437,8 @@ export function render(input, actual = []) {
       + (n.pick ? `<foreignObject x="${n.x}" y="${n.y + n.h + 12}" width="${n.w}" height="${ph - 12}">${pickForm(n, choices, n.id)}</foreignObject>` : ''));
   }
   out.push('</g></svg></div>');
-  // Team members and rounds go into each card's hover preview (node-data `hover`), not below the figure.
-  // The member section below stays only when `choices` draws member picks that need a form.
+  // Rounds go into each card's hover preview (node-data `hover`), not below the figure.
   const pairText = x => [x.agent, [x.model, x.effort].filter(Boolean).join('/')].filter(Boolean).join(' ') || '배정 없음';
-  const stText = { done: '완료', run: '진행', wait: '대기', failed: '실패' };
-  const memberLine = m => `· ${[m.id, [m.role, m.unit].filter(Boolean).join(' / ')].filter(Boolean).join(' ')} — ${pairText(m)}`
-    + (m.status && m.status !== 'done' ? ` (${stText[m.status] ?? m.status})` : '') + (m.fixed ? ' (고정)' : '') + (m.overrideReason ? ` · 사용자 예외 ${m.overrideReason}` : '');
   const byNode = new Map(nodes.map(n => [n.id, n]));
   const fixCompare = rounds.length > 1 ? (() => {
     const pairs = rounds.map(r => `${r.n}회차 ${listOf(r.fix).map(id => pairText(byNode.get(id))).join(', ')}`);
@@ -463,27 +454,8 @@ export function render(input, actual = []) {
       if (r.note && as.includes('수정')) lines.push(r.note);
       if (fixCompare && as.includes('수정')) lines.push(fixCompare);
     }
-    if (n.members?.length) lines.push('팀원', ...n.members.map(memberLine));
     return lines;
   });
-  const leads = choices ? nodes.filter(n => n.members?.length) : [];
-  if (leads.length) {
-    out.push('<section class="notes" aria-label="팀 내부 배정">');
-    for (const n of leads) {
-      out.push(`<div><b>${esc(n.id)} · 팀 내부 배정</b><ul>`);
-      for (const m of n.members) {
-        const row = `${m.role} / ${m.unit} · ${m.agent} ${m.model} · effort ${m.effort ?? '없음'}`;
-        out.push(`<li>${esc(row)}${m.fixed ? ' (고정)' : ''}${m.overrideReason ? ' · 사용자 예외 ' + esc(m.overrideReason) : ''}`);
-        if (m.routing && !m.fixed) {
-          if (choices) out.push(pickForm(m, choices, memberKey(n.id, m), n.id));
-          out.push(`<details class="member-evidence"><summary>점수 근거</summary><dl>${routingRows(m.routing)}</dl></details>`);
-        }
-        out.push('</li>');
-      }
-      out.push('</ul></div>');
-    }
-    out.push('</section>');
-  }
   out.push('<div class="notes">');
   out.push(...notes.map(n => `<div><b>${n.title}</b>${n.body}</div>`), '</div>');
   for (const [i, n] of nodes.entries()) if (n.routing && !n.fixed) out.push(`<template id="routing-${i}">${routingRows(n.routing)}</template>`);
@@ -512,18 +484,12 @@ function selfTest() {
   const review = load('reference.json');
   const gate = review.nodes.find(n => n.id === 'pm');
   Object.assign(gate, { kind: 'approval', title: '실행 승인', agent: null, model: null, effort: null });
-  const lead = review.nodes.find(n => n.id === 't1');
-  Object.assign(lead, { role: 'qa-inspector', unit: '리드', members: [
-    { role: 'planner', unit: '내부 분해', agent: 'claude', model: 'opus', effort: 'high' },
-    { role: 'code-reviewer', unit: '코드 <리뷰>', agent: 'codex', model: 'review-model', effort: null },
-  ] });
-  const page = render(review).html; // existing edges enter and leave t1; pm → t1 is the approval gate
-  // members go to the hover preview data, not a section below (no choices here)
-  if (page.includes('팀 내부 배정</b>')) fail('팀장 DAG: 팀 내부 배정 칸이 아래에 남음');
-  for (const v of ['실행 승인', '"팀원"', '· planner / 내부 분해 — claude opus/high',
-    '· code-reviewer / 코드 \\u003c리뷰> — codex review-model']) {
-    if (!page.includes(v)) fail('팀장 DAG에 누락: ' + v);
-  }
+  const page = render(review).html;
+  if (!page.includes('실행 승인')) fail('self-test: approval gate missing');
+  const withMembers = structuredClone(review);
+  withMembers.nodes.find(n => n.id === 't1').members = [{ role: 'verifier', unit: '점검', agent: 'claude', model: 'opus', effort: 'high' }];
+  let mmsg = ''; try { render(withMembers); } catch (err) { mmsg = err.message; }
+  if (!/members는 없어졌습니다/.test(mmsg)) fail(`self-test: a node with members should fail, got "${mmsg}"`);
   if (render(load('reference.json')).html !== readFileSync(join(HERE, '..', 'assets', 'reference.html'), 'utf8').replace(/\r\n/g, '\n')) fail('reference output changed');
   // With `choices`: one pick per worker node, marks on the base/recommended options, codex box from the runtime.
   const pick = load('choices.json'), html = render(pick).html;
@@ -558,11 +524,10 @@ function selfTest() {
       scores, E: 6, claude: 'opus/high', runtime: n.agent, model, effort, haiku: { status: 'classified', scores: { U: 2 }, reason: '대안 둘을 검증한다.' },
     } });
   }
-  const task = v2.nodes.find(n => n.id === 't1');
-  task.members = [{ role: 'reviewer', unit: 'a/b~c', agent: 'claude', model: 'opus', effort: 'high', routing: { ...task.routing, mode: 'manual' } }];
+  v2.nodes.find(n => n.id === 't1').routing.mode = 'manual';
   const adaptivePage = render(v2).html;
   for (const expected of ['C2 U2 R2 V2 F0 · E6', 'Haiku · 경계 점수 판정', '&lt;대안 비교&gt;', '대안 둘을 검증한다.', '2×U(2) + V(2) + F(0) + 0 (C&lt;3) = 6',
-    'data-node="t1~reviewer~a%2Fb%7Ec"', 'data-parent="t1"', 'data-role="reviewer"', 'value="opus/high" selected>opus/high (추천값 고정)', 'value="" selected>추천 사용']) {
+    'value="opus/high" selected>opus/high (추천값 고정)', 'value="" selected>추천 사용']) {
     if (!adaptivePage.includes(expected)) fail('self-test: v2 approval missing ' + expected);
   }
   const claudeOnly = structuredClone(v2);
@@ -571,17 +536,12 @@ function selfTest() {
   Object.assign(codexNode, { agent: 'claude', model: 'opus', effort: 'high' });
   Object.assign(codexNode.routing, { runtime: 'claude', model: 'opus', effort: 'high' });
   if (!render(claudeOnly).html.includes('Codex 치환표 없음')) fail('self-test: Claude approvals without a Codex table');
-  delete task.members[0].routing;
-  try { render(v2); fail('self-test: unassessed v2 team member accepted'); } catch (err) {
-    if (!err.message.includes('requires routing')) throw err;
-  }
   // rounds: edge labels, card badges and the per-round assignment section.
   const rs = load('reference.json');
-  rs.nodes.find(n => n.id === 't3').members = [{ id: 't3-1', role: 'engineer', agent: 'claude', model: 'opus', effort: 'high', status: 'failed' }];
   rs.rounds = [{ n: 1, verify: 'pm', fix: 't1', recheck: 't3' }, { n: 2, verify: ['t2'], fix: 't5' }];
   const rh = render(rs).html;
   for (const v of ['>수정 1회차<', '>재검 1회차<', '>수정 2회차<', '>1회차<', '>1회차 재검<', '"1회차 검증 — claude opus/medium"',
-    '"· t3-1 engineer — claude opus/high (실패)"', '수정 배정 비교: ', '회차마다 다르다']) if (!rh.includes(v)) fail(`self-test: rounds missing ${v}`);
+'수정 배정 비교: ', '회차마다 다르다']) if (!rh.includes(v)) fail(`self-test: rounds missing ${v}`);
   let rmsg = ''; try { render({ ...rs, rounds: [{ n: 1, verify: 'nope', fix: 't1' }] }); } catch (err) { rmsg = err.message; }
   if (!/unknown node nope/.test(rmsg)) fail('self-test: rounds should reject unknown node');
   console.log('self-test ok: reference counts match, crossing edge rejected, output without choices unchanged, choices picks and marks drawn, rounds labelled and listed');

@@ -9,15 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 const M = 60000;
 const LANE = { plan: 'plan', data: 'plan', design: 'design', dev: 'dev', media: 'dev', verify: 'verify', coord: 'coord', harness: 'harness' };
-const ROLE_LANE = [[/planner|product-manager|shopify-analyst|data-modeler|migration-manager|integration-reviewer/, 'plan'], [/blender-modeler|design-reviewer.*스펙/, 'design'],
-  [/code-reviewer|qa-inspector|visual-analyst|design-reviewer/, 'verify'], [/harness-engineer|docs-curator/, 'harness'], [/storefront-dev|cinematographer|brand-creative|creative-director|campaign/, 'dev']];
+const ROLE_LANE = [[/product-manager|research/, 'plan'], [/frontend|backend/, 'dev'], [/verifier/, 'verify'], [/harness-engineer|doc-steward/, 'harness']];
 // Orca: created_at "2026-10-31 00:53:27" (UTC, no zone), completed_at ISO with Z.
 const utc = (s) => (s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s.replace(' ', 'T') + 'Z') : null);
 const iso = (ms, off) => new Date(ms + off * M).toISOString().slice(0, 16) + (off === 540 ? '+09:00' : 'Z');
 const head = (spec) => String(spec ?? '').split(/등급:|\n/)[0];
 const strip = (s) => String(s).replace(/^\[역할:[^\]]*\]\s*/, '').trim();
 const role = (spec) => /^\[역할:\s*([^\]·]+)/.exec(String(spec ?? ''))?.[1].trim() ?? '';
-const isLead = (spec) => /^\[역할:[^\]]*·\s*리드\]/.test(String(spec ?? ''));
 // "BL-0921~0925" → 0921..0925; single "BL-0917" too.
 const bls = (text) => [...String(text).matchAll(/BL-(\d{4})(?:~(\d{4}))?/g)].flatMap(([, a, b]) => {
   const out = []; for (let n = +a; n <= +(b ?? a); n++) out.push('BL-' + String(n).padStart(4, '0')); return out;
@@ -51,11 +49,10 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
   for (const [id, extra] of Object.entries(patch.extraDeps ?? {})) pt.find((t) => t.id === id)?.deps.push(...extra);
   const byId = Object.fromEntries(pt.map((t) => [t.id, t]));
   const rows = [], end = {}, start = {};
-  // Match each non-leader Orca task to one plan task by its BL or plan ID in the spec head.
-  const leaders = [];
+  // Match each Orca task to one plan task by its BL or plan ID in the spec head.
   // Plan Tasks are often registered all at once when the Run starts, so created_at is not when work began.
   // Start = recorded launch; else when it became ready (latest dep completion, not before created_at),
-  // pulled back to its first child's creation if a member was launched earlier. Member Tasks keep created_at.
+  // pulled back to its first child's creation if a child was launched earlier. Child Tasks keep created_at.
   const byOid = new Map(orcaTasks.map((o) => [o.id, o]));
   const firstChild = new Map();
   for (const o of orcaTasks) if (o.parent_id) firstChild.set(o.parent_id, Math.min(firstChild.get(o.parent_id) ?? Infinity, utc(o.created_at)));
@@ -67,7 +64,7 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     for (const d of deps) { const e = utc(byOid.get(d)?.completed_at); if (e && e > s) s = e; }
     return Math.min(s, firstChild.get(o.id) ?? Infinity);
   };
-  // Member spec heads are often just "[역할: X]"; name the row from display_name "[X - U02-M1] 할 일 (BL-…)".
+  // Child spec heads are often just "[역할: X]"; name the row from display_name "[X - U02-M1] 할 일 (BL-…)".
   const memberName = (dn) => { const id = /- ([^\]]+)\]/.exec(dn ?? '')?.[1]; const rest = String(dn ?? '').replace(/^\[[^\]]*\]\s*/, '').replace(/\s*\(BL-.*$/, '').trim(); return [id, rest].filter(Boolean).join(' '); };
   for (const o of orcaTasks) {
     if (retired.has(o.id)) continue;
@@ -75,7 +72,6 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     if (!o.completed_at && o.status && o.status !== 'dispatched') continue;
     const s = startOfTask(o), e = utc(o.completed_at), h = head(o.spec);
     const exact = mapped.get(o.id);
-    if (isLead(o.spec)) { leaders.push({ o, s, e, planTask: byId[exact], members: new Set(bls(h)) }); continue; }
     const hit = exact ? (byId[exact] ? [byId[exact]] : []) : ledger[o.id] && byId[ledger[o.id]] ? [byId[ledger[o.id]]]
       : pt.filter((t) => (t.bl && bls(h).includes(t.bl)) || new RegExp(`(^|[\\]\\s])${t.id}([\\s·/]|$)`).test(h));
     if (hit.length === 1) {
@@ -91,27 +87,14 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
       rows.push({ id: o.id, title: (strip(h) || memberName(o.display_name)) + (r ? ` (${r})` : ''), lane: ROLE_LANE.find(([re]) => re.test(r))?.[1] ?? 'coord', status: e ? 'done' : 'run', s, e: e ?? now, deps: [] });
     }
   }
-  // Leaders: coord rows; still running → end = max(now + 10 min, members' ends). Tasks fed by a running bundle also wait for its report.
-  for (const l of leaders) {
-    const memberIds = pt.filter((t) => t.id !== l.planTask?.id && t.bl && l.members.has(t.bl)).map((t) => t.id);
-    const key = l.planTask?.id ?? 'lead:' + l.o.id;
-    const name = strip(l.o.display_name || head(l.o.spec));
-    l.row = { id: key, title: `${l.planTask?.title ?? name} — 리더`, lane: 'coord', status: l.e ? 'done' : 'run', s: l.s, deps: l.planTask?.deps ?? [], memberIds };
-    rows.push(l.row);
-    if (l.planTask) { start[key] = l.s; end[key] = l.e ?? now; }
-    if (!l.e) for (const t of pt) if (t.id !== key && !memberIds.includes(t.id) && !t.deps.includes(key) && t.deps.some((d) => memberIds.includes(d))) t.deps.push(key);
-  }
   // Schedule the rest from now: earliest-startable first, ties → longest remaining path. Only 'work' uses slots.
   const todo = pt.filter((t) => !(t.id in end));
   const tail = {};
   const tailOf = (id) => (tail[id] ??= (byId[id]?.dur ?? 0) + Math.max(0, ...todo.filter((t) => t.deps.includes(id)).map((t) => tailOf(t.id))));
   const slots = Array(slotCount ?? plan.maxWorkers ?? plan.assumptions?.maxWorkers ?? 3).fill(now);
-  const leaderEnd = () => { for (const l of leaders) if (!l.e) end[l.row.id] = Math.max(now + 10 * M, ...l.row.memberIds.map((id) => end[id] ?? now)); };
-  leaderEnd();
   const pending = [...todo];
   while (pending.length) {
-    leaderEnd();
-    const ready = pending.filter((t) => t.deps.every((d) => d in end || !(d in byId) && !d.startsWith('lead:')));
+    const ready = pending.filter((t) => t.deps.every((d) => d in end || !(d in byId)));
     assert(ready.length, 'unschedulable (cycle or missing dep): ' + pending.map((t) => t.id).join(','));
     const free = Math.min(...slots);
     const depEnd = (t) => Math.max(0, ...t.deps.map((d) => end[d] ?? 0));
@@ -122,9 +105,7 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     if (t.kind === 'approval') {
       const preds = t.deps.filter((d) => d in byId);
       const allDone = preds.every((d) => rows.find((r) => r.id === d)?.status === 'done');
-      // A successor counts as started when its own Task or its team leader's bundle has started.
-      const leadStart = (id) => leaders.find((l) => l.row.memberIds.includes(id))?.s;
-      const succStarts = pt.filter((x) => x.deps.includes(t.id)).map((x) => start[x.id] ?? leadStart(x.id)).filter((v) => v != null);
+      const succStarts = pt.filter((x) => x.deps.includes(t.id)).map((x) => start[x.id]).filter((v) => v != null);
       if (allDone && preds.length) {
         s = Math.max(...preds.map((d) => end[d]));
         if (succStarts.length) { e = Math.min(...succStarts); status = 'done'; } else { e = Math.max(s, now); status = 'run'; }
@@ -134,7 +115,6 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     end[t.id] = e;
     rows.push({ ...t, title: t.kind === 'approval' ? `✋ ${t.title}${status === 'done' ? '' : ' (대기 시간 미정)'}` : t.title, status, s, e });
   }
-  for (const l of leaders) l.row.e = l.e ?? end[l.row.id];
   // Critical path: from the latest end back through the latest-ending dep.
   const rowById = Object.fromEntries(rows.map((r) => [r.id, r]));
   for (let cur = rows.reduce((a, b) => (!a || b.e > a.e ? b : a), null); cur; ) {
@@ -153,8 +133,8 @@ export function fromOrca({ plan = { tasks: [] }, orcaTasks, now = Date.now(), sl
     now: iso(now, off),
     tasks: out,
     notes: patch.notes ?? [
-      { title: '예상 근거', body: `완료·진행 막대의 시작은 Orca Task 생성 시각, 끝은 worker_done 시각. 대기 막대는 계획 추정의 likely 값을 의존성 순서대로 지금 이후에 붙인 것 — 팀원 슬롯 ${slots.length}개 가정, 남은 경로가 긴 Task 먼저.` },
-      { title: '빠진 것', body: '사용자 승인·결정 대기는 0분으로 그렸다(기다린 만큼 뒤 막대가 밀린다). 리더·코디네이터 기동·감독, 추정 밖 FIX 반복, 압축·재기동은 넣지 않았다. 예상 종료는 보장 시각이 아니다.' },
+      { title: '예상 근거', body: `완료·진행 막대의 시작은 Orca Task 생성 시각, 끝은 worker_done 시각. 대기 막대는 계획 추정의 likely 값을 의존성 순서대로 지금 이후에 붙인 것 — 워커 슬롯 ${slots.length}개 가정, 남은 경로가 긴 Task 먼저.` },
+      { title: '빠진 것', body: '사용자 승인·결정 대기는 0분으로 그렸다(기다린 만큼 뒤 막대가 밀린다). 코디네이터 기동·감독, 추정 밖 FIX 반복, 압축·재기동은 넣지 않았다. 예상 종료는 보장 시각이 아니다.' },
     ],
   };
 }
@@ -166,7 +146,7 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(file
   const map = a.map && read(a.map);
   const runs = (a.run ?? map?.run ?? '').split(',');
   if (map) assert(map.run && runs[0] === map.run, '대응표와 실행 Run 불일치');
-  // --run a,b: parent Run plus leader child Runs (task-list of the parent does not include child-Run Tasks).
+  // --run a,b: parent Run plus child Runs (task-list of the parent does not include child-Run Tasks).
   const lists = a.tasks ? [read(a.tasks)] : runs.map((run) => JSON.parse(execFileSync('orca', ['orchestration', 'task-list', '--run', run, '--full', '--json'], { encoding: 'utf8' })));
   const orcaTasks = lists.flatMap((raw) => { const r = raw.result ?? raw; return Array.isArray(r) ? r : r.tasks; });
   const plan = a.plan ? read(a.plan) : { tasks: [] };

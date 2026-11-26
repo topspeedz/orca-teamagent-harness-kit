@@ -4,7 +4,7 @@
  "now": "2026-10-31T11:40+09:00",
  "dag": "https://claude.ai/artifact/Uvn5SPchu1joQkrMZFizbj",
  "tasks": [
-  {"title": "설계 문서 (planner S)", "lane": "plan", "status": "done", "start": "2026-10-31T09:20+09:00", "end": "2026-10-31T10:05+09:00", "crit": true},
+  {"title": "설계 문서 (product-manager S)", "lane": "plan", "status": "done", "start": "2026-10-31T09:20+09:00", "end": "2026-10-31T10:05+09:00", "crit": true},
   {"title": "✋ 설계 승인", "lane": "coord", "status": "done", "start": "2026-10-31T10:05+09:00", "end": "2026-10-31T10:20+09:00", "crit": true},
   {"title": "화면 구현 · BL-0001", "lane": "dev", "status": "run", "start": "2026-10-31T10:22+09:00", "end": "2026-10-31T12:00+09:00", "crit": true},
   {"title": "데이터 조사 · BL-0002", "lane": "plan", "status": "done", "start": "2026-10-31T10:22+09:00", "end": "2026-10-31T10:50+09:00"},

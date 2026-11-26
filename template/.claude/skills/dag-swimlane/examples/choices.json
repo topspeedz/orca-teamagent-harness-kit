@@ -19,24 +19,31 @@
     },
     {
       "id": "dev",
-      "name": "제작 팀",
+      "name": "프론트엔드",
       "roles": [
-        "행0 unity-gameplay-engineer",
-        "행1 technical-artist"
+        "frontend"
+      ],
+      "tone": "dev"
+    },
+    {
+      "id": "backend",
+      "name": "백엔드",
+      "roles": [
+        "backend"
       ],
       "tone": "dev"
     },
     {
       "id": "verify",
-      "name": "검증 팀",
+      "name": "검증",
       "roles": [
-        "qa-inspector"
+        "verifier"
       ],
       "tone": "verify"
     },
     {
       "id": "harness",
-      "name": "하네스 팀",
+      "name": "하네스",
       "tone": "harness"
     }
   ],
@@ -125,9 +132,9 @@
     },
     {
       "id": "t2",
-      "lane": "dev",
+      "lane": "backend",
       "col": 1,
-      "row": 1,
+      "row": 0,
       "bl": "BL-0102",
       "complexity": 13,
       "title": "T2",
@@ -204,7 +211,7 @@
     },
     {
       "title": "기준값과 추천",
-      "body": "(기준값)은 BL 복잡도 규칙 값, (추천)은 계획자 추천입니다. 처음 선택은 기준값입니다."
+      "body": "(기준값)은 BL 복잡도 규칙 값, (추천)은 product-manager 추천입니다. 처음 선택은 기준값입니다."
     },
     {
       "title": "codex 체크와 고정",

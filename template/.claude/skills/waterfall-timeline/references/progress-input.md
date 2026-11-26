@@ -17,14 +17,13 @@ UTF-8 JSON. 시각은 모두 오프셋 포함 ISO(`2026-10-31T11:20+09:00`). 화
 
 ## from-orca
 
-막대 시작은 이 순서로 정한다. ① `--map` 항목에 `orca-launch.mjs`가 적은 실제 기동 시각(`okStarted`, 없으면 `started`). ② 없으면 Task가 준비된 시각 — 선행 Task의 가장 늦은 완료 시각(생성 시각보다 이르지 않게). 첫 팀원이 그보다 먼저 생성됐으면 그 시각. ③ 팀원 Task(`parent_id` 있음)는 생성 시각(`created_at`). 하네스가 Run 시작 때 계획 Task를 한꺼번에 등록해도 막대가 등록 시각부터 늘어지지 않는다. 팀원 행 이름은 spec 첫 줄이 `[역할: …]`뿐이면 `display_name`의 작업 번호와 할 일로 짓는다(`(BL-…)`은 계획 Task와 다시 맞물리지 않게 뺀다).
+막대 시작은 이 순서로 정한다. ① `--map` 항목에 `orca-launch.mjs`가 적은 실제 기동 시각(`okStarted`, 없으면 `started`). ② 없으면 Task가 준비된 시각 — 선행 Task의 가장 늦은 완료 시각(생성 시각보다 이르지 않게). 첫 하위 Task가 그보다 먼저 생성됐으면 그 시각. ③ 하위 Task(`parent_id` 있음)는 생성 시각(`created_at`). 하네스가 Run 시작 때 계획 Task를 한꺼번에 등록해도 막대가 등록 시각부터 늘어지지 않는다. 하위 Task 행 이름은 spec 첫 줄이 `[역할: …]`뿐이면 `display_name`의 작업 번호와 할 일로 짓는다(`(BL-…)`은 계획 Task와 다시 맞물리지 않게 뺀다).
 
-`scripts/from-orca.mjs`가 위 JSON을 만든다. `--plan`은 선택 — 없으면(다른 창구의 Run 등) Orca 실측 막대만 만들고 예상 막대는 `--patch`의 `tasks`로 받는다. 역할(`[역할: …]`)이 없는 Orca Task는 빼고, 목록은 `task-list --full`로 읽는다(요약 보기에는 spec·완료 시각이 없다). 입력: `--run`(쉼표로 리더 child Run을 함께 — 부모 task-list엔 child Run Task가 없다, 또는 저장한 task-list JSON `--tasks`), `--plan`(예측 입력 형식 또는 PM `lane` 형식 — `id`·`deps`·`kind`·`estimate.likely`·`bl`), 선택 `--map <orca-tasks.json>`·`--ledger`·`--now`·`--slots`(기본 계획 `maxWorkers`, 없으면 3)·`--title`·`--dag`·`--patch`.
+`scripts/from-orca.mjs`가 위 JSON을 만든다. `--plan`은 선택 — 없으면(다른 창구의 Run 등) Orca 실측 막대만 만들고 예상 막대는 `--patch`의 `tasks`로 받는다. 역할(`[역할: …]`)이 없는 Orca Task는 빼고, 목록은 `task-list --full`로 읽는다(요약 보기에는 spec·완료 시각이 없다). 입력: `--run`(쉼표로 child Run을 함께 — 부모 task-list엔 child Run Task가 없다, 또는 저장한 task-list JSON `--tasks`), `--plan`(예측 입력 형식 또는 PM `lane` 형식 — `id`·`deps`·`kind`·`estimate.likely`·`bl`), 선택 `--map <orca-tasks.json>`·`--ledger`·`--now`·`--slots`(기본 계획 `maxWorkers`, 없으면 3)·`--title`·`--dag`·`--patch`.
 
-- **매칭:** `--map`을 주면 실제 Orca Task ID → 계획 ID를 가장 먼저 적용한다. 같은 BL의 T01·T02도 각자의 시각을 받는다. 미기동 상태에서 재승인으로 교체한 옛 ID는 측정에서 제외한다. 대응표만 주면 그 실행 Run을 조회한다. `--run`을 함께 주면 첫 Run이 대응표의 Run과 같아야 한다. 대응표가 없는 Task는 장부 행의 `task_…` → 계획 ID를 사용한다. 없으면 spec 머리(`등급:` 앞)의 BL이나 계획 ID 토큰이 정확히 한 계획 Task에 맞을 때. 못 맞추면 역할로 lane을 정한 별도 행(계획 전 planner 단계 등).
+- **매칭:** `--map`을 주면 실제 Orca Task ID → 계획 ID를 가장 먼저 적용한다. 같은 BL의 T01·T02도 각자의 시각을 받는다. 미기동 상태에서 재승인으로 교체한 옛 ID는 측정에서 제외한다. 대응표만 주면 그 실행 Run을 조회한다. `--run`을 함께 주면 첫 Run이 대응표의 Run과 같아야 한다. 대응표가 없는 Task는 장부 행의 `task_…` → 계획 ID를 사용한다. 없으면 spec 머리(`등급:` 앞)의 BL이나 계획 ID 토큰이 정확히 한 계획 Task에 맞을 때. 못 맞추면 역할(`product-manager`·`research` → plan, `frontend`·`backend` → dev, `verifier` → verify, `harness-engineer`·`doc-steward` → harness, 그 밖 → coord)로 lane을 정한 별도 행(계획 전 product-manager 단계 등).
 - **재작업:** 같은 계획 ID에 두 번째 Task(FIX·재실행)가 오면 `<ID> ↻ <이름>` 별도 행, 계획 Task의 끝은 늦은 쪽.
-- **리더(`· 리드]`):** 조정 lane 행. 진행 중이면 끝 = max(지금+10분, 묶음 BL 멤버의 끝)이고, 묶음 밖에서 멤버를 선행으로 둔 Task는 리더 보고 뒤에 시작한다.
-- **승인(`kind` approval/done):** 선행이 모두 완료 + 후행(또는 후행이 속한 리더 묶음)이 시작 → 완료(선행 끝~후행 시작). 후행 미시작 → 진행(선행 끝~지금). 그 밖은 0분 대기 + "대기 시간 미정".
+- **승인(`kind` approval/done):** 선행이 모두 완료 + 후행이 시작 → 완료(선행 끝~후행 시작). 후행 미시작 → 진행(선행 끝~지금). 그 밖은 0분 대기 + "대기 시간 미정".
 - **대기 배치:** 지금 이후, 의존성·슬롯(`work`만 슬롯 사용) 안에서 가장 먼저 시작 가능한 Task부터, 같으면 남은 경로가 긴 것부터. 임계 = 가장 늦은 끝에서 가장 늦게 끝난 선행을 따라간 사슬.
 - **`--patch`:** `{ "notes": [{title, body}], "extraDeps": { "<ID>": ["<선행 ID>"] }, "tasks": [진행 입력 형식 행] }` — `tasks`는 그대로 더한다(장부 ✋ 게이트, 계획 없는 Run의 남은 예상) — 지금 걸린 결정·지연 요인 카드, 계획에 없던 대기.
 - 코디네이터 gate처럼 Orca Task가 없는 계획 Task는 지났어도 추정으로 남는다 — notes에 실제 진행을 적는다.

@@ -20,9 +20,9 @@ Run에 실측 시작 기록이 하나라도 있으면 진행 모드다. 예측 �
 
 | 값 | 출처 |
 |---|---|
-| Task·의존성·상태 | `_workspace/<run>/00_ledger.md`(Run 장부)·`coordinator-checkpoint.md`·팀 리더 `*-progress.md` — 더 최신 기록이 장부와 다르면 그쪽을 쓰고 보고에 적는다. 장부가 없으면 계획 문서 `docs/superpowers/plans/*.md`의 DAG |
+| Task·의존성·상태 | `_workspace/<run>/00_ledger.md`(Run 장부)·`coordinator-checkpoint.md`·에이전트 `*-progress.md` — 더 최신 기록이 장부와 다르면 그쪽을 쓰고 보고에 적는다. 장부가 없으면 계획 문서 `docs/superpowers/plans/*.md`의 DAG |
 | 실측 시작·끝(진행) | Orca 워터폴은 Task의 생성 시각(`created_at`)과 완료 시각(`completed_at`)을 사용한다. Orca 밖 작업은 리포트의 실측 시각을 쓴다. 시각 기록이 없는 Task는 추측하지 않는다 — 사용자에게 묻거나 그 Task를 notes에 "시각 미기록"으로 적는다 |
-| 남은 막대(진행)·추정(예측) | 같은 종류 과거 Run 장부 실측, 없으면 PM 추정(`estimates.json` 등), 그것도 없으면 `team-lead` §등급표의 등급(S/A/B/C)·`docs/backlog.md` BL 행의 크기(S/M/L, `backlog-management`) |
+| 남은 막대(진행)·추정(예측) | 같은 종류 과거 Run 장부 실측, 없으면 PM 추정(`estimates.json` 등), 그것도 없으면 `docs/backlog.md` BL 행의 크기(S/M/L, `backlog-management`) |
 | BL · 역할 | `docs/backlog.md`의 BL-#### · `.claude/agents/<역할>.md` 이름 |
 
 ## 진행 모드
@@ -35,12 +35,12 @@ node .claude/skills/waterfall-timeline/scripts/from-orca.mjs --map _workspace/_r
   --out _workspace/_run/<phase>/waterfall-progress.json [--slots 2] [--dag <url>] [--patch patch.json]
 ```
 
-하네스에서는 `--map`이 실행 Run과 Task ID를 제공한다. 팀장 child Run도 합칠 때는 `--run <실행 Run>,<child>`를 더한다. 캡처로 재현할 때는 `--tasks <task-list.json>`을 쓴다.
+하네스에서는 `--map`이 실행 Run과 Task ID를 제공한다. child Run도 합칠 때는 `--run <실행 Run>,<child>`를 더한다. 캡처로 재현할 때는 `--tasks <task-list.json>`을 쓴다.
 
-`orca orchestration task-list`의 Task 생성·완료 시각 = 완료/진행 막대, 계획 JSON(예측 모드 입력 또는 PM 추정)의 likely = 지금 이후 대기 막대. 매칭·리더·승인 규칙은 [진행 입력 §from-orca](references/progress-input.md#from-orca). 결과를 보고 지금 걸린 결정·지연 요인을 `--patch`의 `notes`로 덮어쓴 뒤 progress.mjs로 렌더한다. 실제 동시 팀원 수가 계획과 다르면 `--slots`로 맞춘다. Orca 밖 작업이면 아래 1~3을 손으로 채운다.
+`orca orchestration task-list`의 Task 생성·완료 시각 = 완료/진행 막대, 계획 JSON(예측 모드 입력 또는 PM 추정)의 likely = 지금 이후 대기 막대. 매칭·승인 규칙은 [진행 입력 §from-orca](references/progress-input.md#from-orca). 결과를 보고 지금 걸린 결정·지연 요인을 `--patch`의 `notes`로 덮어쓴 뒤 progress.mjs로 렌더한다. 실제 동시 워커 수가 계획과 다르면 `--slots`로 맞춘다. Orca 밖 작업이면 아래 1~3을 손으로 채운다.
 
 1. 위 출처에서 Task마다 lane·상태·시작·끝을 정한다. `done` = 실측 시작·끝, `run` = 실측 시작 + 예상 끝, `wait` = 의존성을 지킨 예상 시작·끝(선행의 예상 끝 뒤). 임계 경로는 `crit: true`.
-2. lane: `plan` 기획·데이터 설계·플래너 · `coord` 코디네이터·팀 리더·사용자 승인(✋ 접두) · `design` 디자인(blender 포함) · `dev` 개발·마케팅 산출 · `verify` 검증 팀 · `harness` 하네스 팀.
+2. lane: `plan` 기획·조사(`product-manager`·`research`) · `coord` 코디네이터·사용자 승인(✋ 접두) · `design` 디자인(blender 포함) · `dev` 개발·마케팅 산출 · `verify` 검증(`verifier`) · `harness` 하네스(`harness-engineer`·`doc-steward`).
 3. notes 카드 3~4개: **예상 근거**(실측 출처·추정 근거), **임계 경로**(사슬과 어디까지 완료), 구조 변경·지연 요인, **사용자 대기**(승인·훅 신뢰 등 미정 시간, "추정이며 보장 아님").
 4. `_workspace/<run>/waterfall-progress.json`에 쓰고 `node .claude/skills/waterfall-timeline/scripts/progress.mjs <json> _workspace/<run>/waterfall-progress.html`. `now`를 비우면 렌더 순간이 "지금" — 다시 그릴 때마다 선이 옮겨 간다. 모든 Task가 `done`이면 끝난 Run으로 보고 "지금" 선 없이 축을 첫 시작~마지막 끝으로 자르고 페이지 폭에 맞춰 늘린다(헤더 = 종료·소요 = 작업 + 사용자 대기 + 빈 시간).
 5. 같은 Run의 DAG 스윔레인 Artifact가 있으면 `dag`에 URL을 넣는다.
@@ -57,10 +57,10 @@ node .claude/skills/waterfall-timeline/scripts/from-orca.mjs --map _workspace/_r
 
 ## 예측 모드
 
-설계 승인 전 팀 단위, 실행 승인 전 Task 단위로 같은 DAG의 실제 선행과 예상 시간을 사용해 대기 상태의 T+ low/likely/high를 게시한다. 실행 중 재예측은 `waterfall.json`에 쓰고 승인 당시 `waterfall.plan.json`은 회고까지 보존한다.
+설계 승인 전 에이전트 단위, 실행 승인 전 Task 단위로 같은 DAG의 실제 선행과 예상 시간을 사용해 대기 상태의 T+ low/likely/high를 게시한다. 실행 중 재예측은 `waterfall.json`에 쓰고 승인 당시 `waterfall.plan.json`은 회고까지 보존한다.
 
 1. 입력은 [예측 입력](references/input.md), 예시 [example.json](examples/example.json). tone은 `plan`·`dev`·`verify`·`coord`·`harness`(디자인은 `dev`), 승인 게이트는 `kind: "approval"`.
-2. 시나리오별 시작·종료는 의존성·`maxWorkers`·`resource`를 지켜 계산한다. 검증 팀은 같은 빌드에서 증거가 준비된 영역부터 병렬, 최종 수락은 모든 검증 뒤.
+2. 시나리오별 시작·종료는 의존성·`maxWorkers`·`resource`를 지켜 계산한다. 검증은 같은 빌드에서 증거가 준비된 영역부터 병렬, 최종 수락은 모든 검증 뒤.
 3. `_workspace/<run>/waterfall.json` → `node .claude/skills/waterfall-timeline/scripts/render.mjs <json> _workspace/<run>/waterfall.html`.
 4. 실제 경과·작업자 시간 합·병렬 경과를 섞지 않는다. 승인 대기·워커 기동·감독·수정 루프는 0분으로 확정하지 말고 `assumptions`에 따로 적는다. 전후 비교는 같은 범위·같은 자원으로, 워커를 늘린 비교는 별도 가정으로.
 
