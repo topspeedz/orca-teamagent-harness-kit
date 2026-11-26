@@ -141,7 +141,7 @@ ok();
 // a folder name with spaces and Hangul
 const spaced = join(dir, '리포트 모음 1');
 mkdirSync(spaced);
-r = run('01_planner_plan_v1.md', `${head}- ✅ check\n`, spaced);
+r = run('01_product-manager_plan_v1.md', `${head}- ✅ check\n`, spaced);
 assert.equal(r.code, 0);
 ok();
 

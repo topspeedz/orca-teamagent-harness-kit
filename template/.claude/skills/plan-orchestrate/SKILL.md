@@ -53,7 +53,7 @@ description: "새 요구사항, 사용자가 지정한 백로그 ID, 한 phase �
 
 ## 기획 세션은 하나다
 
-기획 단계에서 창구는 `product-manager` 세션 하나를 쓴다. 한 세션이 자기 단계를 차례로 잇는다(요구사항 정리, 요구사항 검토, 항목화, 설계, 계획, 계획 대조). 단계마다 새로 띄우면 워커가 같은 정본을 처음부터 다시 읽는다.
+기획 단계에서 창구는 `product-manager` 세션 하나를 쓴다. 한 세션이 자기 단계를 차례로 잇는다(요구사항 정리, 항목화, 요구사항 검토, 설계, 계획, 계획 대조). 단계마다 새로 띄우면 워커가 같은 정본을 처음부터 다시 읽는다.
 
 - **단계의 끝은 `ask`다.** 워커는 한 단계를 마치면 `worker_done`이 아니라 `ask`로 리포트 경로를 올리고 턴을 끝낸다. `worker_done`은 창구가 마지막이라고 알린 단계에서 한 번 보낸다. spec의 `보고` 줄에 이 순서를 적는다.
 - **창구는 `ask`마다 그 단계를 정산한다.** 리포트 파일이 있는지와 `node .claude/scripts/report-check.mjs <리포트 경로>`를 본다. 사용자에게 물을 것(결정, 승인)을 묻고 답을 원문과 날짜로 브리프에 더한다.
@@ -81,7 +81,7 @@ PM은 `requirements-write`·`backlog-management`로 작성하고 `product-review
 
 ### 설계 전 조사
 
-설계에 출처를 모아야 하는 질문이 있으면(PM이 리포트에 조사를 요청했거나 창구가 문답에서 그렇게 판단했으면) 창구가 설계 전에 `research`를 띄운다. 조사 리포트 경로는 설계 단계 spec의 `먼저 읽을 것`에 넣는다.
+설계에 출처를 모아야 하는 질문이 있으면(PM이 리포트에 조사를 요청했거나 창구가 문답에서 그렇게 판단했으면) 창구가 설계 전에 `research`를 띄운다. 그 spec은 아래 "설계·계획 단계의 spec"과 같이 `_workspace/_run/<phase>/spec/`에 쓴다. 조사 리포트 경로는 설계 단계 spec의 `먼저 읽을 것`에 넣는다.
 
 - `research / 조사`는 산정 행이라 점수 없이는 뜨지 않는다. 창구가 질문의 C·U·R·V·F 값과 근거를 `phase-planning`의 배정 절과 같은 형식으로 쓰고 `node .claude/scripts/model-routing.mjs plan --agent research --unit 조사 --input <근거.json>`으로 배정을 얻어 spec의 배정 줄에 적는다.
 - 기동은 같은 점수를 평가 파일 `{ "input": <근거.json의 내용>, "reason": "<점수의 근거를 대조한 결과>" }`로 붙인다: `node .claude/scripts/orca-launch.mjs worker --agent research --unit 조사 --spec-file <spec> --bracket <phase> --does <하는 일> --assessment <평가.json>`.

@@ -126,7 +126,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **모델과 effort를 표 하나로 관리한다**
 
 - 점수는 에이전트가 아니라 Task에 붙는다. PM은 BL에 구조 복잡도·불확실성·실패 영향·검증 근거를 남기고, 계획에서 Task마다 C·U·R·V의 값과 근거를 적는다. `model-routing.mjs plan`이 model과 effort를 계산하고, 해석에 따라 배정이 달라질 때만 Haiku로 점수를 확인한다. 사용자는 DAG에서 추천을 검토하고 직접 고정하거나 기동 직전 재평가를 위임한다. 코디네이터는 승인된 런타임과 치환표에서 최종 배정을 적용한다.
-- 모델 표에서 model이 `복잡도`인 산정 행의 Task는 점수 없이 뜨지 않는다. 기동 스크립트는 기본값으로 넘어가지 않고 거부한다. 계획 밖에서 띄우는 워커(설계 전의 `research` 등)는 `--assessment`로 점수를 함께 넘긴다.
+- 모델 표에서 메모가 `고정`으로 시작하는 행만 고정 행이고, 그 밖의 행은 model이 `복잡도`든 값이 적혀 있든 산정 행이다. 산정 행의 Task는 점수 없이 뜨지 않는다. 기동 스크립트는 기본값으로 넘어가지 않고 거부한다. 계획 밖에서 띄우는 워커(설계 전의 `research` 등)는 `--assessment`로 점수를 함께 넘긴다.
 - PM의 기획 세션은 `setup`에서 고른 model과 effort 하나로 뜬다(기본 fable/xhigh). 요구에서 계획까지 한 세션이 이 값으로 잇는다. [배정 기준과 Astra ultra 치환](template/docs/harness/model-selection.md)
 - 표를 수정하면 다음 계획부터 적용된다. 현재 Run의 Task 배정을 바꾸려면 해당 배정과 DAG를 갱신하고 다시 승인받는다.
 
@@ -299,7 +299,7 @@ docs/
 
 1. **진행 중인 phase는 0.5.1에서 끝낸다.** 0.5.1에서 승인받은 phase는 새로 띄운 코디네이터가 이어 가지 못한다. 기동은 두 메시지 가운데 하나로 멈춘다. 옛 DAG에 `members`가 있는 노드가 있으면 검토가 먼저 `<노드 ID>의 팀 내부 배정(members)은 없어졌습니다. 일마다 Task 하나로 나눠 다시 그리세요`로 멈추고, 없으면 승인 기록의 해시가 달라 `현재 계획·DAG와 실행 승인 버전이 다름`으로 멈춘다. 끝내지 못했으면 올린 뒤 계획을 다시 승인받는다. phase 중간에 올리지 않는다.
 2. **작업 트리를 커밋해 둔다.** 옮기기는 프로젝트 파일을 지운다. 되돌릴 때는 그 커밋으로 돌아간다.
-3. **플러그인을 올리고 `setup`을 다시 돌린다.** `docs/harness/agents.md`가 없는 동안, 곧 `setup`을 다시 돌리기 전에는 스크립트가 `docs/harness/agents.md가 없고 옛 명단(team-org.md)만 있습니다. setup을 다시 돌려 새 구조로 옮기세요.`로 멈춘다. 다시 돌린 뒤에는 `agent-author`의 옮기기가 남아 있어도 스크립트가 돈다.
+3. **플러그인을 올리고 `setup`을 다시 돌린다.** `setup`을 다시 돌리기 전에는 프로젝트의 스크립트가 0.5.1 사본이라 전과 같이 돈다. 그동안 `docs/harness/agents.md가 없고 옛 명단(team-org.md)만 있습니다. setup을 다시 돌려 새 구조로 옮기세요.`를 보이고 멈추는 것은 플러그인의 `agent-toggle`이고, `agent-author`도 setup을 다시 돌리라고 안내하고 멈춘다. 다시 돌린 뒤에는 `agent-author`의 옮기기가 남아 있어도 스크립트가 돈다.
    - 응답 파일의 `planner.effort`는 `pm.model`과 `pm.effort`로 바뀌었다(기본 fable/xhigh). 옛 키가 있으면 설치가 거절한다.
    - 키트가 깔았고 프로젝트가 고치지 않은 물러난 파일(`team-lead`·`team-qa` 스킬, `team-skill.md`, 역할 `planner`·`code-reviewer`·`qa-inspector`와 그 Codex 정의)을 지운다. 프로젝트가 고쳤거나 설치 기록에 없는 물러난 파일은 충돌로 보이고 `install --approve <경로>`로 승인했을 때만 지운다.
    - 새 명단 `docs/harness/agents.md`와 새 기본 에이전트를 깐다. `docs/harness/team-org.md`는 남는다.

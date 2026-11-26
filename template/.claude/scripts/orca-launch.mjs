@@ -6,7 +6,7 @@
 //   node .claude/scripts/orca-launch.mjs worker --agent <a> --unit <u> --spec-file <p> --bracket <BL-0012|phase> --does <하는 일> [--run <id>] [--task <id>] [--override-reason <원문>] [--assessment <json>]   (outside an execution Run; --assessment required on a formula row)
 //   node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <p> --does <요청> [--backlog BL-0001,BL-0002] --approval <file> --version v1 --plan <plan.md> --dag <dag.json>
 //   node .claude/scripts/orca-launch.mjs snapshot --run <id>
-//   node .claude/scripts/orca-launch.mjs codex-rules   (prints the six worker lines for a Codex Task spec)
+//   node .claude/scripts/orca-launch.mjs codex-rules   (prints the seven worker lines for a Codex Task spec)
 //   node .claude/scripts/orca-launch.mjs wait --inbox run:<Run ID>|dispatch:<Dispatch ID> [--once] [--last]   (background; returns only mail to act on)
 // Tasks registered in Orca (the coordinator's execution Run; <map> is _workspace/_run/<phase>/orca-tasks.json):
 //   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <approved-plan.v1.json>
@@ -38,7 +38,7 @@ import { judge } from './report-check.mjs';
 import { take as takeTree, defaultGit } from './tree-snapshot.mjs';
 import { readRoster } from './roster.mjs';
 
-// P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's six lines in the spec instead.
+// P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's seven lines in the spec instead.
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
 const fmt = (model, effort) => (effort ? `${model}/${effort}` : model);
 const fmtRow = (runtime, model, effort) => `${runtime} ${fmt(model, effort)}`;
@@ -275,7 +275,7 @@ async function execute(cmd, o, deps) {
     return { code: 0, out: { version: record.version, review: record.review } };
   }
 
-  // Codex gets the hook's six lines inside the spec (P8). Returns the path of the copy to hand to Orca.
+  // Codex gets the hook's seven lines inside the spec (P8). Returns the path of the copy to hand to Orca.
   const specCopy = (specFile, content) => {
     const p = join(mkdtempSync(join(tmpdir(), 'orca-spec-')), basename(specFile));
     writeFileSync(p, content);
@@ -878,7 +878,7 @@ async function execute(cmd, o, deps) {
     let specFile = o['spec-file'];
     let content = spec;
     if (use.runtime === 'codex') {
-      if (o.task) console.error('경고: Codex 워커 — Task spec에 작업 방식 여섯 줄이 들어 있어야 한다(codex-rules)');
+      if (o.task) console.error('경고: Codex 워커 — Task spec에 작업 방식 일곱 줄이 들어 있어야 한다(codex-rules)');
       else content = content.trimEnd() + '\n\n' + rules().trimEnd() + '\n';
     }
     if (content !== spec) specFile = specCopy(specFile, content);
@@ -962,7 +962,7 @@ function writeJson(path, text, exclusive = false) {
   try { if (exclusive) linkSync(temp, path); else renameSync(temp, path); }
   finally { try { unlinkSync(temp); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
 }
-// Run the hook as the Orca preamble would trigger it; its additionalContext is the single source of the six lines.
+// Run the hook as the Orca preamble would trigger it; its additionalContext is the single source of the seven lines.
 function hookLines() {
   const r = spawnSync(process.execPath, [HOOK_PATH], { ...opts, input: JSON.stringify({ prompt: 'You are a dispatched worker' }) });
   return JSON.parse(r.stdout || '{}').hookSpecificOutput?.additionalContext ?? '';

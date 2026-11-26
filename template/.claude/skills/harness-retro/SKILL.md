@@ -25,6 +25,7 @@ description: "phase 끝의 하네스 회고 절차. harness-engineer가 phase �
 | 수정 루프 횟수 | `ledger.md`의 예산 줄. 새 양식의 장부에는 이 줄이 없어 `측정 불가`로 나오고, `수정 라운드(결함 원장)`가 대신한다 |
 | 수정 라운드(결함 원장), 제기된 High, 확정 · 인용 · 기각 · 열림, High가 아닌데 수정에 든 결함 | `ledger.md`의 `## 결함 원장` |
 | 건너뛴 Task | `--map`으로 넘긴 Task 대응표 |
+| 워커 기동 수(재시도 포함), 항목당 워커 수(워커 기동 수 ÷ 백로그 항목 수) | `--map`으로 넘긴 Task 대응표의 기동 기록과 `bl` |
 | 재시도와 원인, 질문이 있던 Task | `ledger.md`의 표 |
 | 실패 Task | `actual.json`의 `status` (Orca의 기록) |
 | 준비→기동 지연: 마지막 의존이 끝난 때부터 그 Task를 띄운 때까지. 합, 최댓값, 최댓값인 Task | `actual.json`의 시각과 `waterfall.json`의 의존 |
@@ -43,7 +44,8 @@ node .claude/skills/harness-retro/scripts/retro-measure.mjs \
   --map _workspace/_run/<phase>/orca-tasks.json
 ```
 
-- `--map`은 선택이다. 결함 원장이나 대응표가 없으면 그 줄은 `측정 불가`로 나온다.
+- `--map`이 없으면 워커 기동 수, 항목당 워커 수, 건너뛴 Task가 `측정 불가`로 나온다. 결함 원장이나 대응표가 없으면 그 줄은 `측정 불가`로 나온다.
+- 워커 기동 수와 항목당 워커 수는 기준선(이전 회고 리포트)과 비교한다. 항목당 워커 수가 줄지 않았거나 결함(제기된 High)이 늘었으면, 어느 합침이 원인인지 찾아 그 단위만 다시 나눈다. 전체를 되돌리지 않는다.
 - `waterfall.plan.json`은 `exec-run`이 실행 Run을 만들 때 `waterfall.json`을 한 번 복사해 얼려 둔 승인 계획이다. `waterfall.json`은 phase 동안 재예측으로 덮어써지므로 계획 열에 쓰지 않는다. 사본이 없는 phase는 `waterfall.json`을 넘기고, 리포트에 계획 열이 재예측일 수 있다고 적는다.
 
 - 출력은 리포트에 그대로 붙일 표다. 입력이 없거나 읽을 수 없는 지표는 `측정 불가`로 찍히고 끝에 사유가 붙는다. 0으로 세지 않는다.

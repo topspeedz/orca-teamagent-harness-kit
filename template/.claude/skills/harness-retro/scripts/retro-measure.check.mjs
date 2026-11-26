@@ -210,6 +210,9 @@ t('CLI: worker counts from the map; no bl → 측정 불가', () => {
   assert.match(out, /\| 워커 기동 수 \| 4 \|/);
   assert.match(out, /\| 항목당 워커 수 \| 2\.0 \|/);
   assert.match(run({ tasks: { T1: { dispatch: 'd1' } } }), /\| 항목당 워커 수 \| 측정 불가 \|/);
+  // a comma-joined bl is its separate items; an empty one is none
+  assert.match(run({ tasks: { T1: { bl: 'BL-1, BL-2', dispatch: 'd1' }, T2: { bl: 'BL-3', dispatch: 'd2' } } }), /\| 항목당 워커 수 \| 0\.7 \|/);
+  assert.match(run({ tasks: { T1: { bl: '', dispatch: 'd1' } } }), /\| 항목당 워커 수 \| 측정 불가 \|/);
 });
 
 t('CLI: defect rows with --map, without --map, and with an unreadable severity', () => {

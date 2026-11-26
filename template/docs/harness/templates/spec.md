@@ -53,5 +53,5 @@ Task: <Task ID> <이름>
 - 워커는 사용자에게 직접 묻지 않는다. 막히면 `ask`로 배정자(코디네이터 또는 창구)에게 올린다.
 - 워커는 커밋하지 않는다.
 - 기다리는 단계를 `sleep`으로 쓰지 않는다. Claude Code가 단독 `sleep`을 막는다.
-- Codex 워커에게는 기동 스크립트가 작업 방식 여섯 줄을 spec 끝에 붙여 넘긴다(`register`로 등록할 때와 `--spec-file`로 띄울 때). 문장은 `worker-intake-context.mjs`가 정본이라 양식에 쓰지 않는다. Orca에 직접 만든 Task를 `--task`로 띄울 때만 스크립트가 붙이지 못하므로, `node .claude/scripts/orca-launch.mjs codex-rules`가 찍는 줄을 Task spec에 넣는다.
+- Codex 워커에게는 기동 스크립트가 작업 방식 일곱 줄을 spec 끝에 붙여 넘긴다(`register`로 등록할 때와 `--spec-file`로 띄울 때). 문장은 `worker-intake-context.mjs`가 정본이라 양식에 쓰지 않는다. Orca에 직접 만든 Task를 `--task`로 띄울 때만 스크립트가 붙이지 못하므로, `node .claude/scripts/orca-launch.mjs codex-rules`가 찍는 줄을 Task spec에 넣는다.
 - 등록된 Task의 spec은 바꿀 수 없다. spec 파일을 고쳐도 워커에게는 가지 않는다. 등록한 뒤에 전할 것(게이트로 받은 사용자 결정, 앞 시도의 실패 원인)은 메모(spec 옆의 `<Task ID>.memo.md`)에 적는다.

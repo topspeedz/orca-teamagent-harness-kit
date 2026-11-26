@@ -25,7 +25,7 @@ description: Claude Code용 전문 서브에이전트를 신규 설계하거나 
 
 하네스가 설치된 프로젝트에서 하는 일은 셋이고, 이 순서로 본다. 기본은 스킬을 더하는 것이다. 에이전트를 새로 만드는 것은 [에이전트 단위 구성 2절](../setup/references/agent-units.md)의 세 기준 가운데 하나가 사실일 때뿐이다. 직함이 다르다는 것은 이유가 아니다. 네 번째 절은 0.5.1 프로젝트를 옮길 때만 쓴다.
 
-모든 명령은 프로젝트 루트에서 돌린다. 공통으로 읽는 것: 명단 `docs/harness/agents.md`, 역할 파일 `.claude/agents/`(꺼진 `.agent-toggle-off` 포함), 스킬 `.claude/skills/`, 모델 표 `docs/harness/model-selection.md`, `docs/DOCUMENTATION_INDEX.md`의 정본·절과 `## 작성자 배정 대기`. 양식은 대상 프로젝트의 `docs/harness/templates/agent.md`(역할)와 `docs/harness/templates/skill.md`(스킬)다. 설치 프로젝트의 역할 머리말은 `name`과 `description` 두 줄이다. `docs/harness/agents.md`가 없고 옛 명단만 있으면 검사 스크립트가 "setup을 다시 돌려 새 구조로 옮기라"며 멈춘다. 그때는 사용자에게 setup을 다시 돌리라고 안내하고 멈춘다.
+모든 명령은 프로젝트 루트에서 돌린다. 공통으로 읽는 것: 명단 `docs/harness/agents.md`, 역할 파일 `.claude/agents/`(꺼진 `.agent-toggle-off` 포함), 스킬 `.claude/skills/`, 모델 표 `docs/harness/model-selection.md`, `docs/DOCUMENTATION_INDEX.md`의 정본·절과 `## 작성자 배정 대기`. 양식은 대상 프로젝트의 `docs/harness/templates/agent.md`(역할)와 `docs/harness/templates/skill.md`(스킬)다. 설치 프로젝트의 역할 머리말은 `name`과 `description` 두 줄이다. `docs/harness/agents.md`가 없고 옛 명단만 있으면 setup을 다시 돌리기 전의 0.5.1 프로젝트다. 그 프로젝트의 검사 스크립트는 0.5.1 사본이라 전과 같이 돌고 멈추지 않는다. 그때는 사용자에게 setup을 다시 돌리라고 안내하고 멈춘다.
 
 ### 1. 스킬 더하기
 
@@ -76,7 +76,7 @@ setup 7단계가 `inspect` 출력의 `migration`이 비어 있지 않을 때 부
    - 옛 기본 역할의 꺼진 사본: `.claude/agents/planner.md.agent-toggle-off`, `code-reviewer.md.agent-toggle-off`, `qa-inspector.md.agent-toggle-off`와 같은 이름의 `.codex/agents/*.toml.agent-toggle-off`. setup은 이 사본을 지우지 않는다.
    - 옛 팀 스킬: `.claude/skills/<팀 스킬>/`, Codex를 쓰면 `.agents/skills/<팀 스킬>/`.
    - `docs/harness/team-org.md`.
-   - 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4단계대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
+   - setup 3단계 `conflicts`에 남은 물러난 파일(프로젝트가 고친 옛 `team-lead`·`team-qa` 스킬, `team-skill.md`, 옛 역할 파일)은 고친 내용을 4단계대로 옮긴 뒤 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --approve "<경로>"`로 지운다.
 7. 명단의 에이전트마다 `node .claude/scripts/agent-definition.mjs --agent <에이전트>`, 이어 `node .claude/scripts/model-selection.mjs check`를 돌린다. Codex를 쓰면 고친 역할마다 `node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" sync-agent --target . --agent <에이전트>`를 돌린다. 실패하면 메시지를 보여 주고 고칠지 묻는다.
 8. 프로젝트 문서에 남은 옛 역할 이름을 찾아 목록으로 보여 준다. 고치는 것은 사용자가 고른 것만이다.
 
