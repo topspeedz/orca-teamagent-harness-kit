@@ -395,7 +395,7 @@ export function render(input, actual = []) {
   out.push('<div class="legend">'
     + TONES.filter(t => lanes.some(l => l.tone === t)).map(t => `<span>${sw(`var(--${t}-s)`, `var(--${t})`)}${esc(TONE_MEANING[t])} (${esc(lanes.filter(l => l.tone === t).map(l => l.name).join(' · '))})</span>`).join('')
     + (nodes.some(n => AGENT[n.agent]) ? '<span><b style="color:#d97757">✳</b> Claude · <b>◎</b> Codex · 작은 글씨 = effort(L·M·H·XH·MAX·UL), 모델은 마우스 오버</span>' : '')
-    + (choices ? (adaptive ? '<span>추천 사용은 기동 직전 재평가를 허용합니다. 조합을 직접 고르면 추천과 같은 값도 고정됩니다. 카드를 열어 점수 근거를 확인하세요.</span>' : '<span>카드 아래 선택 = Claude model/effort(기준값 = 복잡도 규칙, 추천 = 계획자 추천) · codex 체크 = Codex로 실행(→ 치환표 값)</span>') : '')
+    + (choices ? (adaptive ? '<span>추천 사용은 기동 직전 재평가를 허용합니다. 조합을 직접 고르면 추천과 같은 값도 고정됩니다. 카드를 열어 점수 근거를 확인하세요.</span>' : '<span>카드 아래 선택 = Claude model/effort(기준값 = 복잡도 규칙, 추천 = product-manager 추천) · codex 체크 = Codex로 실행(→ 치환표 값)</span>') : '')
     + `<span>${sw('var(--done)', 'var(--node)')}완료 = 녹색 테두리</span><span>${sw('var(--muted)', 'var(--node)')}진행 = 레인 색 굵은 테두리</span><span>${sw('var(--muted)', 'var(--node)', ';border-style:dashed;opacity:.6')}대기 = 점선·흐림</span>`
     + '</div>');
   if (choices) out.push(`<p class="sub" id="pick-note" hidden></p><div class="pick-diff" aria-live="polite"><b>${adaptive ? '직접 지정 또는 런타임을 변경한 배정' : '기준값과 다른 Task (사용자 예외가 됨)'}</b><ul id="pick-diff"><li>없음</li></ul></div>`);
@@ -541,7 +541,7 @@ function selfTest() {
   rs.rounds = [{ n: 1, verify: 'pm', fix: 't1', recheck: 't3' }, { n: 2, verify: ['t2'], fix: 't5' }];
   const rh = render(rs).html;
   for (const v of ['>수정 1회차<', '>재검 1회차<', '>수정 2회차<', '>1회차<', '>1회차 재검<', '"1회차 검증 — claude opus/medium"',
-'수정 배정 비교: ', '회차마다 다르다']) if (!rh.includes(v)) fail(`self-test: rounds missing ${v}`);
+    '수정 배정 비교: ', '회차마다 다르다']) if (!rh.includes(v)) fail(`self-test: rounds missing ${v}`);
   let rmsg = ''; try { render({ ...rs, rounds: [{ n: 1, verify: 'nope', fix: 't1' }] }); } catch (err) { rmsg = err.message; }
   if (!/unknown node nope/.test(rmsg)) fail('self-test: rounds should reject unknown node');
   console.log('self-test ok: reference counts match, crossing edge rejected, output without choices unchanged, choices picks and marks drawn, rounds labelled and listed');
