@@ -22,7 +22,8 @@ const clean = value => value.replaceAll('`', '').trim()
 
 function table(text, section, header) {
   const rows = []
-  let inSection = false, inTable = false, fence = ''
+  let inSection = false, inTable = false, fence = '', width = 0
+  const want = header.split('|')
   for (const line of text.split(/\r?\n/)) {
     const marker = line.trim().match(/^(`{3,}|~{3,})/)?.[1]
     if (marker) { if (!fence) fence = marker; else if (marker.startsWith(fence)) fence = ''; continue }
@@ -30,14 +31,15 @@ function table(text, section, header) {
     if (/^#{1,2} /.test(line)) { inSection = line.trim() === '## ' + section; inTable = false; continue }
     if (!inSection || !line.trim().startsWith('|')) { inTable = false; continue }
     const row = cells(line)
-    if (row.join('|') === header) { inTable = true; continue }
-    if (inTable && row.length === header.split('|').length && !row.every(c => /^:?-+:?$/.test(c))) rows.push(row)
+    // Match the leading columns only, so tables with extra trailing columns (e.g. 양식) still parse.
+    if (want.every((h, i) => row[i] === h)) { inTable = true; width = row.length; continue }
+    if (inTable && row.length === width && !row.every(c => /^:?-+:?$/.test(c))) rows.push(row)
   }
   return rows
 }
 
 function docPath(cell, markdownFile) {
-  const link = cell.match(/^\[[^\]]*\]\(([^)]+)\)$/)
+  const link = cell.match(/^\[[^\]]*\]\(([^)]+)\)/) // a cell listing several links uses the first
   const target = clean(link?.[1] ?? cell).split('#')[0]
   if (!target) return
   if (target.startsWith('/') || /[\\:\0]/.test(target)) return target
@@ -95,8 +97,11 @@ function documentData(project, roles) {
       const key = Object.hasOwn(responsibilityKeys, clean(responsibility)) && responsibilityKeys[clean(responsibility)]
       const rel = docPath(doc, role.docs[0].rel)
       if (rel && key) {
-        const names = scopeRow(rel, clean(scope))[key]
-        if (!names.includes(role.name)) names.push(role.name)
+        const row = scopeRow(rel, clean(scope))
+        if (!row[key].includes(role.name)) row[key].push(role.name)
+        // Kit 0.4.1 names reviewers inside the scope cell: "(검토 `planner`)".
+        for (const name of codes(scope.match(/검토 ([^)]*)/)?.[1] ?? ''))
+          if (roles.has(name) && !row.reviewers.includes(name)) row.reviewers.push(name)
       }
     }
     if (!/^## 문서 책임\s*$/m.test(body)) {
