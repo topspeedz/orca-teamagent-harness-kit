@@ -63,7 +63,7 @@ The team agent structure is based on [revfactory/harness](https://github.com/rev
 **Role hierarchy and size-based routing**
 
 - The hierarchy goes two levels below the coordinator. Team members do not start workers, and workers do not commit.
-- With its lead ON, an execution team can receive one simple Task directly from the coordinator. Two or more Tasks, or one that needs expert decomposition, go through the lead. When its lead is OFF, assignments to the team wait.
+- The coordinator assigns an approved execution team's Tasks directly to its members. Having several Tasks does not call for a lead; only a Task the plan left to be split inside the team goes through one. When the agent that would lead is OFF, assignments to the team wait.
 
 **Phase workflow and approvals**
 
@@ -95,7 +95,7 @@ Domain teams such as development or design are not included. Step 7 of `setup` r
 | Component | What it does |
 | --- | --- |
 | `approval-gate` hook | Blocks commands that need user approval (deploy, push, and so on) in non-interactive sessions and tells the worker to escalate with `ask`. A force push always needs approval, whatever the project lists: it is not blocked outright, the user is asked |
-| `orca-wait-gate` hook | Blocks any `check --wait` that violates the wait contract (started with a shell `&`, missing `--timeout-ms` or `--types`, or chained to other commands in one background line) |
+| `orca-wait-gate` hook | Blocks a `check --wait` run directly instead of through `orca-launch.mjs wait` when it is started with a shell `&`, lacks `--timeout-ms` or `--types`, or is chained to other commands in one background line |
 | `compact-gate` hook | Defers automatic context compaction to the next turn boundary while the coordinator is in the middle of consecutive tool calls |
 | `worker-intake-context` hook | Injects the worker rules into context when a worker starts |
 | `secret-gate` hook | Blocks Playwright MCP calls that carry cookies, tokens or passwords, or that try to read cookies, so those values never land in the conversation log |
@@ -104,7 +104,7 @@ Domain teams such as development or design are not included. Step 7 of `setup` r
 | `defect-ledger.mjs` | Copies the report's `## 결함` table into the ledger's `## 결함 원장`. A High row with no evidence is recorded as Medium, and an existing row is never rewritten |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
-| `wait-contract-check.mjs` | Checks that the wait contract embedded in three skills matches its source file |
+| `test-ledger.mjs` | Copies the JSON result of the full test run (vitest, jest) into the latest-result column of the test case ledger and switches `구현됨`/`검증됨` in the traceability matrix. A case missing from the run keeps its result and is listed |
 | `coordinator-settings.mjs` | Reads the allowlist and generates the coordinator-only settings file |
 | `browser/launch.cjs`, `browser/probe-fps.cjs` | A launcher and a GPU probe for work that stays outside Playwright MCP: screenshot batches, 3D and WebGL measurement, and checks that need a login. Secrets are read only from a dotenv file and masked in logs |
 
@@ -115,7 +115,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 **Lower token usage for the coordinator**
 
 - The coordinator runs with a dedicated settings file that enables the minimum set of plugins and skills. You choose what stays enabled in `.claude/coordinator.keep.json`.
-- The coordinator does not wake up on every heartbeat. It waits with a single background job, and the five-line wait contract and a hook enforce this.
+- The coordinator does not wake up on heartbeats, redeliveries or timeouts. It waits with one background `orca-launch.mjs wait`, which ends only when there is mail to act on. Settling a `worker_done` (the four checks, failing the Task, the defect ledger, the snapshot) is one `orca-launch.mjs settle` command.
 - The coordinator does not read full worker reports or rerun worker tests. It only checks the result of the report evaluation script.
 - The coordinator starts as a fresh session after the plan is approved, so skills loaded during design do not stay in its context.
 
@@ -150,7 +150,7 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 **Documentation stays under control**
 
 - The working directory is `_workspace/<team>/<phase>/` and is excluded through `.gitignore`. File names follow one format: `NN_<agent>_<artifact>_v1.md`.
-- No rule is written in two places. The wait contract, the model assignment table, and the team roster each have a single source of truth.
+- No rule is written in two places. The model assignment table and the team roster each have a single source of truth, and steps that need no judgment (waiting, settling) live in scripts rather than in instructions.
 - Team reports preserve the work history. Each designated author writes and maintains their assigned live document or section. The PM writes the PRD and SRS. `doc-steward` maintains the index and checks consistency. For a document without an owner, the user can create a role, defer the assignment or mark it inapplicable.
 - On a fresh install, setup uses the 12 forms under `docs/harness/templates/product-docs/` to prepare 13 drafts covering the codebase map and the twelve numbered folders. Existing canonical paths in the index and edited documents are preserved.
 
@@ -217,7 +217,7 @@ Open Claude Code at the root of the target project and run `/orca-teamagent-harn
 2. **Five questions**: whether to use Codex, which commands need user approval, the permission mode of the coordinator terminal, the planner's effort, and which plugins and skills stay enabled for the coordinator.
 3. **Install**: skips files with identical content. For existing files that differ, shows a diff and overwrites only the approved ones.
 4. **Generate settings**: updates the allowlist `.claude/coordinator.keep.json` and generates the coordinator settings file.
-5. **Verify**: runs the installed self-tests, the model assignment table check, and the wait contract check.
+5. **Verify**: runs the installed self-tests and the model assignment table check.
 6. **Foundation design**: runs the project's verification commands and records only the passing ones in the instructions, then sets forbidden commands (`permissions.deny`), document routing, and a token baseline.
 7. **Team composition**: analyzes past session records and existing pipelines, recommends teams and team members with the evidence, then creates the team skills, agents, and role skills the user picks and adds them to the team roster and the model assignment table.
 8. **Model table**: shows every row of the model assignment table on a survey page (Artifact) and writes only the values the user saved.
@@ -263,7 +263,7 @@ Requests to the front desk (your regular Claude Code session) are routed by the 
 | A simple question or a small edit to one file | The front desk handles it directly |
 | New requirements | The PM creates backlog items and the Planner reviews the requirements |
 | Named backlog IDs / delegated phase | Named IDs go directly to the Planner. For a delegated phase, the PM selects a batch |
-| Approved execution-team work | With the lead ON, a member can receive one simple Task directly. Two or more Tasks, or one needing expert decomposition, go through the lead. With the lead OFF, the team waits |
+| Approved execution-team work | The coordinator assigns members directly. Only a Task the plan left to be split inside the team goes through the lead. With the lead agent OFF, the team's assignments wait. |
 
 ## Installed files
 
@@ -277,8 +277,8 @@ AGENTS.md, CLAUDE.md             shared instructions and routing
                                  dag-swimlane, waterfall-timeline
   hooks/                         approval, waiting, context compaction, worker rule injection,
                                  browser secret blocking
-  scripts/                       worker launch, model assignment table, report evaluation,
-                                 wait contract check, coordinator settings, browser launcher
+  scripts/                       worker launch, wait and settle, model assignment table,
+                                 report evaluation, coordinator settings, browser launcher
   settings.json                  hook registration, permissions, and the two env lines for parallel
                                  browsers (merged into an existing file)
   front-desk.settings.json       turns those two env lines off in a session you open yourself

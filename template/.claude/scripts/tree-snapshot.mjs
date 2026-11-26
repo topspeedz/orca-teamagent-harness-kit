@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const defaultGit = (args, env = {}) => {
+export const defaultGit = (args, env = {}) => {
   const r = spawnSync('git', args, { env: { ...process.env, ...env }, encoding: 'utf8', maxBuffer: 1 << 28 });
   return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? (r.error?.message ?? '') };
 };

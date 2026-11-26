@@ -1772,4 +1772,136 @@ await ta(async () => {
   assert.deepEqual([tasks.T01.conditional, tasks.F1.conditional], [true, true]);
 });
 
+// wait: the model is woken only by mail it has to act on
+{
+  const at = (seconds) => new Date(Date.UTC(2000, 0, 2, 0, 0, seconds)).toISOString();
+  const msg = (id, type, extra = {}) => ({ id, type, from_handle: 'dispatch:ctx_1', subject: id, body: 'b', created_at: at(10), payload: '{}', ...extra });
+  const done = (id, dispatchId, at) => msg(id, 'worker_done', { created_at: at, payload: JSON.stringify({ dispatchId }) });
+  const fakeWait = (batches, inbox = []) => {
+    const fs = {}, calls = [];
+    return { fs, calls, deps: {
+      orca: (args) => {
+        calls.push(args);
+        const messages = args[1] === 'inbox' ? inbox : (batches.shift() ?? []);
+        return { status: 0, stdout: JSON.stringify(messages === 'error' ? { ok: false, error: { message: 'waiter_exists' } } : { ok: true, result: { messages } }), stderr: '' };
+      },
+      read: (p) => { if (!(p in fs)) throw Object.assign(new Error('ENOENT ' + p), { code: 'ENOENT' }); return fs[p]; },
+      write: (p, text) => { fs[p] = text; },
+      now: () => at(0),
+    } };
+  };
+  const W = ['wait', '--inbox', 'run:run_1', '--state', 's.json'];
+  const ids = (r) => r.out.messages.map((m) => m.id);
+
+  await ta(async () => {
+    const r = await main(['wait'], fakeWait([]).deps);
+    assert.equal(r.code, 1); assert.match(r.out.error, /--inbox/);
+  });
+  // a heartbeat-only batch is waited through; the wait carries the wake types, the long timeout and the Run
+  await ta(async () => {
+    const f = fakeWait([[msg('h1', 'heartbeat')], [msg('h2', 'heartbeat'), msg('m1', 'question')]]);
+    const r = await main(W, f.deps);
+    assert.equal(r.code, 0, JSON.stringify(r.out));
+    assert.deepEqual(ids(r), ['m1']);
+    assert.deepEqual(r.out.messages[0], { id: 'm1', type: 'question', from: 'dispatch:ctx_1', subject: 'm1', body: 'b', payload: {}, at: at(10) });
+    assert.equal(f.calls.length, 2);
+    assert.deepEqual(f.calls[0], ['orchestration', 'check', '--wait', '--types', 'worker_done,escalation,question,status', '--timeout-ms', '1800000', '--run', 'run_1', '--json']);
+  });
+  // mail already handed over is not handed over again, and a worker's resend of worker_done is dropped
+  await ta(async () => {
+    const f = fakeWait([[done('d1', 'ctx_9', at(10))], [done('d1', 'ctx_9', at(10)), done('d2', 'ctx_9', at(13)), msg('m2', 'status')]]);
+    assert.deepEqual(ids(await main(W, f.deps)), ['d1']);
+    assert.deepEqual(ids(await main(W, f.deps)), ['m2']);
+  });
+  // a timeout looks once at the inbox for mail another check took; older mail than the first wait is left alone
+  await ta(async () => {
+    const f = fakeWait([[]], [msg('old', 'worker_done', { created_at: at(-60) }), msg('lost', 'escalation')]);
+    const r = await main(W, f.deps);
+    assert.deepEqual(ids(r), ['lost']);
+    assert.deepEqual(f.calls[1], ['orchestration', 'inbox', '--terminal', 'run:run_1', '--limit', '5', '--full', '--json']);
+  });
+  // three empty waits in a row come back as idle; a team lead's inbox takes no --run
+  await ta(async () => {
+    const f = fakeWait([[], [], []]);
+    const r = await main(['wait', '--inbox', 'dispatch:ctx_7', '--state', 's.json'], f.deps);
+    assert.deepEqual(r.out, { messages: [], idle: true });
+    assert.equal(f.calls.filter((c) => c[1] === 'check').length, 3);
+    assert.ok(!f.calls[0].includes('--run'));
+  });
+  // --last prints the last handed-over batch again without touching Orca; --once is one check without --wait
+  await ta(async () => {
+    const f = fakeWait([[msg('m1', 'question')], []]);
+    await main(W, f.deps);
+    const n = f.calls.length;
+    assert.deepEqual(ids(await main([...W, '--last'], f.deps)), ['m1']);
+    assert.equal(f.calls.length, n);
+    const once = await main([...W, '--once'], f.deps);
+    assert.deepEqual(once.out, { messages: [] });
+    assert.deepEqual(f.calls[n], ['orchestration', 'check', '--run', 'run_1', '--json']);
+  });
+  await ta(async () => {
+    const r = await main(W, fakeWait(['error']).deps);
+    assert.equal(r.code, 1); assert.match(r.out.error, /waiter_exists/);
+  });
+}
+
+// settle: one worker_done is judged, recorded or failed in one command
+{
+  const LEDGER = '# 장부\n\n## 결함 원장\n\n| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |\n| --- | --- | --- | --- | --- | --- |\n\n## 결정\n\n## 스냅샷\n\n- T00 | tree_0\n';
+  const REPORT = '# 리포트\n## 결함\n| ID | 심각도 | 증거 | 위치 |\n| --- | --- | --- | --- |\n| A-1 | High | 관찰: 실패 | a.ts |\n## 검증\n- ✅ 완료 기준 1\n- ❌ (참고) 범위 밖\n';
+  const settling = async (over = {}) => {
+    const f = await registered();
+    const m = f.map();
+    m.tasks.T01.dispatch = 'ctx_new';
+    f.fs['orca-tasks.json'] = JSON.stringify(m);
+    f.tasks.get(m.tasks.T01.orca).status = 'completed';
+    f.tasks.get(m.tasks.T02.orca).status = 'ready';
+    Object.assign(f.fs, { 'ledger.md': LEDGER, 'r.md': REPORT, 'out.ts': 'x', ...over });
+    f.deps.exists = (p) => f.fs[p] !== undefined;
+    f.deps.snapshot = () => 'tree_1';
+    return f;
+  };
+  const S = ['settle', ...M, '--id', 'T01', '--dispatch', 'ctx_new', '--report', 'r.md', '--ledger', 'ledger.md'];
+
+  // passing report: defect rows and the snapshot line go into the ledger; nothing is failed
+  await ta(async () => {
+    const f = await settling();
+    const { code, out } = await main([...S, '--expect', 'out.ts'], f.deps);
+    assert.equal(code, 0, JSON.stringify(out));
+    assert.deepEqual(out, { id: 'T01', ok: true, checked: 1, notes: ['- ❌ (참고) 범위 밖'], tree: 'tree_1', defects: { added: ['A-1'], existing: [] } });
+    assert.match(f.fs['ledger.md'], /\| A-1 \| T01 \| High \| 관찰 \| 1 \| 열림 \|/);
+    assert.match(f.fs['ledger.md'], /- T00 \| tree_0\n- T01 \| tree_1\n/);
+    assert.equal(f.count('task-update'), 0);
+  });
+  // a missing artifact fails the Task and rebinds the Task Orca already made ready; the ledger is left alone
+  await ta(async () => {
+    const f = await settling();
+    const { code, out } = await main([...S, '--expect', 'out.ts,missing.ts'], f.deps);
+    assert.equal(code, 1);
+    assert.equal(out.ok, false);
+    assert.equal(out.cause, '❌ 산출물 없음: missing.ts');
+    assert.deepEqual(out.demoted, ['T02']);
+    assert.equal(f.tasks.get(f.map().tasks.T01.orca).status, 'failed');
+    assert.equal(f.tasks.get(f.map().tasks.T02.orca).status, 'pending');
+    assert.equal(f.fs['ledger.md'], LEDGER);
+  });
+  // the worker's own failed outcome and an unreadable report both fail the Task
+  await ta(async () => {
+    const a = await main([...S, '--outcome', 'failed'], (await settling()).deps);
+    assert.equal(a.code, 1); assert.equal(a.out.cause, '❌ 워커가 실패로 보고함');
+    const b = await main([...S.slice(0, -4), '--report', 'none.md', '--ledger', 'ledger.md'], (await settling()).deps);
+    assert.equal(b.code, 1); assert.match(b.out.cause, /리포트를 읽을 수 없음: none\.md/);
+  });
+  // a report from another Dispatch settles nothing and fails nothing
+  await ta(async () => {
+    const f = await settling();
+    const { code, out } = await main(S.map((a) => (a === 'ctx_new' ? 'ctx_stale' : a)), f.deps);
+    assert.equal(code, 1);
+    assert.match(out.error, /기대한 Dispatch가 아님/);
+    assert.equal(out.expected, 'ctx_new');
+    assert.equal(f.count('task-update'), 0);
+    assert.equal(f.fs['ledger.md'], LEDGER);
+  });
+}
+
 console.log(`orca-launch.check: ${passed} passed`);

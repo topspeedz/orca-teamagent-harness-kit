@@ -61,7 +61,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **역할 계층과 요청 규모별 라우팅**
 
 - 계층은 코디네이터 아래 두 단계까지다. 팀원은 워커를 실행하지 않고, 워커는 commit하지 않는다.
-- 승인된 실행 팀에 단순 Task가 하나이고 팀장이 ON이면 코디네이터가 팀원에게 직접 배정할 수 있다. Task가 2개 이상이거나 하나라도 전문 분해가 필요하면 팀장을 거친다. 팀장이 OFF이면 해당 팀의 배정은 대기한다.
+- 승인된 실행 팀의 Task는 코디네이터가 팀원에게 직접 배정한다. Task가 여럿이라는 것만으로는 팀장을 두지 않고, 계획이 팀 내부 분해를 맡긴 Task만 팀장을 거친다. 팀장이 되는 에이전트가 OFF이면 해당 팀의 배정은 대기한다.
 
 **phase 진행과 승인**
 
@@ -93,7 +93,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | 구성 요소 | 역할 |
 | --- | --- |
 | `approval-gate` hook | 사용자 승인이 필요한 명령(배포, push 등)을 비대화형 세션에서 차단하고 `ask`로 에스컬레이션하게 한다. force push는 프로젝트 설정과 무관하게 항상 승인 대상이다. 무조건 막지 않고 사용자에게 묻는다 |
-| `orca-wait-gate` hook | 대기 규약을 위반한 `check --wait`(셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것, 다른 명령과 한 줄에 묶어 백그라운드로 건 것)를 차단한다 |
+| `orca-wait-gate` hook | 대기 명령(`orca-launch.mjs wait`)을 거치지 않고 직접 건 `check --wait` 가운데 셸 `&`로 실행한 것, `--timeout-ms`나 `--types`가 빠진 것, 다른 명령과 한 줄에 묶어 백그라운드로 건 것을 차단한다 |
 | `compact-gate` hook | 코디네이터가 tool call을 연속 실행하는 중이면 자동 컨텍스트 압축을 다음 턴 경계로 미룬다 |
 | `worker-intake-context` hook | 워커가 시작될 때 워커용 규칙을 컨텍스트에 주입한다 |
 | `secret-gate` hook | Playwright MCP 입력에 쿠키, 토큰, 비밀번호가 들어가거나 쿠키를 읽으려 하면 차단한다. 넣은 값이 대화 기록에 남는 것을 막는다 |
@@ -102,7 +102,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 | `defect-ledger.mjs` | 리포트의 `## 결함` 표를 장부의 `## 결함 원장`에 옮긴다. 증거가 없는 High는 Medium으로 기록하고, 이미 있는 행은 다시 쓰지 않는다 |
 | `model-selection.mjs` | 모델 배정표를 검증한다 (존재하지 않는 에이전트, 중복 행, 지원하지 않는 조합) |
 | `report-check.mjs` | 워커 리포트의 `## 검증` 섹션을 판정하고, 그 Task의 산출물 파일이 실제로 있는지 확인한다 |
-| `wait-contract-check.mjs` | 세 skill에 포함된 대기 규약이 원본과 일치하는지 비교한다 |
+| `test-ledger.mjs` | 전체 테스트의 결과 JSON(vitest, jest)을 테스트 케이스 장부의 최근 결과와 추적표의 `구현됨`·`검증됨`에 옮긴다. 실행 결과에 없는 케이스는 그대로 두고 목록으로 낸다 |
 | `coordinator-settings.mjs` | allowlist를 읽어 코디네이터 전용 설정 파일을 생성한다 |
 | `browser/launch.cjs`, `browser/probe-fps.cjs` | 화면 캡처, 3D·WebGL 실측, 로그인이 필요한 검증을 Playwright MCP 밖에서 돌리는 런처와 GPU 실측 스크립트. 비밀값은 dotenv 파일에서만 읽고 로그에서 가린다 |
 
@@ -113,7 +113,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **코디네이터의 토큰 사용량을 줄인다**
 
 - 코디네이터는 플러그인과 skill을 최소로 활성화한 전용 설정으로 실행된다. 활성화할 항목은 `.claude/coordinator.keep.json`에서 사용자가 직접 지정한다.
-- 코디네이터는 heartbeat마다 깨어나지 않는다. 대기는 백그라운드 작업 하나로만 걸고, 대기 규약 5줄과 hook이 이를 강제한다.
+- 코디네이터는 heartbeat, 재배달, 타임아웃에 깨어나지 않는다. 대기는 `orca-launch.mjs wait` 하나를 백그라운드 작업으로 걸고, 이 명령은 처리할 메시지가 올 때만 끝난다. `worker_done`의 정산(네 가지 확인, 실패 처리, 결함 원장, 스냅샷)도 `orca-launch.mjs settle` 한 명령이다.
 - 코디네이터는 워커 리포트의 전문을 읽지 않고 워커의 테스트를 다시 실행하지도 않는다. 리포트 판정 스크립트의 결과만 확인한다.
 - 코디네이터는 계획 승인 후 새 세션으로 실행된다. 설계 단계에서 로드한 skill이 컨텍스트에 남지 않는다.
 
@@ -148,7 +148,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 **문서가 무분별하게 늘어나지 않는다**
 
 - 작업 디렉터리는 `_workspace/<팀>/<phase>/`이고 `.gitignore`로 제외한다. 파일 이름은 `NN_<에이전트>_<산출물>_v1.md` 형식 하나로 통일한다.
-- 같은 규칙을 두 곳에 두지 않는다. 대기 규약, 모델 배정표, 팀 구성표는 각각 단일 원본(single source of truth) 파일을 갖는다.
+- 같은 규칙을 두 곳에 두지 않는다. 모델 배정표와 팀 구성표는 각각 단일 원본(single source of truth) 파일을 갖고, 판단이 없는 절차(대기, 정산)는 지침이 아니라 스크립트에 둔다.
 - 팀의 작업 리포트는 이력이다. 라이브 문서의 첫 작성과 후속 수정은 지정된 문서·절의 작성자가 맡는다. PM은 PRD·SRS를 쓰고 `doc-steward`는 색인과 정합성을 확인한다. 담당자가 없으면 역할 생성, 나중에 배정, 해당 없음 중 사용자가 선택한다.
 - 새 설치는 `docs/harness/templates/product-docs/`의 양식 12개로 코드 지도와 12개 번호 폴더의 초안 13개를 준비한다. 기존 색인이 가리키는 정본과 편집한 내용은 보존한다.
 
@@ -215,7 +215,7 @@ claude plugin install orca-teamagent-harness-kit@orca-teamagent
 2. **질문 5개**: Codex 사용 여부, 사용자 승인이 필요한 명령, 코디네이터 터미널의 권한 모드, planner의 effort, 코디네이터에서 활성화할 플러그인과 skill.
 3. **설치**: 내용이 같은 파일은 건너뛰고, 내용이 다른 기존 파일은 diff를 보여 준 뒤 승인받은 파일만 덮어쓴다.
 4. **설정 생성**: allowlist `.claude/coordinator.keep.json`을 수정하고 코디네이터 설정 파일을 생성한다.
-5. **검증**: 설치된 self-test, 모델 배정표 검증, 대기 규약 비교를 실행한다.
+5. **검증**: 설치된 self-test와 모델 배정표 검증을 실행한다.
 6. **기반 설계**: 프로젝트의 검증 명령을 실제로 실행해 통과한 것만 지침에 기록하고, 금지 명령(`permissions.deny`), 문서 라우팅, 토큰 기준선을 정한다.
 7. **팀 구성**: 지난 세션 기록과 기존 파이프라인을 분석해 팀과 팀원을 근거와 함께 추천하고, 사용자가 고른 대로 팀 skill, 에이전트, 역할 skill을 만들어 팀 구성표와 모델 배정표에 올린다.
 8. **모델 표**: 모델 배정표의 모든 행을 설문 페이지(Artifact)로 띄우고, 사용자가 저장한 값만 표에 반영한다.
@@ -261,7 +261,7 @@ Codex를 함께 쓰면 같은 이름의 팀 스킬 포인터를 만들고 새 �
 | 단순 질문, 파일 하나의 작은 수정 | 창구가 직접 처리한다 |
 | 새 요구사항 | PM이 항목화하고 Planner가 요구사항을 검토한다 |
 | 명시한 백로그 ID / 한 phase 위임 | 지정 ID는 Planner에게 바로 넘긴다. 위임하면 PM이 묶음을 선정한다 |
-| 승인된 실행 팀 배정 | 팀장 ON이고 단순 Task 1개면 직접 배정 가능, 2개 이상 또는 전문 분해 1개면 팀장 경유, 팀장 OFF면 대기 |
+| 승인된 실행 팀 배정 | 코디네이터가 팀원에게 직접 배정, 계획이 팀 내부 분해를 맡긴 Task만 팀장 경유, 팀장 에이전트가 OFF면 대기 |
 
 ## 설치되는 파일
 
@@ -274,7 +274,7 @@ AGENTS.md, CLAUDE.md             공통 지침과 라우팅
                                  docs-management, requirements-write, product-review, team-qa,
                                  dag-swimlane, waterfall-timeline
   hooks/                         승인, 대기, 컨텍스트 압축, 워커 규칙 주입, 브라우저 비밀값 차단
-  scripts/                       워커 실행, 모델 배정표, 리포트 판정, 대기 규약 비교, 코디네이터 설정, 브라우저 런처
+  scripts/                       워커 실행·대기·정산, 모델 배정표, 리포트 판정, 코디네이터 설정, 브라우저 런처
   settings.json                  hook 등록, permissions, 브라우저 병렬용 env 두 줄 (기존 파일에는 항목만 병합한다)
   front-desk.settings.json       직접 여는 세션에서 그 env 두 줄을 끄는 설정
   coordinator.keep.json          코디네이터에서 활성화할 플러그인과 skill의 allowlist

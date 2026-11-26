@@ -22,10 +22,11 @@ writeFileSync(join(cwd, '.claude/agents/qa-inspector.md.agent-toggle-off'), '# Q
 assert.equal(team('--count', '2').route, 'wait');
 assert.equal(team('--count', '1').route, 'wait');
 renameSync(join(cwd, '.claude/agents/qa-inspector.md.agent-toggle-off'), join(cwd, '.claude/agents/qa-inspector.md'));
-assert.equal(team('--count', '1').route, 'direct');
-assert.equal(team('--count', '2').route, 'lead');
-assert.equal(team('--count', '1', '--complex').route, 'lead');
-assert.notEqual(spawnSync(process.execPath, [script, 'team', '--team', 'qa', '--count', '0'], { cwd }).status, 0);
+assert.equal(team().route, 'direct');
+// a Task count alone does not call for a lead; only a Task the plan left to be split inside the team does
+assert.equal(team('--count', '5').route, 'direct');
+assert.equal(team('--complex').route, 'lead');
+assert.notEqual(spawnSync(process.execPath, [script, 'team'], { cwd }).status, 0);
 const intake = (...args) => spawnSync(process.execPath, [script, 'intake', ...args], { cwd, encoding: 'utf8' });
 const first = (args, role, reviewer, approvals) => {
   const result = intake(...args);
@@ -52,4 +53,4 @@ writeFileSync(join(cwd, 'docs/backlog-archive.md'), '');
 const missing = intake('--ids', 'BL-0012');
 assert.equal(missing.status, 1);
 assert.match(missing.stderr, /없는 ID/);
-console.log('phase-routing: three intake paths, dependencies and archived IDs, team OFF/ON and lead selection passed');
+console.log('phase-routing: three intake paths, dependencies and archived IDs, team OFF/ON, direct by default and lead only for --complex passed');

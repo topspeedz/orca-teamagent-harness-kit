@@ -109,13 +109,13 @@ export function defects(ledgerText, map) {
 }
 
 const NOTICE = /^\s*You have \d+ orchestration message/;
-// The wait contract runs `check --wait` as a background command; its completion notice is the wake.
+// The wait runs as a background command (`orca-launch.mjs wait`, or a bare `check --wait` in older sessions); its completion notice is the wake.
 const BG_DONE = /^\s*<task-notification>[\s\S]*?<tool-use-id>([^<\s]+)<\/tool-use-id>/;
-const WAIT_CMD = /orchestration\s+check\s[^\n]*--wait/;
+const WAIT_CMD = /orchestration\s+check\s[^\n]*--wait|orca-launch\.mjs["']?\s+wait\b/;
 // Only the coordinator creates the execution Run and registers Tasks; the front desk and team leads do not.
 const COORD_CMD = /orca-launch\.mjs["']?\s+(exec-run|register)\b/;
 
-// One session .jsonl: turns woken by Orca's typed notice or by a finished background `check --wait`, and those that
+// One session .jsonl: turns woken by Orca's typed notice or by a finished background wait, and those that
 // ended with no tool call.
 // toolless only approximates "the batch held only heartbeats" — the session log does not record batch contents.
 export function wakes(text) {

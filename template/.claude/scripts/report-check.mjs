@@ -62,6 +62,16 @@ export function newerVersion(path) {
   return best?.name;
 }
 
+// The whole verdict on one report file: its verification lines, a newer version next to it, the artifacts it had to produce.
+export function judge(path, expected = [], opts = {}, io = { read: (p) => readFileSync(p, 'utf8'), exists: existsSync }) {
+  let out = check(io.read(path), opts);
+  const newer = newerVersion(path);
+  if (newer) out = { ...out, ok: false, error: `더 높은 버전이 있음: ${newer}` };
+  const missing = expected.filter((p) => !io.exists(p));
+  if (missing.length) out = { ...out, ok: false, failed: [...out.failed, ...missing.map((p) => `❌ 산출물 없음: ${p}`)] };
+  return out;
+}
+
 // realpath on both sides: run through a junction or symlink, main must still run
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const [path, ...rest] = process.argv.slice(2);
@@ -69,11 +79,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
   const cap = Number(rest[rest.indexOf('--round-cap') + 1]);
   let out;
   try {
-    out = check(readFileSync(path, 'utf8'), rest.includes('--round-cap') && Number.isInteger(cap) ? { roundCap: cap } : {});
-    const newer = newerVersion(path);
-    if (newer) out = { ...out, ok: false, error: `더 높은 버전이 있음: ${newer}` };
-    const missing = expected.filter((p) => !existsSync(p));
-    if (missing.length) out = { ...out, ok: false, failed: [...out.failed, ...missing.map((p) => `❌ 산출물 없음: ${p}`)] };
+    out = judge(path, expected, rest.includes('--round-cap') && Number.isInteger(cap) ? { roundCap: cap } : {});
   } catch (e) { out = { ok: false, checked: 0, failed: [], notes: [], error: path ? e.message : 'usage: report-check.mjs <report-path>' }; }
   console.log(JSON.stringify(out));
   process.exit(out.ok ? 0 : 1);

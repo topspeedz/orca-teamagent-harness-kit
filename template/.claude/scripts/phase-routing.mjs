@@ -40,9 +40,8 @@ function teamRoute(args) {
   const { values } = parseArgs({ args, options: {
     team: { type: 'string' }, count: { type: 'string' }, complex: { type: 'boolean' },
   } });
-  const count = Number(values.count);
-  if (!values.team || !Number.isSafeInteger(count) || count < 1)
-    throw new Error('사용법: phase-routing.mjs team --team <팀> --count <양의 정수> [--complex]');
+  // --count is still accepted from older callers and decides nothing: a Task count alone does not call for a lead.
+  if (!values.team) throw new Error('사용법: phase-routing.mjs team --team <팀> [--complex]');
   const rows = readFileSync('docs/harness/team-org.md', 'utf8').split(/\r?\n/)
     .filter(line => line.trim().startsWith('|'))
     .map(line => line.trim().split('|').slice(1, -1).map(cell => cell.replaceAll('`', '').trim()));
@@ -55,8 +54,8 @@ function teamRoute(args) {
     throw new Error('명시된 팀장이 있는 실행 팀만 배정할 수 있음: ' + values.team);
   const file = join('.claude/agents', lead + '.md');
   const active = existsSync(file) && !existsSync(file + '.agent-toggle-off');
-  let route = 'wait';
-  if (active) route = count === 1 && !values.complex ? 'direct' : 'lead';
+  // The coordinator assigns members directly. A lead is for a Task the plan left to be split inside the team (--complex).
+  const route = !active ? 'wait' : values.complex ? 'lead' : 'direct';
   return { team: values.team, lead, route };
 }
 

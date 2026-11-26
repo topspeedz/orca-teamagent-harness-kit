@@ -150,12 +150,12 @@ const COORD = [
   say('a1', [{ type: 'tool_use', id: 'u9', name: 'Bash', input: { command: 'node .claude/scripts/orca-launch.mjs register --map m.json --id T01 --spec-file a.md' } }]),
   done('t1'),
   say('a2', [{ type: 'text', text: '테스트 끝' }]),
-  bg('w2', 'orca orchestration check --wait --json'),
+  bg('w2', 'node .claude/scripts/orca-launch.mjs wait --inbox run:run_1'),
   done('w2'),
   say('a3', [{ type: 'text', text: '대기' }]),
 ].join('\n');
 
-t('wakes: a finished background `check --wait` is a wake, another background command is not; exec-run/register marks the coordinator', () => {
+t('wakes: a finished background wait (bare `check --wait` or `orca-launch.mjs wait`) is a wake, another background command is not; exec-run/register marks the coordinator', () => {
   assert.deepEqual(wakes(COORD), { wakes: 2, toolless: 1, coordinator: true });
 });
 

@@ -8,6 +8,7 @@
 //   node .claude/scripts/orca-launch.mjs coordinator --phase <phase> --spec-file <p> --does <요청> [--backlog BL-0001,BL-0002] --approval <file> --version v1 --plan <plan.md> --dag <dag.json>
 //   node .claude/scripts/orca-launch.mjs snapshot --run <id>
 //   node .claude/scripts/orca-launch.mjs codex-rules   (prints the six worker lines for a Codex Task spec)
+//   node .claude/scripts/orca-launch.mjs wait --inbox run:<Run ID>|dispatch:<Dispatch ID> [--once] [--last]   (background; returns only mail to act on)
 // Tasks registered in Orca (the coordinator's execution Run; <map> is _workspace/_run/<phase>/orca-tasks.json):
 //   node .claude/scripts/orca-launch.mjs exec-run --phase <phase> --map <map> --approval <approved-plan.v1.json>
 //   node .claude/scripts/orca-launch.mjs register --map <map> --id <T01> --spec-file <p> [--deps T01,T02] [--lead] [--override-reason <원문>] [--edits <경로,…>] [--resource <gpu,blender,…>]
@@ -16,13 +17,14 @@
 //   node .claude/scripts/orca-launch.mjs launchable --map <map> [--slots 8]   (register takes --edits <paths,> --resource <gpu,blender>)
 //   node .claude/scripts/orca-launch.mjs pull --map <map> --id <T01> --deps <실제 입력 Task,…> --reason <이유>
 //   node .claude/scripts/orca-launch.mjs fail --map <map> --id <T01> --cause <원인>
+//   node .claude/scripts/orca-launch.mjs settle --map <map> --id <T01> --dispatch <id> --report <리포트> --ledger <ledger.md> [--expect <산출물,…>] [--outcome failed]
 //   node .claude/scripts/orca-launch.mjs skip --map <map> --id <T01> --reason <사유>   (conditional, fix and recheck Tasks only)
 //   node .claude/scripts/orca-launch.mjs gate --map <map> --id <T01> --question <질문>
 //   node .claude/scripts/orca-launch.mjs resolve --map <map> --id <T01> --resolution <답>
 //   node .claude/scripts/orca-launch.mjs actual --map <map>
 // stdout: one JSON receipt. Never stops or relaunches a worker whose turn start was not observed.
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, realpathSync, renameSync, linkSync, unlinkSync, rmdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, mkdirSync, realpathSync, renameSync, linkSync, unlinkSync, rmdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, basename, dirname, resolve } from 'node:path';
@@ -32,7 +34,9 @@ import { TABLE_PATH, parseTable, matchRow, lookup, choices } from './model-selec
 import { assessRouting } from './model-routing.mjs';
 import { SETTINGS_PATH, KEEP_PATH, unclassified, readInventory } from './coordinator-settings.mjs';
 import { reviewPlan, approvePlan, loadApproval } from './orca-launch-approval.mjs';
-import { readLedger, fixAllowed, currentRound } from './defect-ledger.mjs';
+import { readLedger, fixAllowed, currentRound, parseDefects, addDefects, addSnapshot } from './defect-ledger.mjs';
+import { judge } from './report-check.mjs';
+import { take as takeTree, defaultGit } from './tree-snapshot.mjs';
 
 // P8: Codex runs project hooks only after a human trusts them, so Codex workers get the hook's six lines in the spec instead.
 export const HOOK_PATH = '.claude/hooks/worker-intake-context.mjs';
@@ -116,10 +120,12 @@ export function coordinatorCommand({ model, effort, settingsPath, permissionMode
 const OPTIONS = Object.fromEntries([
   ...['agent', 'unit', 'spec-file', 'bracket', 'does', 'run', 'task', 'override-reason', 'phase', 'backlog',
     'map', 'id', 'deps', 'cause', 'question', 'resolution', 'edits', 'resource', 'slots', 'reason',
-    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity', 'assessment'].map((k) => [k, { type: 'string' }]),
-  ['lead', { type: 'boolean' }],
-  ['retry', { type: 'boolean' }],
+    'version', 'plan', 'dag', 'review', 'response', 'approval', 'parent', 'legacy-map', 'complexity', 'assessment',
+    'inbox', 'state', 'timeout-ms', 'dispatch', 'report', 'ledger', 'expect', 'outcome', 'round-cap'].map((k) => [k, { type: 'string' }]),
+  ...['lead', 'retry', 'once', 'last'].map((k) => [k, { type: 'boolean' }]),
 ]);
+// What wakes a wait. heartbeat is left out; status stays, since it carries the user's instruction to a waiting coordinator.
+const WAKE_TYPES = 'worker_done,escalation,question,status';
 const fail = (error, extra = {}) => ({ code: 1, out: { error, ...extra } });
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // phase name or backlog ID as a whole token of the objective (`phase-a` must not match `phase-ab`)
@@ -197,6 +203,45 @@ async function execute(cmd, o, deps, locks) {
     const inbox = call(['orchestration', 'check', '--peek']);
     const workers = call(['orchestration', 'worker-list', '--run', o.run, '--full']);
     return { code: inbox.ok === false || workers.ok === false ? 1 : 0, out: { run: o.run, inbox, workers } };
+  }
+
+  // The one wait a coordinator, team lead or front desk keeps, run as a tracked background command. It waits through
+  // heartbeats, redeliveries and timeouts and returns only mail to act on, so the model is not woken to re-arm a wait.
+  if (cmd === 'wait') {
+    if (!/^(run|dispatch):\S+$/.test(o.inbox ?? '')) return fail('사용법: wait --inbox run:<Run ID>|dispatch:<Dispatch ID> [--once] [--last]');
+    const path = o.state ?? join('_workspace', '_run', '.wait', `${o.inbox.replace(':', '_')}.json`);
+    const st = JSON.parse(io.optional(path) ?? 'null') ?? { since: deps.now(), seen: [], done: {}, last: [] };
+    if (o.last) return { code: 0, out: { messages: st.last } };
+    const json = (s) => { try { return JSON.parse(s); } catch { return s ?? null; } };
+    // Each message is handed over once. A worker_done for a Dispatch that reported seconds ago is the worker's resend.
+    const take = (rows) => rows.filter((m) => {
+      if (m.type === 'heartbeat' || st.seen.includes(m.id)) return false;
+      st.seen.push(m.id);
+      const dispatch = m.type === 'worker_done' && json(m.payload)?.dispatchId;
+      if (!dispatch) return true;
+      const prev = st.done[dispatch];
+      st.done[dispatch] = m.created_at;
+      return !(prev && Math.abs(Date.parse(m.created_at) - Date.parse(prev)) < 60000);
+    }).map((m) => ({ id: m.id, type: m.type, from: m.from_handle, subject: m.subject, body: m.body, payload: json(m.payload), at: m.created_at }));
+    const check = ['orchestration', 'check', ...(o.once ? [] : ['--wait', '--types', WAKE_TYPES, '--timeout-ms', o['timeout-ms'] ?? '1800000']),
+      ...(o.inbox.startsWith('run:') ? ['--run', o.inbox.slice(4)] : [])];
+    for (let empty = 0; ;) {
+      const r = call(check);
+      if (r.ok === false) return fail(`check 실패: ${r.error?.message}`);
+      const got = r.result?.messages ?? [];
+      let out = take(got);
+      if (!got.length) {
+        // Timed out. Mail a stray check took shows only in the inbox listing; mail older than the first wait is not ours.
+        const box = call(['orchestration', 'inbox', '--terminal', o.inbox, '--limit', '5', '--full']);
+        out = take((box.result?.messages ?? []).filter((m) => Date.parse(m.created_at) >= Date.parse(st.since)));
+        empty++;
+      }
+      if (out.length) st.last = out;
+      st.seen = st.seen.slice(-2000);
+      deps.write(path, JSON.stringify(st));
+      if (out.length || o.once) return { code: 0, out: { messages: out } };
+      if (empty >= 3) return { code: 0, out: { messages: [], idle: true } };
+    }
   }
 
   const table = (agent, unit, complexity) => {
@@ -667,18 +712,45 @@ async function execute(cmd, o, deps, locks) {
     return { code: 0, out: { run: m.run, running: running.length, free: slots - running.length, launch, held, candidates } };
   }
 
-  if (cmd === 'fail') {
-    if (!o.id || !o.cause) return fail('사용법: fail --map <map> --id <T01> --cause <원인>');
-    let m, e, st;
-    try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
-    const done = setStatus(m, e.orca, 'failed', '--result', o.cause);
-    if (done.ok === false) return fail(`task-update 실패: ${done.error?.message}`);
-    try { st = statuses(m); } catch (err) { return fail(err.message); }
+  const failTask = (m, e, cause) => {
+    const done = setStatus(m, e.orca, 'failed', '--result', cause);
+    if (done.ok === false) throw new Error(`task-update 실패: ${done.error?.message}`);
+    const st = statuses(m);
     // measured: Orca makes dependents ready on the worker's own report and does not take that back when the Task fails later
     const dependents = Object.keys(m.tasks).filter((id) => m.tasks[id].deps.includes(o.id));
     const demoted = dependents.filter((id) => st[id].status === 'ready');
     for (const id of demoted) setStatus(m, m.tasks[id].orca, 'pending');
-    return { code: 0, out: { id: o.id, demoted, alreadyStarted: dependents.filter((id) => ['dispatched', 'completed'].includes(st[id].status)) } };
+    return { demoted, alreadyStarted: dependents.filter((id) => ['dispatched', 'completed'].includes(st[id].status)) };
+  };
+
+  if (cmd === 'fail') {
+    if (!o.id || !o.cause) return fail('사용법: fail --map <map> --id <T01> --cause <원인>');
+    try { const m = loadMap(); return { code: 0, out: { id: o.id, ...failTask(m, entry(m), o.cause) } }; } catch (err) { return fail(err.message); }
+  }
+
+  // One worker_done settled in one command: the four checks, the fail-and-rebind on a miss, the defect rows, the tree snapshot.
+  if (cmd === 'settle') {
+    if (!o.id || !o.dispatch || !o.report || !o.ledger) return fail('사용법: settle --map <map> --id <T01> --dispatch <worker_done의 dispatchId> --report <리포트> --ledger <ledger.md> [--expect <산출물,…>] [--outcome failed] [--round-cap <N>]');
+    let m, e;
+    try { m = loadMap(); e = entry(m); } catch (err) { return fail(err.message); }
+    // a report from another Dispatch (an earlier attempt, a resend) settles nothing and fails nothing
+    if (o.dispatch !== e.dispatch) return fail('기대한 Dispatch가 아님 — 정산하지 않음', { id: o.id, expected: e.dispatch });
+    let verdict;
+    try { verdict = judge(o.report, csv(o.expect), o['round-cap'] ? { roundCap: Number(o['round-cap']) } : {}, { read: deps.read, exists: deps.exists }); }
+    catch { verdict = { ok: false, checked: 0, failed: [`❌ 리포트를 읽을 수 없음: ${o.report}`], notes: [] }; }
+    if (o.outcome === 'failed') verdict = { ...verdict, ok: false, failed: ['❌ 워커가 실패로 보고함', ...verdict.failed] };
+    if (!verdict.ok) {
+      const cause = verdict.failed[0] ?? verdict.error ?? '검증 줄에 ✅가 없음';
+      try { return { code: 1, out: { id: o.id, ok: false, cause, failed: verdict.failed, notes: verdict.notes, ...failTask(m, e, cause) } }; }
+      catch (err) { return fail(err.message); }
+    }
+    const ledger = deps.read(o.ledger);
+    const defects = parseDefects(deps.read(o.report));
+    const before = new Map(readLedger(ledger).defects.map((d) => [d.id, d.source]));
+    const tree = deps.snapshot();
+    deps.write(o.ledger, addSnapshot(addDefects(ledger, { source: o.id, round: currentRound(m), defects }), o.id, tree));
+    return { code: 0, out: { id: o.id, ok: true, checked: verdict.checked, notes: verdict.notes, tree,
+      defects: { added: defects.map((d) => d.id).filter((id) => !before.has(id)), existing: defects.filter((d) => before.has(d.id)).map((d) => ({ id: d.id, source: before.get(d.id) })) } } };
   }
 
   // Closes a planned Task that has nothing to do, so the Tasks behind it can start. Every refusal comes before any Orca change.
@@ -949,7 +1021,7 @@ async function execute(cmd, o, deps, locks) {
     return { code: turnStarted ? 0 : 1, out };
   }
 
-  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|exec-run|register|ready|launchable|pull|fail|skip|gate|resolve|actual ...');
+  return fail('사용법: orca-launch.mjs review|approve|reapprove|assessment-context|worker|coordinator|snapshot|codex-rules|wait|exec-run|register|ready|launchable|pull|fail|settle|skip|gate|resolve|actual ...');
 }
 
 const opts = { encoding: 'utf8', maxBuffer: 64 << 20 };
@@ -974,6 +1046,8 @@ const deps = {
   read: (p) => readFileSync(p, 'utf8').replace(/^﻿/, ''),
   run: (cmd, args) => spawnSync(cmd, args, opts).stdout ?? '',
   write: writeJson,
+  exists: existsSync,
+  snapshot: () => takeTree(defaultGit),
   create: (p, text) => writeJson(p, text, true),
   lock: async p => {
     mkdirSync(dirname(p), { recursive: true });

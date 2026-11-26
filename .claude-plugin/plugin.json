@@ -1,6 +1,6 @@
 {
   "name": "orca-teamagent-harness-kit",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Orca 멀티 에이전트 하네스 설치, 팀 생성과 팀원 추가",
   "author": { "name": "Hans Koh" }
 }

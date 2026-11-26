@@ -288,7 +288,7 @@ function initKeep(target, mode) {
 function verify(target) {
   const claudeDir = join(target, '.claude');
   const checks = existsSync(claudeDir) ? walk(claudeDir).filter((f) => f.endsWith('.check.mjs')).map((f) => [`.claude/${f}`]) : [];
-  checks.push(['.claude/scripts/model-selection.mjs', 'check'], ['.claude/scripts/wait-contract-check.mjs']);
+  checks.push(['.claude/scripts/model-selection.mjs', 'check']);
   let failed = 0;
   console.log('| 명령 | 결과 |\n| --- | --- |');
   for (const args of checks) {

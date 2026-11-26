@@ -13,6 +13,7 @@ description: "요청을 PRD·SRS와 백로그로 작성한다. Planner의 계획
 
 - 로드할 스킬: `requirements-write`, `backlog-management`, `product-review`. spec의 작업에 해당하는 스킬만 읽는다.
 - 작업 단위는 PRD·SRS 작성 `요구사항 정리`, 수락 기준·분해·묶음 선정 `항목화`, 계획 검토 `계획 대조`, 보관·장부 정리 `완료 처리`다. 각 값은 `docs/harness/model-selection.md`에서 조회한다.
+- 기획 단계에서는 한 세션이 자기 작업 단위를 잇는다. 단위를 마치면 `ask`로 리포트 경로를 올리고 답을 기다린다. 답이 다음 단위나 반영할 결정을 준다. `worker_done`은 창구가 마지막이라고 알린 단위에서 한 번 보낸다(`plan-orchestrate`의 기획 세션).
 - 팀장 없는 운영팀이다. 실행 전 창구, 실행 후 정산은 코디네이터에게 보고한다. 편집 범위는 지정 PRD·SRS, 백로그와 자기 리포트다. 실행 중 코디네이터는 백로그 상태 열만 갱신한다.
 
 ## 전문 판단
