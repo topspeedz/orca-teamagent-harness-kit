@@ -1,14 +1,16 @@
-// Run explicitly for a newly authored role, after its team and model rows exist.
+// Run explicitly for a newly authored role, after its roster and model rows exist.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseTable, TABLE_PATH } from './model-selection.mjs';
+import { readRoster } from './roster.mjs';
 
 const roleDir = '.claude/agents';
-const rosterPath = 'docs/harness/team-org.md';
+const rosterPath = 'docs/harness/agents.md';
+const reasons = ['컨텍스트 분리', '병렬', '도구·지시 충돌'];
 const identifiers = /^[a-z0-9][a-z0-9_-]*$/i;
 const unquote = (s) => s.trim().replace(/^`|`$/g, '');
 const cells = (line) => line.trim().slice(1, -1).split('|').map(unquote);
-const names = (field) => field.split(',').map(unquote);
+const names = (field) => field.split(',').map(unquote).filter(Boolean);
 const codeSpans = (line) => [...line.matchAll(/`([^`]+)`/g)].map(m => m[1]);
 const read = (file) => readFileSync(file, 'utf8').replace(/^\uFEFF/, '').replaceAll('\r\n', '\n');
 const fileExists = (file) => statSync(file, { throwIfNoEntry: false })?.isFile();
@@ -41,7 +43,7 @@ function validate(name) {
   }
   if (!description.trim()) fail(path, '빈 description');
   const body = source.slice(header[0].length);
-  for (const heading of ['## 핵심 역할', '## 작업 원칙', '## 전문 판단', '## 입력과 출력', '### 읽는 입력', '### 작업 산출물', '## 완료 기준', '## 다시 호출될 때', '## 오류 처리']) {
+  for (const heading of ['## 핵심 역할', '## 따로 두는 이유', '## 작업 원칙', '## 경계', '## 전문 판단', '## 입력과 출력', '### 읽는 입력', '### 작업 산출물', '## 완료 기준', '## 다시 호출될 때', '## 오류 처리']) {
     if (!section(body, heading)) fail(path, heading + ' 내용 누락');
   }
   const io = section(body, '## 입력과 출력');
@@ -69,14 +71,24 @@ function validate(name) {
   const skill = (id) => {
     if (!identifiers.test(id) || !fileExists('.claude/skills/' + id + '/SKILL.md')) fail(path, '스킬을 찾을 수 없음: ' + id);
   };
+  const apart = section(body, '## 따로 두는 이유');
+  if (apart) {
+    const line = apart.split('\n').find(l => /^- 기준:/.test(l));
+    const value = line ? line.slice(line.indexOf(':') + 1).trim() : '';
+    if (!reasons.includes(value)) fail(path, '따로 두는 이유의 기준은 컨텍스트 분리, 병렬, 도구·지시 충돌 중 하나: ' + value);
+  }
   const rules = section(body, '## 작업 원칙');
   const skillLine = rules.split('\n').find(l => /^- 로드할 스킬:/.test(l));
+  let loaded = [];
   if (!skillLine) fail(path, '로드할 스킬 목록 누락 (없으면 없음)');
   else {
     const list = skillLine.slice(skillLine.indexOf(':') + 1).trim();
-    if (!codeSpans(list).length && list !== '없음') fail(path, '역할 스킬 이름을 백틱으로 표시');
-    for (const id of codeSpans(list)) skill(id);
+    loaded = codeSpans(list);
+    if (!loaded.length && list !== '없음') fail(path, '역할 스킬 이름을 백틱으로 표시');
+    for (const id of loaded) skill(id);
   }
+  if (!rules.split('\n').some(l => /^- 런타임과 자원:\s*\S/.test(l))) fail(path, '런타임과 자원 줄 누락 (없으면 없음)');
+  if (!rules.split('\n').some(l => /^- 서브에이전트:\s*\S/.test(l))) fail(path, '서브에이전트 줄 누락 (없으면 없음)');
   function roleTable(title, header, visit) {
     // a project may add columns after the required ones; only the required ones are read
     const need = header.split('|').length;
@@ -90,44 +102,32 @@ function validate(name) {
       if (!line.startsWith('|')) break;
       const row = cells(line);
       if (!line.trimEnd().endsWith('|') || row.length < need || row.slice(0, need).some(c => !c)) fail(path, title + ' 행 오류: ' + line);
-      else visit(...row.slice(0, need));
+      else visit(...row.slice(0, need), Object.fromEntries(cells(lines[start]).map((h, i) => [h, row[i]])));
     }
   }
   roleTable('문서 책임', '문서|범위|책임', (doc, scope, duty) => {
     checkPath(doc, '문서 책임 ' + scope, true);
     if (!['작성', '검토', '확인'].includes(duty)) fail(path, '문서 책임 값 오류: ' + duty);
   });
-  roleTable('직접 협업', '상대|협의 주제|목적', (peer) => {
+  roleTable('직접 협업', '상대|협의 주제|목적', (peer, topic, purpose, row) => {
     if (peer === name || !roleExists(peer)) fail(path, '협의 상대 역할 오류: ' + peer);
+    // the 한도 column is optional; a table that has it fills it on every row
+    if ('한도' in row && !row['한도']) fail(path, '직접 협업의 한도가 비어 있음: ' + peer);
+  });
+  const units = [];
+  roleTable('작업 단위와 스킬', '작업 단위|쓰는 스킬|돌려주는 것', (unit, skills) => {
+    units.push(unit);
+    for (const id of names(skills)) if (!loaded.includes(id)) fail(path, '작업 단위 표의 스킬이 로드할 스킬에 없음: ' + id);
   });
 
-  const roster = read(rosterPath).split('\n');
-  const start = roster.findIndex(l => l.startsWith('|') && cells(l).slice(0, 5).join('|') === '팀|팀장이 되는 에이전트|팀원|팀 스킬|편집 범위');
-  const teams = [];
-  if (start >= 0) {
-    for (const line of roster.slice(start + 2)) {
-      if (!line.startsWith('|')) break;
-      const row = cells(line);
-      if (names(row[2] ?? '').includes(name)) teams.push(row);
-    }
-  }
-  if (teams.length !== 1) fail(rosterPath, name + '의 명시적 팀원 행이 하나여야 합니다 (현재 ' + teams.length + ')');
-  for (const row of teams) {
-    if (![5, 6].includes(row.length) || (row.length === 6 && !['운영팀', '실행팀', '직속'].includes(row[5]))) fail(rosterPath, '구분 또는 열 수 오류: ' + row[0]);
-    const members = names(row[2]);
-    if (new Set(members).size !== members.length) fail(rosterPath, '중복 팀원: ' + row[2]);
-    for (const member of members) if (!roleExists(member)) fail(rosterPath, '팀원 역할 파일 없음: ' + member);
-    if (row[5] === '실행팀' && (!roleExists(row[1]) || !members.includes(row[1]))) fail(rosterPath, '실행팀의 명시적 팀장 누락: ' + row[0]);
-    if (row[5] === '실행팀' && !row[3]) fail(rosterPath, '실행팀 스킬 누락: ' + row[0]);
-    if (row[3] && !['없음', '-'].includes(row[3])) skill(row[3]);
-  }
+  const listed = readRoster().filter(r => r.agent === name);
+  if (listed.length !== 1) fail(rosterPath, name + '의 명단 행이 하나여야 합니다 (현재 ' + listed.length + ')');
+  else if ([...new Set(listed[0].skills)].sort().join() !== [...new Set(loaded)].sort().join()) fail(rosterPath, '명단과 역할 파일의 스킬이 다름: ' + name);
   const model = parseTable(read(TABLE_PATH));
   for (const err of model.errors) fail(TABLE_PATH, err);
   const rows = model.rows.filter(r => r.agent === name);
   if (!rows.length) fail(TABLE_PATH, name + '의 작업 단위 행 없음');
-  for (const line of rules.split('\n').filter(l => /^- 작업 단위:/.test(l))) {
-    for (const unit of codeSpans(line)) if (!rows.some(r => r.units.includes(unit))) fail(TABLE_PATH, name + '의 작업 단위 없음: ' + unit);
-  }
+  for (const unit of units) if (!rows.some(r => r.units.includes(unit))) fail(TABLE_PATH, name + '의 작업 단위 없음: ' + unit);
   return errors;
 }
 
