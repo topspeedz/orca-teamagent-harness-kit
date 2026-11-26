@@ -79,10 +79,10 @@ function documentData(project, roles) {
   }
   for (const role of roles.values()) {
     const body = role.docs[0].body
-    role.collaboration = table(body, '직접 협업', '상대|협의 주제|목적').flatMap(([peer, topic, purpose]) => {
+    role.collaboration = table(body, '직접 협업', '상대|협의 주제|목적').flatMap(([peer, topic, purpose, limit = '']) => {
       const names = codes(peer)
       return (names.length ? names : [clean(peer)]).filter(n => roles.has(n) && n !== role.name && topic && purpose)
-        .map(name => ({ peer: name, topic: clean(topic), purpose: clean(purpose) }))
+        .map(name => ({ peer: name, topic: clean(topic), purpose: clean(purpose), limit: clean(limit) }))
     })
     if (!/^## 직접 협업\s*$/m.test(body)) {
       const legacy = body.split(/^#{1,2} /m).find(s => /^(협업|직접 협의)[ \t]*\r?\n/.test(s)) ?? ''
@@ -189,48 +189,48 @@ export function teamStructure(project) {
     role.references = [...refs]
     role.editPaths = [...edits]
   }
+  for (const role of roles.values()) Object.assign(role, { unit: '', scope: '', waiting: role.state !== 'on' })
   const groups = []
   const assigned = new Set()
-  function group(name, members, kind, lead, skill) {
+  function group(name, members, extra) {
     const nodes = [...new Set(members)].filter(n => roles.has(n) && !assigned.has(n))
     if (!nodes.length) return
     nodes.forEach(n => assigned.add(n))
-    const waiting = kind === '실행팀' && roles.get(lead)?.state !== 'on'
-    groups.push({ name, kind, isTeam: kind === '실행팀', waiting, lead, skill, members: nodes.map(n => roles.get(n)) })
+    groups.push({ name, ...extra, members: nodes.map(n => roles.get(n)) })
   }
-  const org = regular(project, 'docs/harness/team-org.md')
-  const orgLines = org ? fs.readFileSync(org, 'utf8').split(/\r?\n/) : []
-  for (const line of orgLines) {
-    const [team, lead, members, skill, , category] = cells(line)
-    if (!team || members === undefined || !line.trim().startsWith('|')) continue
-    const leader = codes(lead)[0]
-    const kind = ['운영팀','실행팀','직속'].includes(clean(category ?? '')) ? clean(category)
-      : leader ? '실행팀' : /창구가 직접/.test(lead) ? '운영팀' : ''
-    if (!codes(team).length && !kind) continue
-    group(clean(team), [...codes(lead), ...codes(members)], kind, leader, codes(skill ?? '')[0])
+  // Same rule as template/.claude/scripts/roster.mjs: find the table by its header names.
+  const rosterFile = regular(project, 'docs/harness/agents.md')
+  const rosterLines = rosterFile ? fs.readFileSync(rosterFile, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/) : []
+  const start = rosterLines.findIndex(l => l.startsWith('|') && cells(l).join('|') === '에이전트|맡는 단위|스킬|편집 범위')
+  const listed = []
+  for (const line of start < 0 ? [] : rosterLines.slice(start + 2)) {
+    if (!line.startsWith('|')) break
+    const [agent = '', unit = '', skills = '', scope = ''] = cells(line)
+    const role = roles.get(clean(agent))
+    if (!role) continue
+    Object.assign(role, { unit: clean(unit), skills: codes(skills), scope })
+    listed.push(role.name)
   }
-  for (const line of orgLines) {
-    const direct = line.match(/^- `([\w.-]+)`[은는] 어느 팀에도 속하지 않는다\.\s*코디네이터가 띄운다\./)
-    if (direct) group(direct[1], [direct[1]], '직속')
-  }
+  group('agents', listed, { roster: true })
+  const notice = !rosterFile && regular(project, 'docs/harness/team-org.md')
+    ? 'docs/harness/agents.md가 없고 옛 명단(team-org.md)만 있습니다. setup을 다시 돌려 새 구조로 옮기세요.' : undefined
   for (const file of files('.claude/agent-toggle', '.json')) {
     const record = JSON.parse(fs.readFileSync(regular(project, '.claude/agent-toggle/' + file), 'utf8'))
     const kit = file.slice(0, -5)
-    if (record.version === 2 || record.kit === true) group(kit.replace(/-kit$/, ''), record.agents ?? [kit],
-      kit === 'game-design-team-kit' ? '실행팀' : '', kit === 'game-design-team-kit' ? 'game-design-lead' : null)
+    if (record.version === 2 || record.kit === true) group(kit.replace(/-kit$/, ''), record.agents ?? [kit])
   }
-  group('프로젝트 에이전트', [...roles.keys()], '')
+  group('프로젝트 에이전트', [...roles.keys()])
   const modelFile = regular(project, 'docs/harness/model-selection.md')
   const assignments = []
   if (modelFile) for (const line of fs.readFileSync(modelFile, 'utf8').split(/\r?\n/)) {
     const [, agent, unit, runtime, model, effort] = line.trim().split('|').map(cell => cell.trim().replaceAll('`', ''))
     if (agent && model && ['claude','codex'].includes(runtime)) assignments.push({ agent, unit, runtime, model, effort })
   }
-  for (const { lead, members } of groups) for (const role of members) {
+  for (const { members } of groups) for (const role of members) {
     const exact = assignments.filter(a => a.agent === role.name)
     role.tasks = exact.flatMap(a => a.unit.split(',').map(s => s.trim()))
     role.assignments = [...exact, ...assignments.filter(a => a.agent === '*' &&
-      (a.unit === '기본' || (role.name === lead && a.unit === '리드')) && !role.tasks.includes(a.unit))]
+      a.unit === '기본' && !role.tasks.includes(a.unit))]
     if (!role.assignments.length) {
       const source = role.docs[0].body.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? ''
       const model = source.match(/^model\s*[:=]\s*["']?([^\s"'#]+)/m)?.[1]
@@ -243,5 +243,5 @@ export function teamStructure(project) {
       documents: Boolean(regular(project, 'docs/DOCUMENTATION_INDEX.md')),
       modelSelection: Boolean(modelFile)
     } : null
-  return { project: path.basename(project), groups, workflow, modelSelection:Boolean(modelFile), ...documentData(project, roles) }
+  return { project: path.basename(project), notice, groups, workflow, modelSelection:Boolean(modelFile), ...documentData(project, roles) }
 }

@@ -1,1385 +1,942 @@
 diff --git a/SKILL.md b/SKILL.md
-index 71c3c42..27fed96 100644
+index 4410631..1a74a88 100644
 --- a/SKILL.md
 +++ b/SKILL.md
-@@ -22,10 +22,10 @@ description: 현재 프로젝트에서 ~/.claude/agents-hans의 에이전트 키
+@@ -24,10 +24,10 @@ description: 현재 프로젝트에서 ~/.claude/agents-hans의 에이전트 키
  
  프로젝트 에이전트의 ON/OFF는 Claude Code와 Codex 정의별로 적용한다. OFF는 정의 파일 이름 끝에 `.agent-toggle-off`를 붙여 같은 폴더에 보관하고, ON은 원래 이름으로 복원한다. 스킬과 참고자료는 계속 사용할 수 있다.
  
--화면 아래 팀 구조도는 현재 프로젝트에서 켜진 Claude Code 역할을 표시한다. 팀원, 협업 관계, 문서 소유권은 Claude 역할 정의를 기준으로 하고 모델 배정은 모델 선택 표의 claude 행을 사용한다. 같은 이름의 Codex 정의는 원문 보기에서 열 수 있다. 팀 행에는 활성 팀장이 있는 팀만 표시하고 팀마다 서로 다른 색을 쓴다. 하네스의 팀장 없는 기획 역할은 창구 직속으로 표시한다. 팀에 속하지 않은 에이전트는 독립 역할 영역에서 열 수 있다. 직접 협업 탭은 역할 정의의 협업 항목을, 문서 소유권 탭은 명시된 소유·편집 범위·출력을 구분해 보여 준다. 역할을 누르면 정의의 절별 요약이 열리고, 엔진별 원문 보기에서 해당 정의 전체를 읽을 수 있다. 열린 구조도는 1초마다 변경을 확인하며 같은 서버의 `/team-structure.html`에서도 볼 수 있다.
-+화면 아래 팀 구조도는 프로젝트의 팀 명단과 Claude Code 역할 정의를 읽는다. 실행 팀장을 끄면 팀장 카드에 OFF, 팀에 ‘팀 배정 대기’가 표시된다. 소속과 문서 책임은 유지된다. 운영팀, 실행팀, 코디네이터 직속 역할은 명단의 구분을 따른다. 역할 카드나 담당자 태그를 누르면 상세 설명과 엔진별 원문·활성 상태를 확인할 수 있다. 열린 구조도는 1초마다 변경을 확인하며 같은 서버의 `/team-structure.html`에서도 볼 수 있다.
+-화면 아래 팀 구조도는 프로젝트의 팀 명단과 Claude Code 역할 정의를 읽는다. 실행 팀장을 끄면 팀장 카드에 OFF, 팀에 ‘팀 배정 대기’가 표시된다. 소속과 문서 책임은 유지된다. 운영팀, 실행팀, 코디네이터 직속 역할은 명단의 구분을 따른다. 역할 카드나 담당자 태그를 누르면 상세 설명과 엔진별 원문·활성 상태를 확인할 수 있다. 열린 구조도는 1초마다 변경을 확인하며 같은 서버의 `/team-structure.html`에서도 볼 수 있다.
++화면 아래 에이전트 구조도는 프로젝트의 에이전트 명단(`docs/harness/agents.md`)과 Claude Code 역할 정의를 읽는다. `product-manager`는 창구 아래에, 나머지 명단 에이전트는 코디네이터 아래에 같은 층으로 그린다. 에이전트를 끄면 카드에 ‘배정 대기’가 표시되고 그 에이전트로 가는 배정선은 그리지 않는다. 문서 담당은 유지된다. 창고 키트에서 설치한 에이전트와 명단에 없는 에이전트는 같은 카드로 아래에 따로 보인다. 옛 명단(`team-org.md`)만 있는 프로젝트에서는 구조도 대신 setup을 다시 돌려 옮기라는 안내 한 줄이 보인다. 역할 카드나 담당자 태그를 누르면 상세 설명과 엔진별 원문·활성 상태를 확인할 수 있다. 열린 구조도는 1초마다 변경을 확인하며 같은 서버의 `/team-structure.html`에서도 볼 수 있다.
  
--프로젝트에 plan-orchestrate와 coordinator 스킬이 있으면 팀 카드 위에 사용자·창구, 기획·DAG 계획서, 코디네이터와 팀 배정 경로를 그린다. 문서 색인과 모델 선택 표가 있으면 함께 표시한다.
-+프로젝트에 plan-orchestrate와 coordinator 스킬이 있으면 팀 카드 위에 사용자·창구, 기획·DAG 계획서, 코디네이터와 팀 배정 경로를 그린다. ‘공통 기준 문서’에서 색인의 정본이나 설치 초안을 열 수 있다. ‘모델 선택 표’에서 저장하면 현재 프로젝트 표가 갱신된다. 설문을 연 뒤 표가 바뀌면 다시 열어 새 값을 확인한다. 서버는 프로젝트에 설치된 설문 자산과 내용이 일치하는 사용자 플러그인 캐시의 키트 편집기를 사용한다.
+-프로젝트에 plan-orchestrate와 coordinator 스킬이 있으면 팀 카드 위에 사용자·창구, 기획·DAG 계획서, 코디네이터와 팀 배정 경로를 그린다. ‘공통 기준 문서’에서 색인의 정본이나 설치 초안을 열 수 있다. ‘모델 선택 표’에서 저장하면 현재 프로젝트 표가 갱신된다. 설문을 연 뒤 표가 바뀌면 다시 열어 새 값을 확인한다. 서버는 프로젝트에 설치된 설문 자산과 내용이 일치하는 사용자 플러그인 캐시의 키트 편집기를 사용한다.
++프로젝트에 plan-orchestrate와 coordinator 스킬이 있으면 에이전트 카드 위에 사용자·창구, DAG 계획서, 코디네이터와 에이전트 배정 경로를 그린다. ‘공통 기준 문서’에서 색인의 정본이나 설치 초안을 열 수 있다. ‘모델 선택 표’에서 저장하면 현재 프로젝트 표가 갱신된다. 설문을 연 뒤 표가 바뀌면 다시 열어 새 값을 확인한다. 서버는 프로젝트에 설치된 설문 자산과 내용이 일치하는 사용자 플러그인 캐시의 키트 편집기를 사용한다.
  
--팀별 ‘업무 관계 보기’에서 실선은 작업 배정·보고, 점선은 직접 협의·설정 전달이다. 카드 하단의 업무 태그는 팀별 검정 계열, 스킬명 태그는 짙은 갈색 바탕에 금색 ★ 표시를 붙인다. 오른쪽 아래 ◇는 모델, ⚡는 effort의 첫 글자다. 칩에 마우스를 올리거나 역할 요약을 열면 역할에 매칭된 첫 설정의 전체 값을 확인할 수 있다. 직접 협업 탭에는 관계별 역할 칩과 근거 문장이, 문서 소유권 탭에는 경로·역할·책임 구분 칩이 표시된다.
-+팀별 ‘업무 관계 보기’에서 실선은 작업 배정·보고, 점선은 직접 협의·설정 전달이다. 카드 하단의 업무 태그는 팀별 검정 계열, 스킬명 태그는 짙은 갈색 바탕에 금색 ★ 표시를 붙인다. 오른쪽 아래 ◇는 모델, ⚡는 effort의 첫 글자다. 칩에 마우스를 올리면 첫 설정을, 역할 요약에서는 작업별 설정을 확인할 수 있다. 직접 협업 탭은 양쪽이 켜진 협의 상대와 목적을, 문서 소유권 탭은 문서·범위별 정본 작성자와 주요 검토자를 표시한다.
+-팀별 ‘업무 관계 보기’에서 실선은 작업 배정·보고, 점선은 직접 협의·설정 전달이다. 카드 하단의 업무 태그는 팀별 검정 계열, 스킬명 태그는 짙은 갈색 바탕에 금색 ★ 표시를 붙인다. 오른쪽 아래 ◇는 모델, ⚡는 effort의 첫 글자다. 칩에 마우스를 올리면 첫 설정을, 역할 요약에서는 작업별 설정을 확인할 수 있다. 직접 협업 탭은 양쪽이 켜진 협의 상대와 목적을, 문서 소유권 탭은 문서·범위별 정본 작성자와 주요 검토자를 표시한다.
++전체에 하나인 ‘업무 관계 보기’에서 실선은 코디네이터(PM은 창구)의 작업 배정·보고, 점선은 직접 협업·설정 전달이다. 카드 하단의 업무 태그는 에이전트별 색, 스킬명 태그는 짙은 갈색 바탕에 금색 ★ 표시를 붙인다. 오른쪽 아래 ◇는 모델, ⚡는 effort의 첫 글자다. 칩에 마우스를 올리면 첫 설정을, 역할 요약에서는 작업별 설정을 확인할 수 있다. 직접 협업 탭은 양쪽이 켜진 협의 상대와 목적, 한도를, 문서 담당 탭은 문서·범위별 담당 에이전트와 주요 검토자를 표시한다. 담당 에이전트가 꺼져 있으면 ‘담당 꺼짐’, 담당이 없으면 ‘담당 없음’이다.
  
--자가 점검은 `node "$HOME/.claude/skills/agent-toggle/check.mjs"`로 실행한다. 브라우저 화면은 Python Playwright와 Chromium이 있는 환경에서 `python "$HOME/.claude/skills/agent-toggle/check-team-ui.py"`로 검사한다.
-+자가 점검은 `node "$HOME/.claude/skills/agent-toggle/check.mjs"`로 실행한다. Python Playwright와 Chromium이 있는 환경에서 `python "$HOME/.claude/skills/agent-toggle/check-team-ui.py" --kit "<키트 경로>"`로 임시 설치 프로젝트의 HTTP·화면·저장을 검사한다.
+-자가 점검은 `node "<SKILL_DIR>/check.mjs"`로 실행한다. Python Playwright와 Chromium이 있는 환경에서 `python "<SKILL_DIR>/check-team-ui.py" --kit "<키트 경로>"`로 임시 설치 프로젝트의 HTTP·화면·저장을 검사한다.
++자가 점검은 `node "<SKILL_DIR>/check.mjs"`로 실행한다. Python Playwright와 Chromium이 있는 환경에서 `python "<SKILL_DIR>/check-team-ui.py" --kit "<설치 키트 저장소 경로>"`로 임시 설치 프로젝트의 HTTP·화면·저장을 검사한다.
 diff --git a/check-team-ui.py b/check-team-ui.py
-index 616d237..3fe9bf2 100644
+index 3fe9bf2..5b14154 100644
 --- a/check-team-ui.py
 +++ b/check-team-ui.py
-@@ -1,84 +1,355 @@
--"""Check the team tabs and source drill-down with Python Playwright and Chromium."""
-+"""Run with Python Playwright + Chromium and the matching kit checkout (optional --kit PATH)."""
-+import argparse
-+import json
-+import os
-+import shutil
-+import subprocess
-+import tempfile
-+from contextlib import contextmanager
- from pathlib import Path
- 
- from playwright.sync_api import expect, sync_playwright
- 
- 
--skill = Path(__file__).parent
--body = "# Writer\n\n## 핵심 역할\n- 명세 작성\n## 작업 배정 · 보고\n- lead에게 결과 보고\n## 협업\n- reviewer 검토\n- 정본 소유: spec.md"
--source = 'developer_instructions = "Codex 전용 원문"'
--roles = [
--    dict(name=name, description=name, engines=["Claude Code"], skills=[], references=[],
--         docs=[dict(rel=f".claude/agents/{name}.md", body=text)])
--    for name, text in [("writer", body), ("reviewer", "")]
--]
--roles[0]["docs"].append(dict(rel=".codex/agents/writer.toml", body=source))
--roles[0]["engines"].append("Codex")
--planning = [dict(roles[1], name=n) for n in ["prd-writer", "product-manager", "planner", "pm-reviewer"]]
--data = dict(project="fixture", groups=[dict(name="product", isTeam=True, members=planning),
--    dict(name="qa", isTeam=True, lead="writer", members=roles[:1]),
--    dict(name="harness", isTeam=True, lead="reviewer", members=roles[1:]),
--    dict(name="프로젝트 에이전트", isTeam=False, members=[dict(roles[1], name="doc-steward")])])
--data["workflow"] = dict(documents=True, modelSelection=True)
--roles[0].update(tasks=["명세 작성"], skills=["product-planning", "srs.md"], assignments=[
--    dict(unit="작성", runtime="claude", model="opus", effort="high"),
--    dict(unit="재검", runtime="claude", model="sonnet", effort="medium")])
--
--with sync_playwright() as playwright:
--    browser = playwright.chromium.launch()
--    page = browser.new_page()
--    page.route("http://fixture.test/", lambda route: route.fulfill(
--        content_type="text/html", body="<team-chart></team-chart>"))
--    page.route("**/team.json", lambda route: route.fulfill(json=data))
--    page.route("**/team.css", lambda route: route.fulfill(path=skill / "team.css"))
--    page.goto("http://fixture.test/")
--    page.add_script_tag(path=skill / "team.js")
--    writer = page.locator(".node").filter(has=page.get_by_text("writer", exact=True))
--    workflow = page.get_by_role("img", name="사용자부터 실행 팀까지의 업무 흐름")
--    expect(workflow).to_be_visible()
--    for title in ["사용자", "창구 세션", "DAG 계획서", "코디네이터", "모델 선택 표", "docs/ · 공통 기준 문서"]:
--        expect(workflow.get_by_text(title, exact=True)).to_be_visible()
--    expect(workflow.locator('[data-team="product"]')).to_have_count(0)
--    for role in planning:
--        expect(workflow.locator(f'[data-role="{role["name"]}"]')).to_have_attribute("data-from", "창구")
--    expect(page.locator(".branches .group h3")).to_have_text(["QA", "HARNESS"])
--    fills = page.locator(".branches .group").evaluate_all("groups => groups.map(g => getComputedStyle(g).backgroundColor)")
--    assert len(set(fills)) == 2
--    expect(workflow.locator('[data-team="qa"]')).to_have_attribute("data-from", "코디네이터")
--    expect(page.locator(".branches .group")).to_have_count(2)
--    expect(workflow.locator("[data-team]")).to_have_count(2)
--    expect(workflow.locator('[data-role="doc-steward"]')).to_have_attribute("data-from", "코디네이터")
--    page.locator(".independent-roles").get_by_role("button", name="doc-steward", exact=False).click()
--    expect(page.get_by_role("dialog").get_by_role("heading", name="doc-steward")).to_be_visible()
-+skill = Path(__file__).resolve().parent
-+parser = argparse.ArgumentParser(description=__doc__)
-+parser.add_argument("--kit", type=Path, default=skill.parents[1])
-+kit = parser.parse_args().kit.resolve()
-+if not (kit / "skills/setup/scripts/setup.mjs").is_file():
-+    parser.error("설치 키트 저장소를 --kit PATH로 지정하세요.")
-+
-+
-+def write(root, rel, text):
-+    file = root / rel
-+    file.parent.mkdir(parents=True, exist_ok=True)
-+    file.write_text(text, encoding="utf-8")
-+    return file
-+
-+
-+def install(root):
-+    root.mkdir()
-+    program = """
-+      import { planInstall, applyInstall } from './skills/setup/scripts/setup.mjs';
-+      const answers = {planner:{effort:'high'}, approvalPrefixes:[], codex:true};
-+      const plan = planInstall('template', 'template-codex', process.argv[1], answers, {globalDiagramSkills:{}});
-+      const {conflicts} = applyInstall(plan);
-+      if (conflicts.length) throw Error(conflicts.join(','));
-+    """
-+    subprocess.run(["node", "--input-type=module", "-e", program, str(root)], cwd=kit, check=True)
-+
-+
-+@contextmanager
-+def server(project, home):
-+    env = dict(os.environ, USERPROFILE=str(home), HOME=str(home),
-+               CLAUDE_CONFIG_DIR=str(home / ".claude"), CODEX_HOME=str(home / ".codex"))
-+    proc = subprocess.Popen(["node", str(skill / "server.mjs")], cwd=project, env=env,
-+                            stdout=subprocess.PIPE, encoding="utf-8")
-+    try:
-+        url = proc.stdout.readline().strip().rstrip("/")
-+        assert url.startswith("http://127.0.0.1:"), url
-+        yield url
-+    finally:
-+        proc.terminate()
-+        proc.wait(timeout=10)
-+        proc.stdout.close()
-+
-+
-+def new_role(project, name, responsibilities="", collaborations=""):
-+    text = f"""---
-+name: {name}
-+description: {name} 설명
-+---
-+# {name}
-+## 핵심 역할
-+- {name} 책임
-+### 읽는 입력
-+- 승인 문서
-+### 작업 산출물
-+- Task 리포트
-+## 문서 책임
-+| 문서 | 범위 | 책임 |
+@@ -30,7 +30,7 @@ def install(root):
+     root.mkdir()
+     program = """
+       import { planInstall, applyInstall } from './skills/setup/scripts/setup.mjs';
+-      const answers = {planner:{effort:'high'}, approvalPrefixes:[], codex:true};
++      const answers = {pm:{model:'opus', effort:'high'}, approvalPrefixes:[], codex:true};
+       const plan = planInstall('template', 'template-codex', process.argv[1], answers, {globalDiagramSkills:{}});
+       const {conflicts} = applyInstall(plan);
+       if (conflicts.length) throw Error(conflicts.join(','));
+@@ -62,6 +62,14 @@ description: {name} 설명
+ # {name}
+ ## 핵심 역할
+ - {name} 책임
++## 따로 두는 이유
++- 기준: 컨텍스트 분리
++## 작업 단위와 스킬
++| 작업 단위 | 쓰는 스킬 | 돌려주는 것 |
 +| --- | --- | --- |
-+{responsibilities}
-+## 직접 협업
-+| 상대 | 협의 주제 | 목적 |
-+| --- | --- | --- |
-+{collaborations}
-+## 완료 기준
-+- 검사 결과 첨부
-+"""
-+    return write(project, f".claude/agents/{name}.md", text)
-+
-+
-+def chart_checks(page, url, project):
-+    request = page.request
-+    response = request.get(url + "/team.json")
-+    initial_tag = response.headers["etag"]
-+    assert request.get(url + "/team.json", headers={"If-None-Match": initial_tag}).status == 304
-+    data = response.json()
-+    assert len(data["common"]) == 13
-+    assert all(d["title"] for d in data["common"])
-+    page.goto(url + "/team-structure.html", wait_until="domcontentloaded")
-+    dialog = page.get_by_role("dialog")
-+    team = page.locator(".group").filter(has=page.get_by_role("heading", name="DEV", exact=True))
-+    lead = team.locator(".lead")
-+    expect(lead).to_contain_text("OFF")
-+    expect(team).to_contain_text("팀 배정 대기")
-+    expect(team.locator(".node").get_by_text("api-writer", exact=True)).to_be_visible()
-+    expect(page.locator("svg [data-team='dev']")).to_have_count(0)
-+    for name in ["doc-steward", "harness-engineer"]:
-+        expect(page.locator(f"svg [data-role='{name}']")).to_have_attribute("data-from", "코디네이터")
-+    for name in ["product-manager", "planner"]:
-+        expect(page.locator(f"svg [data-role='{name}']")).to_have_attribute("data-from", "창구")
-+    expect(page.locator(".independent-roles").filter(has_text="팀장 없음").locator(".lead")).to_have_count(0)
-+
-+    common = page.get_by_role("button", name="docs/ · 공통 기준 문서", exact=True)
-+    common.click()
-+    expect(dialog.locator(".document-entry")).to_have_count(13)
-+    for doc in data["common"]:
-+        entry = dialog.locator(".document-entry").filter(has=page.get_by_role("heading", name=doc["title"], exact=True))
-+        if doc["path"].endswith("11-operations/draft.md"):
-+            expect(entry).to_contain_text("해당 없음")
-+        else:
-+            entry.get_by_role("button", name=doc["path"], exact=True).click()
-+            expect(dialog.locator("pre")).to_contain_text("검증 원문 " + doc["path"])
-+            dialog.get_by_role("button", name="← 이전").click()
-+    doc = dialog.locator(".document-entry").filter(has_text="contracts/api.md")
-+    expect(doc).to_contain_text("응답")
-+    expect(doc).to_contain_text("오류")
-+    doc.get_by_role("button", name="api-writer", exact=True).click()
-+    expect(dialog.get_by_role("heading", name="api-writer", exact=True)).to_be_visible()
-+    for title in ["핵심 책임", "읽는 입력", "작업 산출물", "작성할 라이브 문서 · 절", "주요 검토자", "직접 협업 상대", "완료 기준"]:
-+        expect(dialog.get_by_role("heading", name=title, exact=True)).to_be_visible()
-+    dialog.get_by_role("button", name="ui-writer", exact=True).click()
-+    expect(dialog.get_by_role("heading", name="ui-writer", exact=True)).to_be_visible()
-+    dialog.get_by_role("button", name="← 이전").click()
-+    dialog.get_by_role("button", name="Codex 원문 보기 · OFF").click()
-+    expect(dialog.locator("pre")).to_contain_text("Codex 전용 원문")
++| 구현 | `docs-management` | 바꾼 파일 |
++## 경계
++- 화면 코드는 고치지 않는다.
+ ### 읽는 입력
+ - 승인 문서
+ ### 작업 산출물
+@@ -71,8 +79,8 @@ description: {name} 설명
+ | --- | --- | --- |
+ {responsibilities}
+ ## 직접 협업
+-| 상대 | 협의 주제 | 목적 |
+-| --- | --- | --- |
++| 상대 | 협의 주제 | 목적 | 한도 |
++| --- | --- | --- | --- |
+ {collaborations}
+ ## 완료 기준
+ - 검사 결과 첨부
+@@ -90,24 +98,19 @@ def chart_checks(page, url, project):
+     assert all(d["title"] for d in data["common"])
+     page.goto(url + "/team-structure.html", wait_until="domcontentloaded")
+     dialog = page.get_by_role("dialog")
+-    team = page.locator(".group").filter(has=page.get_by_role("heading", name="DEV", exact=True))
+-    lead = team.locator(".lead")
+-    expect(lead).to_contain_text("OFF")
+-    expect(team).to_contain_text("팀 배정 대기")
+-    expect(team.locator(".node").get_by_text("api-writer", exact=True)).to_be_visible()
+-    expect(page.locator("svg [data-team='dev']")).to_have_count(0)
+-    for name in ["doc-steward", "harness-engineer"]:
++    expect(page.get_by_text("업무 관계 보기")).to_have_count(1)
++    expect(page.get_by_text("팀장")).to_have_count(0)
++    for name in ["research", "frontend", "backend", "verifier", "doc-steward", "harness-engineer", "api-writer", "ui-writer"]:
+         expect(page.locator(f"svg [data-role='{name}']")).to_have_attribute("data-from", "코디네이터")
+-    for name in ["product-manager", "planner"]:
+-        expect(page.locator(f"svg [data-role='{name}']")).to_have_attribute("data-from", "창구")
+-    expect(page.locator(".independent-roles").filter(has_text="팀장 없음").locator(".lead")).to_have_count(0)
++    expect(page.locator("svg [data-role='product-manager']")).to_have_attribute("data-from", "창구")
++    expect(page.locator(".branch .node")).to_have_count(9)
+ 
+     common = page.get_by_role("button", name="docs/ · 공통 기준 문서", exact=True)
+     common.click()
+     expect(dialog.locator(".document-entry")).to_have_count(13)
+     for doc in data["common"]:
+         entry = dialog.locator(".document-entry").filter(has=page.get_by_role("heading", name=doc["title"], exact=True))
+-        if doc["path"].endswith("11-operations/draft.md"):
++        if doc["path"].endswith("12-changelog/CHANGELOG.md"):
+             expect(entry).to_contain_text("해당 없음")
+         else:
+             entry.get_by_role("button", name=doc["path"], exact=True).click()
+@@ -118,22 +121,30 @@ def chart_checks(page, url, project):
+     expect(doc).to_contain_text("오류")
+     doc.get_by_role("button", name="api-writer", exact=True).click()
+     expect(dialog.get_by_role("heading", name="api-writer", exact=True)).to_be_visible()
+-    for title in ["핵심 책임", "읽는 입력", "작업 산출물", "작성할 라이브 문서 · 절", "주요 검토자", "직접 협업 상대", "완료 기준"]:
++    for title in ["핵심 책임", "따로 두는 이유", "작업 단위와 스킬", "경계", "읽는 입력", "작업 산출물",
++                  "작성할 라이브 문서 · 절", "주요 검토자", "직접 협업 상대", "완료 기준"]:
+         expect(dialog.get_by_role("heading", name=title, exact=True)).to_be_visible()
+     dialog.get_by_role("button", name="ui-writer", exact=True).click()
+     expect(dialog.get_by_role("heading", name="ui-writer", exact=True)).to_be_visible()
+     dialog.get_by_role("button", name="← 이전").click()
+-    dialog.get_by_role("button", name="Codex 원문 보기 · OFF").click()
+-    expect(dialog.locator("pre")).to_contain_text("Codex 전용 원문")
++    # The button asks the server to open the file in a desktop app; answer it here so no app starts.
++    page.route("**/open?*", lambda route: route.fulfill(status=204))
++    with page.expect_request("**/open?*") as opened:
++        dialog.get_by_role("button", name="Codex 원문 보기 · OFF").click()
++    assert opened.value.method == "POST" and "api-writer.toml.agent-toggle-off" in opened.value.url
++    page.unroute("**/open?*")
      page.keyboard.press("Escape")
--    expect(writer.locator(".role-tags")).to_have_text("명세 작성")
--    expect(writer.locator(".skill-tag")).to_have_text("product-planning")
--    expect(writer.locator(".config-pair")).to_have_count(1)
--    expect(writer.locator(".config-pair")).to_have_attribute("title", "작성 · model opus / effort high")
--    legend = page.locator(".flow-legend")
--    expect(legend.locator(".kind-0")).to_have_css("border-top-style", "solid")
--    expect(legend.locator(".kind-1")).to_have_css("border-top-style", "dashed")
--    expect(legend.locator(".kind-1")).to_have_css("width", "24px")
--    writer.locator("xpath=ancestor::section[1]").get_by_text("업무 관계 보기").click()
--    expect(page.locator(".team-flows[open] .kind-1")).to_have_text("")
--    expect(page.locator(".team-flows[open] .kind-1")).to_have_css("border-top-style", "dashed")
-+
-+    page.get_by_role("tab", name="문서 소유권").click()
-+    expect(page.get_by_role("columnheader")).to_have_text(["문서 · 범위", "정본 작성자", "주요 검토자"])
-+    row = page.get_by_role("row").filter(has_text="contracts/api.md").filter(has_text="응답")
-+    expect(row.get_by_role("cell").nth(1)).to_have_text("api-writer")
-+    expect(row.get_by_role("cell").first).to_contain_text("확인 harness-engineer")
-+    reviewers = row.get_by_role("cell").nth(2).get_by_role("button")
-+    assert set(reviewers.all_text_contents()) == {"qa-inspector", "doc-steward"}
-+    colors = {}
-+    for button in row.get_by_role("cell").nth(1).get_by_role("button").all() + reviewers.all():
-+        name = button.text_content()
-+        colors[name] = button.evaluate("b => b.style.getPropertyValue('--tone')")
-+        button.click()
-+        expect(dialog.get_by_role("heading", name=name, exact=True)).to_be_visible()
-+        assert dialog.evaluate("d => d.style.getPropertyValue('--tone')") == colors[name]
-+        page.keyboard.press("Escape")
-+    assert len(set(colors.values())) == 3
+ 
+-    page.get_by_role("tab", name="문서 소유권").click()
+-    expect(page.get_by_role("columnheader")).to_have_text(["문서 · 범위", "정본 작성자", "주요 검토자"])
++    page.get_by_role("tab", name="문서 담당").click()
++    expect(page.get_by_role("columnheader")).to_have_text(["문서 · 범위", "담당 에이전트", "주요 검토자"])
++    expect(page.get_by_text("모든 에이전트가 docs-management로 자기 문서를 쓴다. 전체 정합성은 doc-steward가 확인한다.")).to_be_visible()
++    pending = page.get_by_role("row").filter(has_text="CHANGELOG.md").filter(has_text="전체")
++    expect(pending.get_by_role("cell").nth(1)).to_have_text("담당 없음")
+     row = page.get_by_role("row").filter(has_text="contracts/api.md").filter(has_text="응답")
+     expect(row.get_by_role("cell").nth(1)).to_have_text("api-writer")
+     expect(row.get_by_role("cell").first).to_contain_text("확인 harness-engineer")
+     reviewers = row.get_by_role("cell").nth(2).get_by_role("button")
+-    assert set(reviewers.all_text_contents()) == {"qa-inspector", "doc-steward"}
++    assert set(reviewers.all_text_contents()) == {"verifier", "doc-steward"}
+     colors = {}
+     for button in row.get_by_role("cell").nth(1).get_by_role("button").all() + reviewers.all():
+         name = button.text_content()
+@@ -148,6 +159,7 @@ def chart_checks(page, url, project):
+     expect(pair).to_have_count(1)
+     expect(pair).to_contain_text("오류 필드를 확인")
+     expect(pair).to_contain_text("↔")
++    expect(pair).to_contain_text("한도 질문 2회, 넘으면 배정자에게")
+     assert pair.get_by_role("button", name="api-writer").evaluate("b => b.style.getPropertyValue('--tone')") == colors["api-writer"]
+     pair.get_by_role("button", name="ui-writer").click()
+     expect(dialog.get_by_role("heading", name="ui-writer")).to_be_visible()
+@@ -162,18 +174,22 @@ def chart_checks(page, url, project):
+ 
+     toggle("api-writer", "off")
+     expect(pair).to_have_count(0)
+-    page.get_by_role("tab", name="문서 소유권").click()
+-    expect(row.get_by_role("cell").nth(1)).to_have_text("api-writer")
++    page.get_by_role("tab", name="문서 담당").click()
++    expect(row.get_by_role("cell").nth(1)).to_have_text("api-writer담당 꺼짐")
++    page.get_by_role("tab", name="에이전트 구조도").click()
++    card = page.locator(".branch .node").filter(has=page.get_by_text("api-writer", exact=True))
++    expect(card).to_contain_text("배정 대기")
++    expect(page.locator("svg [data-role='api-writer']")).to_have_count(0)
++    expect(page.locator("svg [data-role='ui-writer']")).to_have_count(1)
+     toggle("api-writer", "on")
+-    toggle("dev-lead", "on")
+-    page.get_by_role("tab", name="팀 구조도").click()
+-    expect(lead).not_to_contain_text("OFF")
+-    expect(team).not_to_contain_text("팀 배정 대기")
+-    expect(page.locator("svg [data-team='dev']")).to_have_attribute("data-from", "코디네이터")
+-    team.get_by_text("업무 관계 보기").click()
+-    expect(team).to_contain_text("복잡한 내부 분해")
+-    expect(team.locator(".team-flows").get_by_role("button", name="planner")).to_be_visible()
+-    expect(page.locator(".independent-roles").filter(has_text="팀장 없음").get_by_text("planner", exact=True)).to_be_visible()
++    expect(card).not_to_contain_text("배정 대기")
++    expect(page.locator("svg [data-role='api-writer']")).to_have_attribute("data-from", "코디네이터")
++    page.get_by_text("업무 관계 보기").click()
++    flows = page.locator(".team-flows")
++    expect(flows.locator(".flow-line").filter(has_text="코디네이터").get_by_role("button", name="api-writer")).to_be_visible()
++    expect(flows.locator(".flow-line").filter(has_text="창구").get_by_role("button", name="product-manager")).to_be_visible()
++    expect(flows).to_contain_text("응답 형식 · 한도 질문 2회, 넘으면 배정자에게")
++    expect(page.get_by_text("팀장")).to_have_count(0)
+     manager.close()
+ 
+     common.click()
+@@ -188,11 +204,11 @@ def chart_checks(page, url, project):
+     dialog.get_by_role("button", name="contracts/api-next.md", exact=True).click()
+     expect(dialog.locator("pre")).to_have_text("색인이 바뀐 정본")
+     page.keyboard.press("Escape")
+-    new_role(project, "extra-lead")
+-    new_role(project, "extra-member")
+-    with (project / "docs/harness/team-org.md").open("a", encoding="utf-8") as f:
+-        f.write("\n| `extra` | `extra-lead` | `extra-member` | | | 실행팀 |\n")
+-    expect(page.locator(".group").filter(has_text="extra-lead")).to_contain_text("extra-member")
++    new_role(project, "extra-agent")
++    expect(page.locator(".independent-roles").get_by_text("extra-agent", exact=True)).to_be_visible()
++    add_roster(project, "extra-agent")
++    expect(page.locator(".branch .node").get_by_text("extra-agent", exact=True)).to_be_visible()
++    expect(page.locator("svg [data-role='extra-agent']")).to_have_attribute("data-from", "코디네이터")
+     assert request.get(url + "/team.json", headers={"If-None-Match": initial_tag}).status == 200
+     page.set_viewport_size({"width": 390, "height": 844})
      page.get_by_role("tab", name="직접 협업").click()
--    expect(page.locator(".relations").first).to_contain_text("lead에게 결과 보고")
--    expect(page.locator(".relations").last.locator(".connector.kind-1")).to_have_css("border-top-style", "dashed")
--    color = page.get_by_role("button", name="reviewer", exact=True).evaluate("b => b.style.getPropertyValue('--tone')")
--    page.get_by_role("button", name="reviewer", exact=True).click()
--    assert page.get_by_role("dialog").evaluate("d => d.style.getPropertyValue('--tone')") == color
--    expect(page.get_by_role("dialog").get_by_role("heading", name="reviewer")).to_be_visible()
-+    pair = page.locator(".collaboration-row").filter(has_text="응답 형식")
-+    expect(pair).to_have_count(1)
-+    expect(pair).to_contain_text("오류 필드를 확인")
-+    expect(pair).to_contain_text("↔")
-+    assert pair.get_by_role("button", name="api-writer").evaluate("b => b.style.getPropertyValue('--tone')") == colors["api-writer"]
-+    pair.get_by_role("button", name="ui-writer").click()
-+    expect(dialog.get_by_role("heading", name="ui-writer")).to_be_visible()
+@@ -200,11 +216,11 @@ def chart_checks(page, url, project):
+     expect(dialog.get_by_role("heading", name="api-writer")).to_be_visible()
+     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
      page.keyboard.press("Escape")
-+
-+    manager = page.context.new_page()
-+    manager.goto(url, wait_until="domcontentloaded")
-+    expect(manager.locator("#meta")).to_contain_text(str(project))
-+
-+    def toggle(name, state):
-+        manager.locator(f'article[data-name="{name}"][data-engine="Claude Code"] button[data-v="{state}"]').click()
-+
-+    toggle("api-writer", "off")
-+    expect(pair).to_have_count(0)
-     page.get_by_role("tab", name="문서 소유권").click()
--    expect(page.locator(".path-chip")).to_have_text("spec.md")
--    page.get_by_role("row").filter(has_text="spec.md").get_by_role("button", name="writer").click()
--    dialog = page.get_by_role("dialog")
--    expect(dialog.get_by_role("heading", name="핵심 역할")).to_be_visible()
--    expect(dialog.locator("pre")).to_have_count(0)
--    dialog.get_by_role("button", name="Codex 원문 보기").click()
--    assert dialog.locator("pre").text_content() == source
--    dialog.get_by_role("button", name="← 역할 요약").click()
--    expect(dialog.locator("pre")).to_have_count(0)
-+    expect(row.get_by_role("cell").nth(1)).to_have_text("api-writer")
-+    toggle("api-writer", "on")
-+    toggle("dev-lead", "on")
-+    page.get_by_role("tab", name="팀 구조도").click()
-+    expect(lead).not_to_contain_text("OFF")
-+    expect(team).not_to_contain_text("팀 배정 대기")
-+    expect(page.locator("svg [data-team='dev']")).to_have_attribute("data-from", "코디네이터")
-+    team.get_by_text("업무 관계 보기").click()
-+    expect(team).to_contain_text("복잡한 내부 분해")
-+    expect(team.locator(".team-flows").get_by_role("button", name="planner")).to_be_visible()
-+    expect(page.locator(".independent-roles").filter(has_text="팀장 없음").get_by_text("planner", exact=True)).to_be_visible()
-+    manager.close()
-+
-+    common.click()
-+    dialog.get_by_role("button", name="contracts/api.md", exact=True).click()
-+    write(project, "contracts/api.md", "변경한 실제 본문")
-+    expect(dialog.locator("pre")).to_have_text("변경한 실제 본문")
-+    page.keyboard.press("Escape")
-+    index = project / "docs/DOCUMENTATION_INDEX.md"
-+    write(project, "contracts/api-next.md", "색인이 바뀐 정본")
-+    index.write_text(index.read_text(encoding="utf-8").replace("../contracts/api.md", "../contracts/api-next.md"), encoding="utf-8")
-+    common.click()
-+    dialog.get_by_role("button", name="contracts/api-next.md", exact=True).click()
-+    expect(dialog.locator("pre")).to_have_text("색인이 바뀐 정본")
-+    page.keyboard.press("Escape")
-+    new_role(project, "extra-lead")
-+    new_role(project, "extra-member")
-+    with (project / "docs/harness/team-org.md").open("a", encoding="utf-8") as f:
-+        f.write("\n| `extra` | `extra-lead` | `extra-member` | | | 실행팀 |\n")
-+    expect(page.locator(".group").filter(has_text="extra-lead")).to_contain_text("extra-member")
-+    assert request.get(url + "/team.json", headers={"If-None-Match": initial_tag}).status == 200
-+    page.set_viewport_size({"width": 390, "height": 844})
-+    page.get_by_role("tab", name="직접 협업").click()
-+    pair.get_by_role("button", name="api-writer").click()
-+    expect(dialog.get_by_role("heading", name="api-writer")).to_be_visible()
-+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-+    page.keyboard.press("Escape")
-+    page.get_by_role("tab", name="문서 소유권").click()
-+    page.get_by_role("row").filter(has_text="contracts/api-next.md").filter(has_text="응답").get_by_role("button", name="qa-inspector").click()
-+    expect(dialog.get_by_role("heading", name="qa-inspector", exact=True)).to_be_visible()
-+    page.keyboard.press("Escape")
-+    page.get_by_role("tab", name="팀 구조도").click()
-+    common.click()
-+    expect(dialog.locator(".document-entry")).to_have_count(13)
-+    page.keyboard.press("Escape")
-+
-+
-+def survey_checks(page, url, project, other):
-+    path = "docs/harness/model-selection.md"
-+    file = project / path
-+    unrelated = (other / path).read_bytes()
-+    with file.open("ab") as notes:
-+        notes.write("\n사용자 메모 · 다음 계획 전 확인\n".encode())
-+    original = file.read_bytes()
-+    open_button = page.get_by_role("button", name="모델 선택 표", exact=True)
-+    with page.context.expect_page() as popup:
-+        open_button.click()
-+    survey = popup.value
-+    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="계획 대조")
-+    model = row.locator("select[id^='model-']")
-+    expect(model).to_have_value("opus")
-+    model.select_option("sonnet")
-+    with survey.expect_response(lambda r: r.request.method == "POST" and r.url.endswith("/model-selection")) as pending:
-+        survey.get_by_role("button", name="저장", exact=True).click()
-+    result = pending.value
-+    assert result.ok, result.text()
-+    assert len(result.request.post_data_json["choices"]) == 1
-+    expect(survey.locator("#status")).to_have_text("프로젝트 모델 표에 저장했습니다.")
-+    original_row = next(line for line in original.splitlines() if "`product-manager` | 계획 대조 |".encode() in line)
-+    assert file.read_bytes() == original.replace(original_row, original_row.replace(b"| opus |", b"| sonnet |"), 1)
-+    assert file.read_bytes() != original
-+    survey.close()
-+    page.locator(".independent-roles .node").filter(has=page.get_by_text("product-manager", exact=True)).click()
-+    expect(page.get_by_role("dialog")).to_contain_text("계획 대조 · claude · sonnet / medium")
-+    page.keyboard.press("Escape")
-+    with page.context.expect_page() as popup:
-+        open_button.click()
-+    survey = popup.value
-+    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="계획 대조")
-+    expect(row.locator("select[id^='model-']")).to_have_value("sonnet")
-+    state = survey.evaluate("DATA.localSave")
-+    headers = {"Content-Type":"application/json", "Origin":url, "x-agent-toggle":state["token"]}
-+    endpoint = url + "/model-selection"
-+    assert page.request.get(endpoint, headers={"Origin":"http://other.invalid"}).status == 403
-+    snapshot = file.read_bytes()
-+    choice = {"agent":"product-manager", "unit":"계획 대조", "runtime":"claude", "model":"opus", "effort":"medium"}
-+    for change in [{"model":"unknown"}, {"unit":"누락된 구형 행"}, {"model":"haiku","effort":"high"}]:
-+        assert page.request.post(endpoint, headers=headers, data={"choices":[dict(choice, **change)], "revision":state["revision"]}).status == 400
-+    for change in [{"Origin":"http://other.invalid"}, {"x-agent-toggle":"wrong"}, {"Host":"other.invalid"}]:
-+        assert page.request.post(endpoint, headers={**headers, **change}, data={"choices":[choice], "revision":state["revision"]}).status == 403
-+    assert file.read_bytes() == snapshot
-+    lock = file.with_name(file.name + ".agent-toggle-save")
-+    lock.touch()
-+    row.locator("select[id^='model-']").select_option("opus")
-+    survey.get_by_role("button", name="저장", exact=True).click()
-+    expect(survey.locator("#status")).to_contain_text("저장하지 못했습니다")
-+    assert file.read_bytes() == snapshot
-+    lock.unlink()
-+    file.write_bytes(snapshot + "\n사용자 외부 메모\n".encode())
-+    survey.get_by_role("button", name="저장", exact=True).click()
-+    expect(survey.locator("#status")).to_contain_text("다른 곳에서 변경")
-+    assert file.read_bytes() == snapshot + "\n사용자 외부 메모\n".encode()
-+    assert (other / path).read_bytes() == unrelated
-+    survey.close()
-+    for asset in [".claude/scripts/model-table.mjs", ".claude/scripts/model-selection.mjs", "docs/harness/templates/model-survey.html"]:
-+        target = project / asset
-+        before = target.read_bytes()
-+        target.write_bytes(before + b"\n ")
-+        assert page.request.get(endpoint).status == 503
-+        target.write_bytes(before)
+-    page.get_by_role("tab", name="문서 소유권").click()
+-    page.get_by_role("row").filter(has_text="contracts/api-next.md").filter(has_text="응답").get_by_role("button", name="qa-inspector").click()
+-    expect(dialog.get_by_role("heading", name="qa-inspector", exact=True)).to_be_visible()
++    page.get_by_role("tab", name="문서 담당").click()
++    page.get_by_role("row").filter(has_text="contracts/api-next.md").filter(has_text="응답").get_by_role("button", name="verifier").click()
++    expect(dialog.get_by_role("heading", name="verifier", exact=True)).to_be_visible()
+     page.keyboard.press("Escape")
+-    page.get_by_role("tab", name="팀 구조도").click()
++    page.get_by_role("tab", name="에이전트 구조도").click()
+     common.click()
+     expect(dialog.locator(".document-entry")).to_have_count(13)
+     page.keyboard.press("Escape")
+@@ -221,7 +237,7 @@ def survey_checks(page, url, project, other):
+     with page.context.expect_page() as popup:
+         open_button.click()
+     survey = popup.value
+-    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="계획 대조")
++    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="기획")
+     model = row.locator("select[id^='model-']")
+     expect(model).to_have_value("opus")
+     model.select_option("sonnet")
+@@ -231,24 +247,24 @@ def survey_checks(page, url, project, other):
+     assert result.ok, result.text()
+     assert len(result.request.post_data_json["choices"]) == 1
+     expect(survey.locator("#status")).to_have_text("프로젝트 모델 표에 저장했습니다.")
+-    original_row = next(line for line in original.splitlines() if "`product-manager` | 계획 대조 |".encode() in line)
++    original_row = next(line for line in original.splitlines() if "`product-manager` | 기획 |".encode() in line)
+     assert file.read_bytes() == original.replace(original_row, original_row.replace(b"| opus |", b"| sonnet |"), 1)
+     assert file.read_bytes() != original
+     survey.close()
+-    page.locator(".independent-roles .node").filter(has=page.get_by_text("product-manager", exact=True)).click()
+-    expect(page.get_by_role("dialog")).to_contain_text("계획 대조 · claude · sonnet / medium")
++    page.locator(".branch .node").filter(has=page.get_by_text("product-manager", exact=True)).click()
++    expect(page.get_by_role("dialog")).to_contain_text("기획 · claude · sonnet / high")
+     page.keyboard.press("Escape")
+     with page.context.expect_page() as popup:
+         open_button.click()
+     survey = popup.value
+-    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="계획 대조")
++    row = survey.get_by_role("row").filter(has_text="product-manager").filter(has_text="기획")
+     expect(row.locator("select[id^='model-']")).to_have_value("sonnet")
+     state = survey.evaluate("DATA.localSave")
+     headers = {"Content-Type":"application/json", "Origin":url, "x-agent-toggle":state["token"]}
+     endpoint = url + "/model-selection"
+     assert page.request.get(endpoint, headers={"Origin":"http://other.invalid"}).status == 403
+     snapshot = file.read_bytes()
+-    choice = {"agent":"product-manager", "unit":"계획 대조", "runtime":"claude", "model":"opus", "effort":"medium"}
++    choice = {"agent":"product-manager", "unit":"기획", "runtime":"claude", "model":"opus", "effort":"high"}
+     for change in [{"model":"unknown"}, {"unit":"누락된 구형 행"}, {"model":"haiku","effort":"high"}]:
+         assert page.request.post(endpoint, headers=headers, data={"choices":[dict(choice, **change)], "revision":state["revision"]}).status == 400
+     for change in [{"Origin":"http://other.invalid"}, {"x-agent-toggle":"wrong"}, {"Host":"other.invalid"}]:
+@@ -278,37 +294,43 @@ def survey_checks(page, url, project, other):
+ def fixtures(project):
+     index = project / "docs/DOCUMENTATION_INDEX.md"
+     index_text = index.read_text(encoding="utf-8")
++    pending = "| `docs/12-changelog/CHANGELOG.md` | 전체 | 미배정 |"
++    assert "OpenAPI | 없음" in index_text and pending in index_text
+     index_text = index_text.replace("OpenAPI | 없음", "OpenAPI | [계약](../contracts/api.md)")
+-    index_text = index_text.replace("| `docs/11-operations/draft.md` | 전체 | 미배정 |",
+-                                    "| `docs/11-operations/draft.md` | 전체 | 해당 없음 |")
+-    index_text = index_text.replace("| `docs/05-api/draft.md` | 전체 | 미배정 |\n", "")
++    index_text = index_text.replace(pending, pending + "\n| `docs/12-changelog/CHANGELOG.md` | 릴리스 노트 | 해당 없음 |")
+     index.write_text(index_text, encoding="utf-8")
+     drafts = json.loads((project / "docs/harness/templates/document-drafts.json").read_text(encoding="utf-8"))
+     for draft in drafts:
+-        if draft.endswith("11-operations/draft.md"):
++        if draft.endswith("12-changelog/CHANGELOG.md"):
+             (project / draft).unlink()
+         else:
+             write(project, draft, "검증 원문 " + draft)
+     write(project, "contracts/api.md", "검증 원문 contracts/api.md")
+     scope = "| `docs/05-api/draft.md` | 응답 | "
+-    new_role(project, "dev-lead").rename(project / ".claude/agents/dev-lead.md.agent-toggle-off")
+-    new_role(project, "api-writer", scope + "작성 |", "| `ui-writer` | 응답 형식 | 오류 필드를 확인 |")
++    new_role(project, "api-writer", scope + "작성 |", "| `ui-writer` | 응답 형식 | 오류 필드를 확인 | 질문 2회, 넘으면 배정자에게 |")
+     new_role(project, "ui-writer", "| `docs/05-api/draft.md` | 오류 | 작성 |")
+-    for name, responsibility in [("qa-inspector","검토"), ("doc-steward","검토"), ("harness-engineer","확인")]:
++    add_roster(project, "api-writer", "ui-writer")
++    for name, responsibility in [("verifier","검토"), ("doc-steward","검토"), ("harness-engineer","확인")]:
+         role = project / f".claude/agents/{name}.md"
+         body = role.read_text(encoding="utf-8")
+         key = "## 문서 책임\n\n| 문서 | 범위 | 책임 |\n| --- | --- | --- |"
+         assert key in body
+         role.write_text(body.replace(key, key + "\n" + scope + responsibility + " |"), encoding="utf-8")
+     write(project, ".codex/agents/api-writer.toml.agent-toggle-off", 'description = "Codex 전용 원문"')
+-    with (project / "docs/harness/team-org.md").open("a", encoding="utf-8") as f:
+-        f.write("\n| `dev` | `dev-lead` | `api-writer`, `ui-writer` | | | 실행팀 |\n")
 +
 +
-+def fixtures(project):
-+    index = project / "docs/DOCUMENTATION_INDEX.md"
-+    index_text = index.read_text(encoding="utf-8")
-+    index_text = index_text.replace("OpenAPI | 없음", "OpenAPI | [계약](../contracts/api.md)")
-+    index_text = index_text.replace("| `docs/11-operations/draft.md` | 전체 | 미배정 |",
-+                                    "| `docs/11-operations/draft.md` | 전체 | 해당 없음 |")
-+    index_text = index_text.replace("| `docs/05-api/draft.md` | 전체 | 미배정 |\n", "")
-+    index.write_text(index_text, encoding="utf-8")
-+    drafts = json.loads((project / "docs/harness/templates/document-drafts.json").read_text(encoding="utf-8"))
-+    for draft in drafts:
-+        if draft.endswith("11-operations/draft.md"):
-+            (project / draft).unlink()
-+        else:
-+            write(project, draft, "검증 원문 " + draft)
-+    write(project, "contracts/api.md", "검증 원문 contracts/api.md")
-+    scope = "| `docs/05-api/draft.md` | 응답 | "
-+    new_role(project, "dev-lead").rename(project / ".claude/agents/dev-lead.md.agent-toggle-off")
-+    new_role(project, "api-writer", scope + "작성 |", "| `ui-writer` | 응답 형식 | 오류 필드를 확인 |")
-+    new_role(project, "ui-writer", "| `docs/05-api/draft.md` | 오류 | 작성 |")
-+    for name, responsibility in [("qa-inspector","검토"), ("doc-steward","검토"), ("harness-engineer","확인")]:
-+        role = project / f".claude/agents/{name}.md"
-+        body = role.read_text(encoding="utf-8")
-+        key = "## 문서 책임\n\n| 문서 | 범위 | 책임 |\n| --- | --- | --- |"
-+        assert key in body
-+        role.write_text(body.replace(key, key + "\n" + scope + responsibility + " |"), encoding="utf-8")
-+    write(project, ".codex/agents/api-writer.toml.agent-toggle-off", 'description = "Codex 전용 원문"')
-+    with (project / "docs/harness/team-org.md").open("a", encoding="utf-8") as f:
-+        f.write("\n| `dev` | `dev-lead` | `api-writer`, `ui-writer` | | | 실행팀 |\n")
-+
-+
-+def legacy_checks(page, url):
-+    page.goto(url + "/team-structure.html")
-+    expect(page.locator(".group")).to_contain_text("old-member")
-+    page.get_by_role("tab", name="문서 소유권").click()
-+    expect(page.locator("tbody tr")).to_have_count(1)
-+    expect(page.locator("tbody tr")).to_contain_text("spec.md")
-+    expect(page.locator("tbody tr")).not_to_contain_text("input.md")
-+    page.get_by_role("tab", name="직접 협업").click()
-+    expect(page.locator(".collaboration-row")).to_have_count(0)
-+
-+
-+with tempfile.TemporaryDirectory(prefix="agent-toggle-ui-") as tmp, sync_playwright() as playwright:
-+    root = Path(tmp)
-+    home = root / "home"
-+    cached = home / ".claude/plugins/cache/orca-teamagent/orca-teamagent-harness-kit/test"
-+    for asset in ["skills/setup/scripts/model-table.mjs", "template/.claude/scripts/model-selection.mjs",
-+                  "skills/setup/assets/model-survey.html"]:
-+        target = cached / asset
-+        target.parent.mkdir(parents=True, exist_ok=True)
-+        shutil.copyfile(kit / asset, target)
-+    project, other = root / "A", root / "B"
-+    install(project)
-+    install(other)
-+    fixtures(project)
-+    table_b = other / "docs/harness/model-selection.md"
-+    table_b.write_bytes(table_b.read_bytes() + b"\nProject B\n")
-+    browser = playwright.chromium.launch()
-+    context = browser.new_context(viewport={"width": 1500, "height": 1000})
-+    context.set_default_timeout(7000)
-+    context.route("https://fonts.googleapis.com/**", lambda route: route.abort())
-+    page = context.new_page()
-+    errors = []
-+    page.on("pageerror", lambda error: errors.append(str(error)))
-+    with server(project, home) as url:
-+        chart_checks(page, url, project)
-+        survey_checks(page, url, project, other)
-+    old = root / "legacy"
-+    write(old, ".claude/agents/old-lead.md", "## 책임\n- 정본 소유: `spec.md`\n")
-+    write(old, ".claude/agents/old-member.md", "## 입력\n- `input.md`\n")
-+    write(old, "docs/harness/team-org.md", "| `legacy` | `old-lead` | `old-member` | | |\n")
-+    with server(old, home) as url:
-+        legacy_checks(page, url)
-+        data = page.request.get(url + "/team.json").json()
-+        page.route("**/team.json", lambda route: route.fulfill(json=data))
-+        legacy_checks(page, url)
-+    assert not errors, errors
-     browser.close()
--print("Passed")
-+print("Passed: installed A/B, legacy HTTP and browser fixture, desktop and mobile")
++def add_roster(project, *names):
++    roster = project / "docs/harness/agents.md"
++    lines = roster.read_text(encoding="utf-8").split("\n")
++    last = max(i for i, line in enumerate(lines) if line.startswith("| `"))
++    lines[last + 1:last + 1] = [f"| `{name}` | 추가 단위 | `docs-management` | 프로젝트가 정한다 |" for name in names]
++    roster.write_text("\n".join(lines), encoding="utf-8")
+ 
+ 
+ def legacy_checks(page, url):
+     page.goto(url + "/team-structure.html")
+-    expect(page.locator(".group")).to_contain_text("old-member")
+-    page.get_by_role("tab", name="문서 소유권").click()
++    expect(page.get_by_text("setup을 다시 돌려 새 구조로 옮기세요")).to_be_visible()
++    page.get_by_role("tab", name="문서 담당").click()
+     expect(page.locator("tbody tr")).to_have_count(1)
+     expect(page.locator("tbody tr")).to_contain_text("spec.md")
+     expect(page.locator("tbody tr")).not_to_contain_text("input.md")
+@@ -342,9 +364,9 @@ with tempfile.TemporaryDirectory(prefix="agent-toggle-ui-") as tmp, sync_playwri
+         chart_checks(page, url, project)
+         survey_checks(page, url, project, other)
+     old = root / "legacy"
+-    write(old, ".claude/agents/old-lead.md", "## 책임\n- 정본 소유: `spec.md`\n")
++    write(old, ".claude/agents/old-owner.md", "## 책임\n- 정본 소유: `spec.md`\n")
+     write(old, ".claude/agents/old-member.md", "## 입력\n- `input.md`\n")
+-    write(old, "docs/harness/team-org.md", "| `legacy` | `old-lead` | `old-member` | | |\n")
++    write(old, "docs/harness/team-org.md", "# 옛 명단\n")
+     with server(old, home) as url:
+         legacy_checks(page, url)
+         data = page.request.get(url + "/team.json").json()
 diff --git a/check.mjs b/check.mjs
-index 46f1792..85b66a4 100644
+index 8205f09..0fb6ee6 100644
 --- a/check.mjs
 +++ b/check.mjs
-@@ -93,8 +93,8 @@ try {
+@@ -81,22 +81,29 @@ try {
+   fs.appendFileSync(installedCodex, '\n# See `docs/codex-only.md`')
+   const chart = teamStructure(project)
+   const group = chart.groups.find(g => g.name === 'package')
+-  assert.equal(group.isTeam, false)
++  assert.equal(group.roster, undefined)
+   assert.deepEqual(group.members.map(r => r.name), ['kit-agent'])
++  assert.equal(group.members[0].unit, '')
++  assert.equal(group.members[0].waiting, false)
+   assert.deepEqual(group.members[0].engines, ['Claude Code', 'Codex'])
+   assert.deepEqual(group.members[0].references, ['.claude/kit-agent/templates/brief.md'])
+   assert.deepEqual(group.members[0].editPaths, [])
+-  const roster = path.join(project, 'docs/harness/team-org.md')
++  const roster = path.join(project, 'docs/harness/agents.md')
+   fs.mkdirSync(path.dirname(roster), { recursive: true })
+-  fs.writeFileSync(roster, '| `qa` | `kit-agent` | `local` | `team-qa` | tests |')
++  fs.writeFileSync(roster, ['\uFEFF| 에이전트 | 맡는 단위 | 스킬 | 편집 범위 |', '| --- | --- | --- | --- |',
++    '| `kit-agent` | 검증 | `team-x` | tests, `_workspace/qa/` |', ''].join('\r\n'))
+   fs.writeFileSync(path.join(path.dirname(roster), 'model-selection.md'),
      '| `kit-agent` | 별도 작업 | codex | test | low | |\n| `kit-agent` | 흐름 검증, 재검 | claude | opus | high | |\n| `*` | 기본 | claude | sonnet | medium | |')
-   const qa = teamStructure(project).groups.find(g => g.name === 'qa')
-   assert.equal(qa.isTeam, true)
--  assert.deepEqual(qa.members[0].tasks, ['흐름 검증', '재검'])
--  assert.deepEqual(qa.members[0].assignments.map(a => a.model), ['opus', 'sonnet'])
-+  assert.deepEqual(qa.members[0].tasks, ['별도 작업', '흐름 검증', '재검'])
-+  assert.deepEqual(qa.members[0].assignments.map(a => a.model), ['test','opus', 'sonnet'])
-   assert.equal(qa.lead, 'kit-agent')
+-  const qa = teamStructure(project).groups.find(g => g.name === 'qa')
+-  assert.equal(qa.isTeam, true)
++  const listed = teamStructure(project)
++  assert.equal(listed.notice, undefined)
++  const qa = listed.groups.find(g => g.roster)
+   assert.deepEqual(qa.members[0].tasks, ['별도 작업', '흐름 검증', '재검'])
+   assert.deepEqual(qa.members[0].assignments.map(a => a.model), ['test','opus', 'sonnet'])
+-  assert.equal(qa.lead, 'kit-agent')
    assert.deepEqual(qa.members.map(r => r.name), ['kit-agent'])
++  assert.deepEqual([qa.members[0].unit, qa.members[0].skills, qa.members[0].scope, qa.members[0].waiting],
++    ['검증', ['team-x'], 'tests, `_workspace/qa/`', false])
++  assert.ok(!listed.groups.some(g => 'lead' in g || 'kind' in g || 'isTeam' in g))
++  assert.ok(!listed.groups.find(g => g.name === 'package'))
    assert.deepEqual(fs.readFileSync(installedAgent), fs.readFileSync(kitAgent))
-@@ -105,13 +105,31 @@ try {
+   assert.deepEqual(fs.readFileSync(installedTemplate), fs.readFileSync(kitTemplate))
+   assert.ok(fs.readFileSync(installedCodex, 'utf8').includes('.claude/kit-agent/templates/brief.md'))
+@@ -105,9 +112,9 @@ try {
    assert.equal(fs.readFileSync(installedTemplate, 'utf8'), 'edited')
    fs.copyFileSync(kitTemplate, installedTemplate)
    m.setProject('kit-agent', 'Claude Code', false)
--  assert.ok(!teamStructure(project).groups.some(g => g.name === 'qa'))
-+  const waiting = teamStructure(project).groups.find(g => g.name === 'qa')
-+  assert.equal(waiting?.waiting, true)
-+  assert.deepEqual(waiting.members.map(r => r.name), ['kit-agent'])
-+  assert.equal(waiting.members[0].state, 'off')
+-  const waiting = teamStructure(project).groups.find(g => g.name === 'qa')
+-  assert.equal(waiting?.waiting, true)
++  const waiting = teamStructure(project).groups.find(g => g.roster)
+   assert.deepEqual(waiting.members.map(r => r.name), ['kit-agent'])
++  assert.equal(waiting.members[0].waiting, true)
+   assert.equal(waiting.members[0].state, 'off')
    assert.ok(m.inventory().some(r => r.name === 'kit-agent' && r.engine === 'Codex' && r.state === 'on'))
    fs.writeFileSync(installedCodex, codexOriginal)
-   fs.renameSync(kit, kit + '-offline')
-   m.set('package-kit', false)
-   assert.ok(!m.inventory().some(row => row.name === 'kit-agent'))
-   for (const file of [installedAgent, installedTemplate, installedCodex]) assert.ok(!fs.existsSync(file))
-+  // The index can point at another project document, including through a Markdown link relative to docs/.
-+  const docs = path.join(project, 'docs')
-+  fs.writeFileSync(path.join(project, 'product.md'), 'project canonical')
-+  fs.writeFileSync(path.join(root, 'private.md'), 'outside')
-+  fs.symlinkSync(root, path.join(project, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
-+  fs.writeFileSync(path.join(docs, 'DOCUMENTATION_INDEX.md'), [
-+    '## 문서', '| 위치 | 담는 것 | 정본 문서 | 관련 ID | 마지막으로 갱신한 phase | 상태 |',
-+    '| --- | --- | --- | --- | --- | --- |',
-+    '| `docs/01-product/` | PRD | [정본](../product.md) | | | 최신 |',
-+    '| `docs/02-requirements/` | SRS | [외부](../../private.md) | | | 최신 |',
-+    '| `docs/03-ui-ux/` | UI | `linked/private.md` | | | 최신 |',
-+  ].join('\n'))
-+  const legacy = teamStructure(project)
-+  assert.deepEqual(legacy.common.map(d => d.title), ['PRD','SRS','UI'])
-+  assert.deepEqual(legacy.files, {'product.md':'project canonical', '../private.md':null, 'linked/private.md':null})
+@@ -130,6 +137,29 @@ try {
+   const legacy = teamStructure(project)
+   assert.deepEqual(legacy.common.map(d => d.title), ['PRD','SRS','UI'])
+   assert.deepEqual(legacy.files, {'product.md':'project canonical', '../private.md':null, 'linked/private.md':null})
++  // A project with only the old roster gets the migration notice.
++  const old = path.join(root, 'old')
++  fs.mkdirSync(path.join(old, 'docs/harness'), { recursive: true })
++  fs.writeFileSync(path.join(old, 'docs/harness/team-org.md'), '| `qa` | `a` | `b` | | |')
++  assert.match(teamStructure(old).notice, /setup을 다시 돌려 새 구조로 옮기세요/)
++  // Tab data: collaboration limit (optional fourth column), writers from 문서 책임, pending-only documents.
++  const flat = path.join(root, 'flat')
++  const role = (name, body) => {
++    fs.mkdirSync(path.join(flat, '.claude/agents'), { recursive: true })
++    fs.writeFileSync(path.join(flat, '.claude/agents', name + '.md'), ['---', 'name: ' + name, 'description: d', '---', ...body].join('\n'))
++  }
++  role('alpha', ['## 문서 책임', '| 문서 | 범위 | 책임 |', '| --- | --- | --- |', '| `docs/05-api/draft.md` | 전체 | 작성 |', '',
++    '## 직접 협업', '| 상대 | 협의 주제 | 목적 | 한도 |', '| --- | --- | --- | --- |', '| `beta` | 계약 | 응답을 맞춘다. | 질문 3회, 넘으면 배정자에게 |'])
++  role('beta', ['## 직접 협업', '| 상대 | 협의 주제 | 목적 |', '| --- | --- | --- |', '| `alpha` | 계약 | 화면을 맞춘다. |'])
++  fs.mkdirSync(path.join(flat, 'docs'), { recursive: true })
++  fs.writeFileSync(path.join(flat, 'docs/DOCUMENTATION_INDEX.md'), ['## 작성자 배정 대기', '| 문서 | 범위 | 배정 상태 |',
++    '| --- | --- | --- |', '| `docs/12-changelog/CHANGELOG.md` | 전체 | 미배정 |'].join('\n'))
++  const tabs = teamStructure(flat)
++  const member = name => tabs.groups.flatMap(g => g.members).find(r => r.name === name)
++  assert.equal(member('alpha').collaboration[0].limit, '질문 3회, 넘으면 배정자에게')
++  assert.equal(member('beta').collaboration[0].limit, '')
++  assert.deepEqual(tabs.ownership.find(r => r.path === 'docs/05-api/draft.md').writers, ['alpha'])
++  assert.deepEqual(tabs.ownership.find(r => r.path === 'docs/12-changelog/CHANGELOG.md').writers, [])
    console.log('Passed')
  } finally {
    fs.rmSync(root, { recursive: true, force: true })
 diff --git a/server.mjs b/server.mjs
-index 257e5da..1a7416d 100644
+index 0b33ada..88dd071 100644
 --- a/server.mjs
 +++ b/server.mjs
-@@ -1,8 +1,9 @@
--import { readFileSync } from 'node:fs'
-+import { readFileSync, readdirSync, realpathSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, lstatSync, accessSync, constants } from 'node:fs'
-+import { pathToFileURL } from 'node:url'
- import http from 'node:http'
- import os from 'node:os'
- import path from 'node:path'
--import { teamStructure } from './team.mjs'
-+import { regular, teamStructure } from './team.mjs'
- import { createHash, randomUUID } from 'node:crypto'
- import { manager } from './manager.mjs'
- 
-@@ -11,16 +12,106 @@ const project = process.cwd()
- const source = path.join(os.homedir(), '.claude', 'agents-hans')
- const m = manager(source, project)
- const token = randomUUID()
-+const revision = text => createHash('sha256').update(text).digest('hex')
-+const tablePath = 'docs/harness/model-selection.md'
-+const problem = (status, message) => Object.assign(Error(message), {status})
-+// Only load code from the user's installed kit. The project copies (including HTML) are data for version matching.
-+async function surveyAssets() {
-+  const assets = [
-+    ['.claude/scripts/model-table.mjs', 'skills/setup/scripts/model-table.mjs'],
-+    ['.claude/scripts/model-selection.mjs', 'template/.claude/scripts/model-selection.mjs'],
-+    ['docs/harness/templates/model-survey.html', 'skills/setup/assets/model-survey.html']
-+  ]
-+  const installed = assets.map(([rel]) => {
-+    const file = regular(project, rel)
-+    if (!file) throw problem(503,'모델 설문 설치 파일이 없습니다: ' + rel)
-+    return readFileSync(file, 'utf8').replaceAll('\r\n', '\n')
-+  })
-+  const homes = new Set([process.env.CLAUDE_CONFIG_DIR, path.join(os.homedir(), '.claude'),
-+    process.env.CODEX_HOME, path.join(os.homedir(), '.codex')].filter(Boolean))
-+  for (const home of homes) {
-+    const cache = path.join(home, 'plugins/cache/orca-teamagent/orca-teamagent-harness-kit')
-+    if (!lstatSync(cache, {throwIfNoEntry:false})?.isDirectory()) continue
-+    for (const version of readdirSync(cache)) {
-+      const kit = regular(cache, version, true)
-+      if (!kit) continue
-+      const relative = path.relative(realpathSync(project), realpathSync(kit))
-+      if (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) continue
-+      if (!assets.every(([, rel], i) => {
-+        const file = regular(kit, rel)
-+        return file && readFileSync(file, 'utf8').replaceAll('\r\n', '\n') === installed[i]
-+      })) continue
-+      const editor = await import(pathToFileURL(path.join(kit, assets[0][1])).href)
-+      if (editor.pageData && editor.buildPage && editor.applyChoices) return {editor, html: installed[2]}
-+    }
-+  }
-+  throw problem(503,'설치한 모델 설문과 일치하는 사용자 키트 버전을 찾을 수 없습니다.')
-+}
-+
-+async function modelSelection(req, res) {
-+  const {editor, html} = await surveyAssets()
-+  const currentTable = () => {
-+    const file = regular(project, tablePath)
-+    if (!file) throw problem(404,'현재 프로젝트에 모델 선택 표가 없습니다.')
-+    return file
-+  }
-+  if (req.method === 'GET') {
-+    const text = readFileSync(currentTable(), 'utf8')
-+    const data = editor.pageData(text, [], Boolean(regular(project, '.codex', true)) || /^\|[^|\n]+\|[^|\n]+\|\s*codex\s*\|/m.test(text))
-+    data.localSave = {token, revision: revision(text)}
-+    return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end(editor.buildPage(html, data))
-+  }
-+  if (req.headers['content-type']?.split(';')[0] !== 'application/json') throw problem(415,'JSON 요청이 필요합니다.')
-+  const chunks = []
-+  let size = 0
-+  for await (const chunk of req) {
-+    size += chunk.length
-+    if (size > 1024 * 1024) throw problem(413,'요청 크기가 너무 큽니다.')
-+    chunks.push(chunk)
-+  }
-+  const { choices, revision: expected } = JSON.parse(Buffer.concat(chunks).toString('utf8')) ?? {}
-+  if (typeof expected !== 'string' || !Array.isArray(choices) || choices.some(c => !c || typeof c.agent !== 'string' ||
-+      typeof c.unit !== 'string' || ['runtime','model','effort'].some(k => k in c && (typeof c[k] !== 'string' || /[|\r\n]/.test(c[k])))))
-+    throw Error('모델 선택 행을 확인하세요.')
-+  const file = currentTable()
-+  accessSync(file, constants.W_OK)
-+  const pending = file + '.agent-toggle-save'
-+  const fd = openSync(pending, 'wx', lstatSync(file).mode)
-+  let renamed = false
-+  let next
-+  try {
-+    const text = readFileSync(currentTable(), 'utf8')
-+    const conflict = () => problem(409,'모델 표가 변경되었습니다. 다시 열어 현재 값을 확인하세요.')
-+    if (revision(text) !== expected) throw conflict()
-+    next = editor.applyChoices(text, choices)
-+    if (next !== text) {
-+      writeFileSync(fd, next)
-+      if (readFileSync(currentTable(), 'utf8') !== text) throw conflict()
-+      renameSync(pending, file)
-+      renamed = true
-+    }
-+  } finally {
-+    closeSync(fd)
-+    if (!renamed) unlinkSync(pending)
-+  }
-+  return res.writeHead(200, {'Content-Type':'application/json; charset=utf-8'}).end(JSON.stringify({ revision: revision(next) }))
-+}
- const esc = s => s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')
--const server = http.createServer((req, res) => {
-+const server = http.createServer(async (req, res) => {
-   const host = '127.0.0.1:' + server.address().port
-   res.setHeader('Cache-Control', 'no-store')
-   res.setHeader('X-Frame-Options', 'DENY')
-   try {
--    if (req.headers.host !== host) throw Error('잘못된 호스트')
-+    if (req.headers.host !== host) throw problem(403,'잘못된 호스트')
-     const url = new URL(req.url, 'http://' + host)
-+    if (req.method === 'POST' && (req.headers.origin !== 'http://' + host || req.headers['x-agent-toggle'] !== token))
-+      throw problem(403,'잘못된 요청')
-+    if (url.pathname === '/model-selection' && ['GET','POST'].includes(req.method)) {
-+      if ((req.headers.origin && req.headers.origin !== 'http://' + host) || req.headers['sec-fetch-site'] === 'cross-site')
-+        throw problem(403,'잘못된 요청')
-+      return await modelSelection(req, res)
-+    }
-     if (req.method === 'POST' && url.pathname === '/toggle') {
--      if (req.headers.origin !== 'http://' + host || req.headers['x-agent-toggle'] !== token) throw Error('잘못된 요청')
-       const name = url.searchParams.get('name')
-       const value = url.searchParams.get('on')
-       if (!['true', 'false'].includes(value)) throw Error('잘못된 토글 값')
-@@ -118,7 +209,8 @@ document.querySelector('main').onclick = async event => {
- render()
- </script></html>`)
-   } catch (err) {
--    res.writeHead(409, {'Content-Type':'text/plain; charset=utf-8'}).end(err.message)
-+    const status = err.status ?? (req.url === '/model-selection' ? err.code ? 500 : 400 : 409)
-+    res.writeHead(status, {'Content-Type':'text/plain; charset=utf-8'}).end(err.message)
-   }
- })
- server.listen(0, '127.0.0.1', () => console.log('http://127.0.0.1:' + server.address().port + '/'))
+@@ -161,7 +161,7 @@ const server = http.createServer(async (req, res) => {
+       return res.writeHead(200, {'Content-Type':type + '; charset=utf-8'}).end(readFileSync(new URL('.' + url.pathname, import.meta.url)))
+     }
+     if (req.method === 'GET' && url.pathname === '/team-structure.html') {
+-      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="agent-toggle-token" content="' + token + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>팀 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
++      return res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'}).end('<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="agent-toggle-token" content="' + token + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>에이전트 구조도</title><style>body{margin:0;background:#101012}</style><team-chart></team-chart><script src="/team.js"></script></html>')
+     }
+     if (req.method !== 'GET' || url.pathname !== '/') return res.writeHead(404).end()
+     function row({name, state, reason, engine, scope}) {
 diff --git a/team.css b/team.css
-index d34d8cd..9baea3d 100644
+index 80c4ea4..ed88903 100644
 --- a/team.css
 +++ b/team.css
-@@ -96,5 +96,22 @@ dialog form button:hover,.action:hover{background:#3c5746}
- .sources{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:8px;margin-top:24px;padding:12px 0;background:#1b2922;border-top:1px solid #3c5345}
- pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.65 Consolas,monospace}
- .empty,small[role=status]{color:var(--muted)}
-+.workflow .control{cursor:pointer}
-+.workflow .control:is(:hover,:focus-visible) rect{stroke:var(--mint);stroke-width:2}
-+.branch.waiting::after{display:none}
-+.node.inactive{border-style:dashed}
-+.state{color:#f1c493;font-size:13px}
-+.collaboration-row{grid-template-columns:minmax(150px,24%) 1fr;align-items:baseline}
-+.collaboration-row h3,.document-entry h4{font-size:15px;margin:0}
-+.flow-line .kind-1{display:inline-flex;align-items:center;justify-content:center;width:auto;gap:2px;border:0;color:#cfbc9c}
-+.flow-line .kind-1::before,.flow-line .kind-1::after{content:"";width:10px;border-top:1px dashed currentColor}
-+.document-entry{padding:12px 0;border-bottom:1px solid var(--line)}
-+.path-chip.action{background:transparent;color:#aed7e6;text-align:left;text-decoration:underline;border:0;padding:3px 0}
-+.block[data-label="읽는 입력"] h4{color:#a8cada}
-+.block[data-label="작업 산출물"] h4{color:#e5bc94}
-+.block[data-label="작성할 라이브 문서 · 절"] h4{color:#a6d0ae}
-+.block[data-label="주요 검토자"] h4,.block[data-label="직접 협업 상대"] h4{color:#c5b7eb}
-+.block[data-label="완료 기준"] h4{color:#b8cce6}
- @media(max-width:600px){:host>section{padding:22px 16px}header{gap:10px 16px;padding-bottom:18px}header span{font-size:15px}nav button{padding:8px 10px;font-size:13px}.flow-legend{font-size:11px}.summary-grid{grid-template-columns:1fr}dialog form{padding:20px 18px 15px;gap:14px}dialog h3{font-size:20px}#docs{padding:20px 18px}.collaboration-row{grid-template-columns:26px 1fr;gap:12px}}
- @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
-+@media(max-width:600px){.collaboration-row{grid-template-columns:1fr}.matrix{min-width:520px}}
+@@ -29,32 +29,22 @@ nav button:hover{background:#242b27;color:var(--ink)}
+ .with-workflow .branch{flex:1;display:flex;align-items:flex-start;justify-content:center;padding-top:0}
+ .with-workflow .branch::before,.with-workflow .branch::after{display:none}
+ .root{position:relative;background:#232429;border:1px solid #55565d;padding:10px 20px;border-radius:9px;font-weight:650}
+-.root:after,.branch:after,.reports:before{content:"";position:absolute;width:1px;background:#777980;height:18px;left:50%;top:100%}
++.root:after,.branch:after{content:"";position:absolute;width:1px;background:#777980;height:18px;left:50%;top:100%}
+ .branches{display:flex;padding-top:18px}.branch{position:relative;padding:18px 8px 0}.branch:after{top:0}.branch:before{content:"";position:absolute;top:0;left:0;right:0;border-top:1px solid #777980}
+ .branch:first-child:before{left:50%}.branch:last-child:before{right:50%}
+-.group{display:grid;gap:10px;text-align:center;width:348px;padding:16px;border:1.4px solid var(--panel-stroke);border-radius:15px;background:var(--panel-fill)}
+-.group{--panel-fill:color-mix(in srgb,var(--tone) 18%,#101012);--panel-stroke:color-mix(in srgb,var(--tone) 63%,#101012);--lead-fill:color-mix(in srgb,var(--tone) 34%,#101012);--card-fill:color-mix(in srgb,var(--tone) 14%,#101012);--card-stroke:color-mix(in srgb,var(--tone) 43%,#101012);--tag-bg:color-mix(in srgb,var(--tone) 7%,#101012);--tag-stroke:var(--card-stroke);border-top:3px solid var(--tone)}
+-.group h3{margin:0;font-size:25px;font-weight:400;color:var(--tone)}
+-.team-heading h3{line-height:32px}
+-.team-heading small{display:block;margin-top:4px;font-size:13px;line-height:18px;font-weight:400;color:#aeb6b1}
+-.members{display:grid;gap:12px}
+-.independent-roles{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),348px));gap:12px;--tone:#bfc7c3;--card-fill:#242828;--card-stroke:#525a56;--tag-bg:#1c1f1e;--tag-stroke:#464d49}
++.independent-roles{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),348px));gap:12px}
+ .independent-roles h3{grid-column:1/-1;margin:0;font-size:18px}
+-.reports{position:relative;margin-top:8px}
+-.reports:before{top:-18px}
+-.node{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;overflow:hidden;min-width:0;width:100%;text-align:left;border:1px solid var(--card-stroke);border-radius:10px;background:var(--card-fill);color:var(--ink);padding:16px;transition:filter .12s}
++.node{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;overflow:hidden;min-width:0;width:100%;text-align:left;border:1px solid var(--card-stroke);border-radius:10px;background:var(--card-fill);color:var(--ink);padding:16px;transition:filter .12s;--card-fill:color-mix(in srgb,var(--tone) 14%,#101012);--card-stroke:color-mix(in srgb,var(--tone) 43%,#101012);--tag-bg:color-mix(in srgb,var(--tone) 7%,#101012);--tag-stroke:var(--card-stroke)}
++.branch>.node{width:348px}
+ .node strong{font-size:16.5px;font-weight:600;overflow-wrap:anywhere}
+ .node small{color:var(--tone);font-size:14px}
+ .node .summary{color:#c0c7c4;font-size:15px;line-height:22px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+-.node.lead{background:var(--lead-fill);border:2px solid var(--tone);padding-right:44px}
+-.ribbon{position:absolute;top:10px;right:-24px;width:82px;transform:rotate(45deg);text-align:center;font-size:12px;color:#171719;background:var(--tone)}
+ .node:hover,.node:focus-visible{filter:brightness(1.25)}
+ .role-tags,.skill-tags{display:flex;flex-wrap:wrap;gap:6px}
+ .card-footer{display:flex;align-items:flex-end;flex-wrap:wrap;gap:6px;width:100%;margin-top:auto;padding-top:8px}
+ .card-footer .role-tags{flex:1 1 130px}.card-footer i{font-style:normal;border:1px solid var(--card-stroke);border-radius:5px;padding:2px 5px}
+ .configs{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;margin-left:auto}
+ .config-pair{display:inline-flex;gap:2px;color:var(--tone);font:12px/1.6 Consolas,monospace}
+-.lead .card-footer{width:calc(100% + 28px)}
+ .role-tags i{background:var(--tag-bg);border-color:var(--tag-stroke);color:var(--tone);font-family:inherit;font-size:12px;font-style:normal;line-height:21px;padding:0 7px;overflow-wrap:anywhere}
+ .skill-tags{gap:4px;max-width:100%}
+ .skill-tag{display:inline-block;background:#3a3324;color:#e2c98a;border-radius:4px;padding:2px 7px;font:400 12px/1.5 "DM Mono",monospace;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 diff --git a/team.js b/team.js
-index a2fc4fc..9f33c5a 100644
+index 15aed5c..3663c80 100644
 --- a/team.js
 +++ b/team.js
-@@ -21,9 +21,8 @@ const skillNames = role => [...new Set(role.skills.map(name =>
+@@ -1,22 +1,14 @@
+ new EventSource('/alive') // server exits when every page holding this is closed
+-const views = ['팀 구조도', '직접 협업', '문서 소유권']
++const views = ['에이전트 구조도', '직접 협업', '문서 담당']
+ const fontStylesheet = document.createElement('link')
+ fontStylesheet.rel = 'stylesheet'
+ fontStylesheet.href = 'https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&display=swap'
+ document.head.append(fontStylesheet)
+ const jobTitles = {
+-  'prd-writer':'제품 요구사항 작성자', 'product-manager':'제품 기획 담당자', planner:'설계·계획 담당자',
+-  'pm-reviewer':'기획 검토자', 'qa-inspector':'품질 검증 담당자', 'code-reviewer':'코드 리뷰어',
+-  'harness-engineer':'하네스 엔지니어', 'doc-steward':'제품 문서 관리자'
++  'product-manager':'제품 기획 담당자', research:'조사 담당자', frontend:'프론트엔드 담당자',
++  backend:'백엔드 담당자', verifier:'검증 담당자', 'harness-engineer':'하네스 엔지니어', 'doc-steward':'제품 문서 관리자'
+ }
+ const teamLabel = name => name === '프로젝트 에이전트' ? 'PROJECT AGENTS' : name.toUpperCase()
+-const koreanTeamNames = {
+-  qa:'검증팀', harness:'하네스팀', operations:'운영팀',
+-  'game-design':'게임기획팀', 'game-design-team':'게임기획팀', 'game-designer-agent':'게임 기획팀',
+-  'ux-ui':'UX/UI 디자인팀', 'mobile-ui-designer-claude':'모바일 UI 디자인팀',
+-  '3d-art':'3D 아트팀', 'blender-copy-modeler':'블렌더 모델링팀',
+-  unity:'Unity 개발팀', 'unity-vfx-expert':'유니티 시각효과팀'
+-}
+ const skillNames = role => [...new Set(role.skills.map(name =>
+   name.replace(/^(?:.*\/skills\/)?([^/]+)\/SKILL\.md$/i, '$1')
  ).filter(name => name && !name.includes('/') && !/\.(md|json|toml)$/i.test(name)))]
- 
- function outline(role) {
--  const body = role.docs.find(d => d.rel.endsWith('.md'))?.body ?? ''
-+  const body = role.docs[0]?.body ?? ''
-   const sections = new Map()
--  const collab = [], reporting = [], ownership = []
-   let section = '', fence = ''
-   for (const raw of body.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---[^\n]*\n/, '').split(/\r?\n/)) {
-     const line = raw.trim()
-@@ -38,28 +37,22 @@ function outline(role) {
-       if (!sections.has(section)) sections.set(section, [])
-       sections.get(section).push(item)
-     }
--    const claim = item.match(/^(정본 소유|소유 문서|문서 소유권|편집 범위|쓰기 경로|출력)\s*[:：]\s*(.+)/)
--    if (claim) {
--      const paths = [...line.matchAll(/`([^`]+)`/g)].map(m => m[1]).filter(p => /\/|\.\w+$/.test(p))
--      if (!paths.length && /^\S+\.[\w-]+$/.test(claim[2])) paths.push(claim[2])
--      ownership.push([claim[1], claim[2], paths])
--    } else if (/작업 배정|배정·보고|보고 체계/.test(section) || /^(보고[는:：]|작업 배정|보고 대상|보고 경로)|팀장은 |창구가 .*띄|코디네이터가 .*띄/.test(item)) reporting.push(item)
--    else if (/협업|협의|설정 전달|collaborat/i.test(section) || /^(직접 협업|직접 협의|설정 전달|협업 상대)\s*[:：]/.test(item)) collab.push(item)
-   }
-   const heading = body.match(/^#\s+(.+)$/m)?.[1]?.trim()
-   const title = heading && heading !== role.name ? heading : jobTitles[role.name] ??
-     role.name.split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
--  return { sections, collab, reporting, ownership, title }
-+  return { sections, title }
+@@ -45,16 +37,16 @@ function outline(role) {
+   return { sections, title }
  }
  
--function workflowDiagram(data, teams, planning) {
-+function workflowDiagram(data, teams, planning, direct, openDocs, openRole) {
-   const width = Math.max(1456, teams.length * 364)
--  const height = 370
-+  const rail = 344 + direct.length * 78
-+  const height = rail + 26
+-function workflowDiagram(data, teams, planning, direct, openDocs, openRole) {
+-  const width = Math.max(1456, teams.length * 364)
+-  const rail = 344 + direct.length * 78
++function workflowDiagram(data, row, openDocs) {
++  const width = Math.max(1456, row.length * 364)
++  const rail = 344
+   const height = rail + 26
    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
    svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
    svg.setAttribute('width', width)
    svg.setAttribute('height', height)
--  svg.setAttribute('role', 'img')
-+  svg.setAttribute('role', 'group')
-   svg.setAttribute('aria-label', '사용자부터 실행 팀까지의 업무 흐름')
+   svg.setAttribute('role', 'group')
+-  svg.setAttribute('aria-label', '사용자부터 실행 팀까지의 업무 흐름')
++  svg.setAttribute('aria-label', '사용자부터 에이전트까지의 업무 흐름')
    svg.classList.add('workflow')
    function shape(tag, attrs, value) {
-@@ -71,15 +64,23 @@ function workflowDiagram(data, teams, planning) {
+     const node = document.createElementNS(svg.namespaceURI, tag)
+@@ -79,33 +71,24 @@ function workflowDiagram(data, teams, planning, direct, openDocs, openRole) {
+       }
+     }
    }
-   const label = (x, y, value, cls = 'edge-label') => shape('text', { x, y, class: cls }, value)
-   const line = (d, dashed = false) => shape('path', { d, class: dashed ? 'setting' : 'route' })
--  function box(x, y, w, title, detail) {
-+  function box(x, y, w, title, detail, activate) {
-+    const first = svg.children.length
-     shape('rect', { x: x - w / 2, y, width: w, height: detail ? 68 : 44, rx: 9 })
-     label(x, y + (detail ? 28 : 29), title, 'box-title')
-     if (detail) label(x, y + 50, detail, 'box-detail')
-+    if (activate) {
-+      const control = shape('g', {role:'button', tabindex:'0', 'aria-label':title, class:'control'})
-+      control.append(...Array.from(svg.children).slice(first, -1))
-+      control.onclick = activate
-+      control.onkeydown = event => {
-+        if (['Enter',' '].includes(event.key)) { event.preventDefault(); activate() }
-+      }
-+    }
-   }
-   const desk = width * .50, pm = width * .10, planner = width * .32
-   const dag = width * .50, exec = width * .69, settings = width * .91
--  const roles = new Set(data.groups.flatMap(g => g.members.map(r => r.name)))
--  const directRoles = new Set(planning.map(r => r.name))
-+  const directRoles = new Set(planning.filter(r => r.state === 'on').map(r => r.name))
-   const hasPM = directRoles.has('product-manager'), hasPlanner = directRoles.has('planner')
-   function deskLine(d, role) {
-     const path = line(d)
-@@ -103,38 +104,40 @@ function workflowDiagram(data, teams, planning) {
-   }
-   if (hasPM && hasPlanner) {
-     line(`M${pm + 105} 262 H${planner - 95}`, true)
--    label((pm + 105 + planner - 95) / 2, 252, '승인된 백로그 →')
-+    label((pm + 105 + planner - 95) / 2, 252, '동료 · 업무 인계')
+-  const desk = width * .50, pm = width * .10, planner = width * .32
+-  const dag = width * .50, exec = width * .69, settings = width * .91
+-  const directRoles = new Set(planning.filter(r => r.state === 'on').map(r => r.name))
+-  const hasPM = directRoles.has('product-manager'), hasPlanner = directRoles.has('planner')
+-  function deskLine(d, role) {
+-    const path = line(d)
+-    path.dataset.from = '창구'
+-    path.dataset.role = role
+-  }
++  // One column per card below; product-manager hangs from the desk, the rest from the coordinator.
++  const slot = width / Math.max(1, row.length)
++  const x = role => slot * (row.indexOf(role) + .5)
++  const pm = row.find(r => r.name === 'product-manager')
++  const others = row.filter(r => r !== pm)
++  const pmX = pm ? x(pm) : width * .10
++  const exec = others.length ? (x(others[0]) + x(others.at(-1))) / 2 : width * .50
++  const dag = (pmX + exec) / 2, desk = dag, settings = Math.min(width - 120, exec + 330)
+ 
+   line(`M${desk} 44 V74 M${desk} 142 V173 H${exec} V228`)
+   label((desk + exec) / 2, 165, '계획 승인 후 실행 요청')
+-  if (hasPlanner) {
+-    deskLine(`M${desk} 173 H${planner} V228`, 'planner')
+-    label((desk + planner) / 2, 165, '설계 · 계획 요청')
+-    line(`M${planner + 95} 262 H${dag - 80}`)
+-    label((planner + 95 + dag - 80) / 2, 252, '작성 →')
+-  }
+-  if (hasPM) deskLine(`M${desk} 173 H${pm} V228`, 'product-manager')
+-  for (const [role, x, detail] of [['prd-writer', width * .23, '요구사항 작성'], ['pm-reviewer', width * .36, '기획 검토 · 계획 대조']]) {
+-    if (!directRoles.has(role)) continue
+-    deskLine(`M${desk - 113} 108 H${x} V68`, role)
+-    box(x, 0, 146, role, detail)
+-  }
+-  if (hasPM && hasPlanner) {
+-    line(`M${pm + 105} 262 H${planner - 95}`, true)
+-    label((pm + 105 + planner - 95) / 2, 252, '동료 · 업무 인계')
++  if (pm && !pm.waiting) {
++    const path = line(`M${desk} 173 H${pmX} V${height}`)
++    path.dataset.from = '창구'
++    path.dataset.role = pm.name
++    label((desk + pmX) / 2, 165, '요구 · 설계 · 계획 요청')
++    line(`M${pmX} 262 H${dag - 80}`)
++    label((pmX + dag - 80) / 2, 252, '작성 →')
    }
    line(`M${dag + 80} 262 H${exec - 104}`)
    label((dag + 80 + exec - 104) / 2, 252, '승인본 전달 →')
-   if (data.workflow.modelSelection) {
-     line(`M${settings - 110} 262 H${exec + 104}`, true)
+@@ -114,31 +97,19 @@ function workflowDiagram(data, teams, planning, direct, openDocs, openRole) {
      label((settings - 110 + exec + 104) / 2, 252, '← 실행 설정')
--    box(settings, 228, 220, '모델 선택 표', '에이전트별 model · effort')
-+    box(settings, 228, 220, '모델 선택 표', '에이전트별 model · effort', () => window.open('/model-selection', '_blank', 'noopener'))
+     box(settings, 228, 220, '모델 선택 표', '에이전트별 model · effort', () => window.open('/model-selection', '_blank', 'noopener'))
    }
--  if (roles.has('doc-steward') && !teams.some(g => g.members.some(r => r.name === 'doc-steward'))) {
--    const path = line(`M${exec + 74} 228 V108 H${settings - 110}`)
--    path.dataset.from = '코디네이터'
--    path.dataset.role = 'doc-steward'
--    label((exec + 74 + settings - 110) / 2, 99, '직접 배정')
--    box(settings, 74, 220, 'doc-steward', '독립 역할 · 제품 문서 관리')
-+  for (const [i, role] of direct.entries()) {
-+    const y = 318 + i * 78
-+    if (role.state === 'on') {
-+      const route = line(`M${exec + 74} 296 V${y + 34} H${settings - 110}`)
-+      route.dataset.from = '코디네이터'
-+      route.dataset.role = role.name
-+    }
-+    box(settings, y, 220, role.name, '코디네이터 직속' + (role.state === 'on' ? '' : ' · OFF'), () => openRole(role))
-   }
-   const slot = width / Math.max(1, teams.length)
--  const execution = teams.map((g, i) => ({ g, x: slot * (i + .5) }))
-+  const execution = teams.map((g, i) => ({ g, x: slot * (i + .5) })).filter(({g}) => !g.waiting)
-   if (execution.length) {
--    line(`M${exec} 296 V344 M${Math.min(exec, execution[0].x)} 344 H${Math.max(exec, execution.at(-1).x)}`)
--    label(exec, 335, '팀장 또는 워커 배정 · 결과 보고')
-+    line(`M${exec} 296 V${rail} M${Math.min(exec, execution[0].x)} ${rail} H${Math.max(exec, execution.at(-1).x)}`)
-+    label(exec, rail - 9, '팀장 또는 워커 배정 · 결과 보고')
-     for (const { g, x } of execution) {
--      const path = line(`M${x} 344 V${height}`)
-+      const path = line(`M${x} ${rail} V${height}`)
+-  for (const [i, role] of direct.entries()) {
+-    const y = 318 + i * 78
+-    if (role.state === 'on') {
+-      const route = line(`M${exec + 74} 296 V${y + 34} H${settings - 110}`)
+-      route.dataset.from = '코디네이터'
+-      route.dataset.role = role.name
+-    }
+-    box(settings, y, 220, role.name, '코디네이터 직속' + (role.state === 'on' ? '' : ' · OFF'), () => openRole(role))
+-  }
+-  const slot = width / Math.max(1, teams.length)
+-  const execution = teams.map((g, i) => ({ g, x: slot * (i + .5) })).filter(({g}) => !g.waiting)
+-  if (execution.length) {
+-    line(`M${exec} 296 V${rail} M${Math.min(exec, execution[0].x)} ${rail} H${Math.max(exec, execution.at(-1).x)}`)
+-    label(exec, rail - 9, '팀장 또는 워커 배정 · 결과 보고')
+-    for (const { g, x } of execution) {
+-      const path = line(`M${x} ${rail} V${height}`)
++  const active = others.filter(r => !r.waiting)
++  if (active.length) {
++    line(`M${exec} 296 V${rail} M${Math.min(exec, x(active[0]))} ${rail} H${Math.max(exec, x(active.at(-1)))}`)
++    label(exec, rail - 9, '배정 · 결과 보고')
++    for (const role of active) {
++      const path = line(`M${x(role)} ${rail} V${height}`)
        path.dataset.from = '코디네이터'
-       path.dataset.team = g.name
+-      path.dataset.team = g.name
++      path.dataset.role = role.name
      }
    }
    box(desk, 0, 186, '사용자')
    box(desk, 74, 226, '창구 세션', '요청 정리 · 승인 · 최종 보고')
--  if (data.workflow.documents) box(pm, 74, 242, 'docs/ · 공통 기준 문서', 'PRD · SRS · 백로그 · 문서 색인')
--  if (hasPM) box(pm, 228, 210, 'Product Manager', '범위 · 우선순위 · 백로그')
--  if (hasPlanner) box(planner, 228, 190, 'Planner', '설계서 · 실행 계획 작성')
-+  if (data.workflow.documents || data.common.length) box(pm, 74, 242, 'docs/ · 공통 기준 문서', '문서 색인 · 지정 작성자', openDocs)
-+  if (hasPM) box(pm, 228, 210, 'Product Manager', '범위 · 우선순위 · 백로그', () => openRole(planning.find(r => r.name === 'product-manager')))
-+  if (hasPlanner) box(planner, 228, 190, 'Planner', '설계서 · 실행 계획 작성', () => openRole(planning.find(r => r.name === 'planner')))
+-  if (data.workflow.documents || data.common.length) box(pm, 74, 242, 'docs/ · 공통 기준 문서', '문서 색인 · 지정 작성자', openDocs)
+-  if (hasPM) box(pm, 228, 210, 'Product Manager', '범위 · 우선순위 · 백로그', () => openRole(planning.find(r => r.name === 'product-manager')))
+-  if (hasPlanner) box(planner, 228, 190, 'Planner', '설계서 · 실행 계획 작성', () => openRole(planning.find(r => r.name === 'planner')))
++  if (data.workflow.documents || data.common.length) box(width * .10, 74, 242, 'docs/ · 공통 기준 문서', '문서 색인 · 문서 담당', openDocs)
    box(dag, 228, 160, 'DAG 계획서', '의존성 · 산출물 · 배정')
    box(exec, 228, 208, '코디네이터', '워커 기동 · 검증 · 보고 취합')
    return svg
-@@ -151,6 +154,8 @@ class TeamChart extends HTMLElement {
+@@ -149,8 +120,8 @@ class TeamChart extends HTMLElement {
+     super()
+     this.attachShadow({ mode: 'open' })
+     this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/team.css"><section>
+-      <header><h2>Claude Code 팀 구조도</h2><span id="project"></span></header>
+-      <nav role="tablist" aria-label="팀 보기"></nav>
++      <header><h2>Claude Code 에이전트 구조도</h2><span id="project"></span></header>
++      <nav role="tablist" aria-label="에이전트 보기"></nav>
+       <div class="chart" id="panel" role="tabpanel" tabindex="0"></div>
        <small role="status"></small><dialog><form method="dialog"><h3></h3><button>닫기</button></form><div id="docs"></div></dialog></section>`
      this.chart = this.shadowRoot.querySelector('.chart')
-     this.dialog = this.shadowRoot.querySelector('dialog')
-+    this.history = []
-+    this.dialog.addEventListener('close', () => { this.history = []; this.selected = null })
-     this.view = 0
-     const nav = this.shadowRoot.querySelector('nav')
-     views.forEach((label, i) => {
-@@ -207,16 +212,14 @@ class TeamChart extends HTMLElement {
+@@ -213,14 +184,13 @@ class TeamChart extends HTMLElement {
    draw(data) {
      this.data = data
      const all = data.groups.flatMap(g => g.members)
--    const teams = data.groups.filter(g => g.lead && g.isTeam !== false)
--    const planning = data.workflow ? data.groups.find(g => g.name === 'product' && !g.lead)?.members ?? [] : []
-+    const teams = data.groups.filter(g => g.kind === '실행팀')
-+    const planning = data.groups.filter(g => g.kind === '운영팀').flatMap(g => g.members)
-+    const direct = data.groups.filter(g => g.kind === '직속').flatMap(g => g.members)
+-    const teams = data.groups.filter(g => g.kind === '실행팀')
+-    const planning = data.groups.filter(g => g.kind === '운영팀').flatMap(g => g.members)
+-    const direct = data.groups.filter(g => g.kind === '직속').flatMap(g => g.members)
++    const listed = data.groups.find(g => g.roster)?.members ?? []
++    const lineup = [...listed.filter(r => r.name === 'product-manager'), ...listed.filter(r => r.name !== 'product-manager')]
      const outlines = new Map(all.map(role => [role, outline(role)]))
      const byName = new Map(all.map(r => [r.name, r]))
      const teamOf = new Map(data.groups.flatMap(g => g.members.map(r => [r, g])))
      const tones = ['#98bfe3','#deb781','#9bcaa7','#bba7de','#dfa6ae','#86cec7']
--    const teamTone = new Map(data.groups.map(g => {
--      const i = teams.indexOf(g)
--      return [g, i < 0 ? '#bfc7c3' : tones[i] ?? `hsl(${(i * 137.508) % 360} 65% 72%)`]
--    }))
-+    const teamTone = new Map(data.groups.map((g,i) => [g, tones[i] ?? `hsl(${(i * 137.508) % 360} 65% 72%)`]))
+-    const teamTone = new Map(data.groups.map((g,i) => [g, tones[i] ?? `hsl(${(i * 137.508) % 360} 65% 72%)`]))
++    const tone = new Map(all.map((r,i) => [r, tones[i] ?? `hsl(${(i * 137.508) % 360} 65% 72%)`]))
      const element = (tag, cls, text) => {
        const el = document.createElement(tag)
        el.className = cls
-@@ -229,50 +232,121 @@ class TeamChart extends HTMLElement {
-       b.onclick = fn
+@@ -234,13 +204,15 @@ class TeamChart extends HTMLElement {
        return b
      }
--    const details = (role, source = '') => {
-+    const relations = []
-+    for (const role of all) for (const {peer, topic, purpose} of role.collaboration) {
-+      const other = byName.get(peer)
-+      if (!other) continue
-+      const existing = relations.find(r => r.topic === topic && r.pair.includes(role) && r.pair.includes(other))
-+      if (!existing) relations.push({pair:[role, other], topic, purposes:[purpose]})
-+      else if (!existing.purposes.includes(purpose)) existing.purposes.push(purpose)
-+    }
-+    const navigate = target => {
-+      if (this.dialog.open && this.selected) this.history.push(this.selected)
-+      show(target)
-+    }
-+    const docs = this.dialog.querySelector('#docs')
-+    const heading = this.dialog.querySelector('h3')
-+    const roleButton = role => {
-+      const b = action(role.name, () => navigate({role:role.name}))
-+      b.classList.add('chip')
-+      b.style.setProperty('--tone', teamTone.get(teamOf.get(role)))
-+      b.setAttribute('aria-haspopup', 'dialog')
-+      return b
-+    }
-+    const pathButton = rel => {
-+      const b = action(rel, () => navigate({path:rel}))
-+      b.classList.add('path-chip')
-+      return b
-+    }
-+    const writers = row => row.writers.length ? row.writers.map(n => roleButton(byName.get(n))) : [row.status || '미배정']
-+    const show = target => {
-+      const {role:name, source, path} = target
-+      this.selected = target
-+      docs.replaceChildren()
-+      heading.removeAttribute('data-team')
-+      heading.removeAttribute('aria-label')
-+      this.dialog.style.removeProperty('--tone')
-+      if (this.history.length) docs.append(action('← 이전', () => show(this.history.pop())))
-+      if (name && byName.has(name)) details(byName.get(name), source)
-+      else if (path) {
-+        heading.textContent = path
-+        docs.append(element('pre', '', data.files[path] ?? '현재 프로젝트에 문서 파일이 없습니다.'))
-+      } else {
-+        heading.textContent = '공통 기준 문서'
-+        for (const doc of data.common) {
-+          const block = element('article', 'document-entry')
-+          block.append(element('h4','',doc.title), doc.locationOnly ? element('code','path-chip',doc.path) : pathButton(doc.path))
-+          if (data.files[doc.path] == null || doc.status === '해당 없음')
-+            block.append(element('span','type-chip', doc.status === '해당 없음' ? '해당 없음' : doc.locationOnly ? '정본 경로 미지정' : '파일 없음'))
-+          const scopes = data.ownership.filter(row => row.path === doc.path)
-+          for (const row of scopes) {
-+            const line = element('p','scope')
-+            line.append(row.scope + ' · ', ...writers(row))
-+            block.append(line)
-+          }
-+          if (!scopes.length) block.append(element('p','scope',doc.status === '해당 없음' ? '해당 없음' : '미배정'))
-+          docs.append(block)
-+        }
-+        if (!data.common.length) docs.append(element('p','empty','설치된 공통 문서 경로표가 없습니다.'))
-+      }
-+      if (!this.dialog.open) this.dialog.showModal()
-+      this.dialog.scrollTop = 0
-+      this.dialog.querySelector('form button').focus()
-+    }
-+    const details = (role, source) => {
-       this.dialog.style.setProperty('--tone', teamTone.get(teamOf.get(role)))
+     const relations = []
+-    for (const role of all) for (const {peer, topic, purpose} of role.collaboration) {
++    for (const role of all) for (const {peer, topic, purpose, limit} of role.collaboration) {
+       const other = byName.get(peer)
+       if (!other) continue
+-      const existing = relations.find(r => r.topic === topic && r.pair.includes(role) && r.pair.includes(other))
+-      if (!existing) relations.push({pair:[role, other], topic, purposes:[purpose]})
+-      else if (!existing.purposes.includes(purpose)) existing.purposes.push(purpose)
++      let existing = relations.find(r => r.topic === topic && r.pair.includes(role) && r.pair.includes(other))
++      if (!existing) relations.push(existing = {pair:[role, other], topic, purposes:[], limits:[]})
++      if (!existing.purposes.includes(purpose)) existing.purposes.push(purpose)
++      if (limit && !existing.limits.includes(limit)) existing.limits.push(limit)
+     }
++    const limitText = r => r.limits.length ? '한도 ' + r.limits.join(' · ') : ''
+     const navigate = target => {
+       if (this.dialog.open && this.selected) this.history.push(this.selected)
+       show(target)
+@@ -250,7 +222,7 @@ class TeamChart extends HTMLElement {
+     const roleButton = role => {
+       const b = action(role.name, () => navigate({role:role.name}))
+       b.classList.add('chip')
+-      b.style.setProperty('--tone', teamTone.get(teamOf.get(role)))
++      b.style.setProperty('--tone', tone.get(role))
+       b.setAttribute('aria-haspopup', 'dialog')
+       return b
+     }
+@@ -259,7 +231,8 @@ class TeamChart extends HTMLElement {
+       b.classList.add('path-chip')
+       return b
+     }
+-    const writers = row => row.writers.length ? row.writers.map(n => roleButton(byName.get(n))) : [row.status || '미배정']
++    const writers = row => row.writers.length ? row.writers.flatMap(n => byName.get(n).state === 'on' ? [roleButton(byName.get(n))]
++      : [roleButton(byName.get(n)), element('span', 'state', '담당 꺼짐')]) : [row.status === '해당 없음' ? '해당 없음' : '담당 없음']
+     const show = target => {
+       const {role:name, source, path} = target
+       this.selected = target
+@@ -285,7 +258,7 @@ class TeamChart extends HTMLElement {
+             line.append(row.scope + ' · ', ...writers(row))
+             block.append(line)
+           }
+-          if (!scopes.length) block.append(element('p','scope',doc.status === '해당 없음' ? '해당 없음' : '미배정'))
++          if (!scopes.length) block.append(element('p','scope',doc.status === '해당 없음' ? '해당 없음' : '담당 없음'))
+           docs.append(block)
+         }
+         if (!data.common.length) docs.append(element('p','empty','설치된 공통 문서 경로표가 없습니다.'))
+@@ -295,10 +268,10 @@ class TeamChart extends HTMLElement {
+       this.dialog.querySelector('form button').focus()
+     }
+     const details = (role, source) => {
+-      this.dialog.style.setProperty('--tone', teamTone.get(teamOf.get(role)))
++      this.dialog.style.setProperty('--tone', tone.get(role))
        this.dialog.querySelector('h3').textContent = role.name
        const group = teamOf.get(role)
--      this.dialog.querySelector('h3').dataset.team = teams.includes(group) ? teamLabel(group.name) : planning.includes(role) ? '창구 직속' : '독립 역할'
--      const docs = this.dialog.querySelector('#docs')
--      docs.replaceChildren()
-+      heading.dataset.team = [teamLabel(group.name), group.kind].filter(Boolean).join(' · ')
-+      heading.setAttribute('aria-label', role.name)
+-      heading.dataset.team = [teamLabel(group.name), group.kind].filter(Boolean).join(' · ')
++      heading.dataset.team = role.unit || teamLabel(group.name)
+       heading.setAttribute('aria-label', role.name)
        const doc = role.docs.find(d => d.rel === source)
--      const changed = this.source !== doc?.rel || this.selected !== role.name
--      this.source = doc?.rel
        if (doc) {
--        docs.append(action('← 역할 요약', () => details(role)), element('h4', '', doc.rel), element('pre', '', doc.body))
-+        docs.append(element('h4', '', doc.rel), element('pre', '', doc.body))
-       } else {
-         docs.append(element('p', 'intro', role.description))
-         const grid = element('div', 'summary-grid')
--        const blocks = [...outlines.get(role).sections, ['담당 스킬', skillNames(role)], ['참조 문서 경로', role.references]]
--        const primary = role.assignments?.[0]
--        if (primary) blocks.unshift(['모델 · effort', [primary.unit + ' · ' + primary.runtime + ' · ' + (primary.model || '미정') + ' / ' + (primary.effort || '—')]])
-+        const sections = outlines.get(role).sections
-+        const owned = data.ownership.filter(row => row.writers.includes(role.name))
-+        const blocks = [...sections].filter(([label]) => !['문서 책임','직접 협업'].includes(label))
-+        blocks.push(['작성할 라이브 문서 · 절', owned.map(row => row.path + ' · ' + row.scope)],
-+          ['검토할 문서', data.ownership.filter(r => r.reviewers.includes(role.name)).map(r => r.path + ' · ' + r.scope)],
-+          ['확인할 문서', data.ownership.filter(r => r.checks.includes(role.name)).map(r => r.path + ' · ' + r.scope)],
-+          ['주요 검토자', [...new Set(owned.flatMap(r => r.reviewers))].map(n => roleButton(byName.get(n)))],
-+          ['직접 협업 상대', relations.filter(r => r.pair.includes(role)).map(r => {
-+            const item = element('span','')
-+            item.append(roleButton(r.pair.find(p => p !== role)), ' ' + r.topic + ' · ' + r.purposes.join(' '))
-+            return item
-+          })], ['담당 스킬', skillNames(role)], ['참조 문서 경로', sections.has('읽는 입력') ? [] : role.references],
-+          ['모델 · effort', role.assignments.map(a => a.unit + ' · ' + a.runtime + ' · ' + (a.model || '미정') + ' / ' + (a.effort || '—'))])
-         for (const [label, items] of blocks) {
-           if (!items.length) continue
-           const block = element('article', 'block')
-           const skills = label === '담당 스킬'
-           const list = element(skills ? 'div' : 'ul', skills ? 'skill-tags' : '')
--          for (const item of (skills ? items : items.slice(0, 3))) list.append(element(skills ? 'span' : 'li', skills ? 'skill-tag' : '', item))
--          block.append(element('h4', '', label), list)
-+          for (const item of items) {
-+            const entry = element(skills ? 'span' : 'li', skills ? 'skill-tag' : '')
-+            entry.append(item)
-+            list.append(entry)
-+          }
-+          block.dataset.label = label
-+          block.append(element('h4', '', label === '핵심 역할' ? '핵심 책임' : label), list)
-           grid.append(block)
-         }
-         docs.append(grid)
-         const buttons = element('div', 'sources')
--        for (const d of role.docs) buttons.append(action((d.rel.endsWith('.toml') ? 'Codex' : 'Claude Code') + ' 원문 보기', () => details(role, d.rel)))
-+        for (const d of role.docs) buttons.append(action(d.engine + ' 원문 보기 · ' + d.state.toUpperCase(), () => navigate({role:role.name, source:d.rel})))
+@@ -315,7 +288,7 @@ class TeamChart extends HTMLElement {
+           ['주요 검토자', [...new Set(owned.flatMap(r => r.reviewers))].map(n => roleButton(byName.get(n)))],
+           ['직접 협업 상대', relations.filter(r => r.pair.includes(role)).map(r => {
+             const item = element('span','')
+-            item.append(roleButton(r.pair.find(p => p !== role)), ' ' + r.topic + ' · ' + r.purposes.join(' '))
++            item.append(roleButton(r.pair.find(p => p !== role)), ' ' + [r.topic, r.purposes.join(' '), limitText(r)].filter(Boolean).join(' · '))
+             return item
+           })], ['담당 스킬', skillNames(role)], ['참조 문서 경로', sections.has('읽는 입력') ? [] : role.references],
+           ['모델 · effort', role.assignments.map(a => a.unit + ' · ' + a.runtime + ' · ' + (a.model || '미정') + ' / ' + (a.effort || '—'))])
+@@ -342,14 +315,14 @@ class TeamChart extends HTMLElement {
          docs.append(buttons)
        }
--      if (!this.dialog.open) this.dialog.showModal()
--      if (changed) {
--        this.dialog.scrollTop = 0
--        ;(doc ? docs.querySelector('button') : this.dialog.querySelector('form button')).focus()
--      }
--      this.selected = role.name
      }
-     const card = (role, lead) => {
-       const button = element('button', 'node' + (lead ? ' lead' : ''))
+-    const card = (role, lead) => {
+-      const button = element('button', 'node' + (lead ? ' lead' : ''))
++    const card = role => {
++      const button = element('button', 'node')
        button.type = 'button'
        button.setAttribute('aria-haspopup', 'dialog')
-       if (lead) button.append(element('b', 'ribbon', '팀장'))
-+      if (role.state !== 'on') {
-+        button.classList.add('inactive')
-+        button.append(element('b','state',role.state === 'off' ? 'OFF' : '정의 충돌'))
-+      }
+-      if (lead) button.append(element('b', 'ribbon', '팀장'))
++      button.style.setProperty('--tone', tone.get(role))
+       if (role.state !== 'on') {
+         button.classList.add('inactive')
+-        button.append(element('b','state',role.state === 'off' ? 'OFF' : '정의 충돌'))
++        button.append(element('b','state',role.state === 'off' ? '배정 대기' : '정의 충돌'))
+       }
        const title = outlines.get(role).title
        button.append(element('strong', '', role.name), element('small', 'job-title', title),
-         element('span', 'summary', role.description))
-@@ -294,27 +368,18 @@ class TeamChart extends HTMLElement {
-       configs.append(cnf)
-       footer.append(tags, configs)
-       button.append(footer)
--      button.onclick = () => details(role)
-+      button.onclick = () => navigate({role:role.name})
-       return button
-     }
-     const active = this.shadowRoot.activeElement?.closest('.node')?.querySelector('strong')?.textContent
+@@ -379,9 +352,9 @@ class TeamChart extends HTMLElement {
      const canvas = element('div', 'canvas')
      const branches = element('div', 'branches')
--    const roleButton = role => {
--      const b = action(role.name, () => details(role))
--      b.classList.add('chip')
--      b.style.setProperty('--tone', teamTone.get(teamOf.get(role)))
--      b.setAttribute('aria-haspopup', 'dialog')
--      return b
--    }
      const flowNames = ['작업 배정 · 보고', '직접 협의 · 설정 전달']
--    const linePeers = (line, role) => [...new Set((line.match(/[\w.-]+/g) ?? [])
--      .map(name => byName.get(name)).filter(peer => peer && peer !== role))]
-     const flowLine = (role, peers, index) => {
+-    const flowLine = (role, peers, index) => {
++    const flowLine = (from, peers, index) => {
        const line = element('div', 'flow-line')
-       line.append(roleButton(role))
+-      line.append(roleButton(role))
++      line.append(from)
        if (peers.length) {
--        const connector = element('i', 'connector kind-' + index)
-+        const connector = element('i', 'connector kind-' + index, index ? '↔' : '')
+         const connector = element('i', 'connector kind-' + index, index ? '↔' : '')
          connector.setAttribute('aria-label', flowNames[index])
-         line.append(connector, ...peers.map(roleButton))
+@@ -389,55 +362,34 @@ class TeamChart extends HTMLElement {
        }
-@@ -322,6 +387,7 @@ class TeamChart extends HTMLElement {
+       return line
      }
-     for (const g of teams) {
+-    for (const g of teams) {
++    for (const role of lineup) {
        const branch = element('div', 'branch')
-+      if (g.waiting) branch.classList.add('waiting')
-       const panel = element('section', 'group')
-       panel.style.setProperty('--tone', teamTone.get(g))
-       const heading = element('div', 'team-heading')
-@@ -329,27 +395,31 @@ class TeamChart extends HTMLElement {
-       const koreanName = koreanTeamNames[g.name] ?? (/[가-힣]/.test(g.name) ? g.name : '')
-       if (koreanName) heading.append(element('small', '', koreanName))
-       panel.append(heading)
-+      if (g.waiting) panel.append(element('strong','state','팀 배정 대기'))
-       const lead = g.members.find(r => r.name === g.lead)
-       if (lead) panel.append(card(lead, true))
--      const members = element('div', 'members' + (lead ? ' reports' : ''))
--      for (const role of g.members.filter(r => r !== lead)) members.append(card(role, false))
-+      const members = element('div', 'members')
-+      for (const role of g.members.filter(r => r !== lead)) {
-+        const slot = element('div', lead && !g.waiting && role.state === 'on' ? 'reports' : '')
-+        slot.append(card(role, false))
-+        members.append(slot)
-+      }
-       if (members.childElementCount) panel.append(members)
-       const links = element('details', 'team-flows')
-       links.append(element('summary', '', '업무 관계 보기'))
--      if (lead && g.members.length > 1) {
--        links.append(element('h4', '', flowNames[0]), flowLine(lead, g.members.filter(r => r !== lead), 0))
--      } else {
--        links.append(element('h4', '', flowNames[0]))
--        for (const role of g.members) {
--          const note = outlines.get(role).reporting[0]
--          if (note) links.append(flowLine(role, linePeers(note, role), 0), element('p', '', note))
--        }
-+      links.append(element('h4', '', flowNames[0]))
-+      if (lead && !g.waiting) {
-+        const active = g.members.filter(r => r !== lead && r.state === 'on')
-+        if (active.length) links.append(flowLine(lead, active, 0),
-+          element('p','','단순 Task 하나는 코디네이터가 팀원에게 직접 배정할 수 있습니다.'))
-+        const planner = planning.find(r => r.name === 'planner' && r.state === 'on')
-+        if (planner && data.workflow) links.append(flowLine(lead, [planner], 0),
-+          element('p','','복잡한 내부 분해 시 팀장이 Planner에게 임시 배정'))
-       }
-       links.append(element('h4', '', flowNames[1]))
--      for (const role of g.members) {
--        const peers = [...new Set(outlines.get(role).collab.flatMap(line => linePeers(line, role)))]
--        if (peers.length) links.append(flowLine(role, peers, 1))
+-      if (g.waiting) branch.classList.add('waiting')
+-      const panel = element('section', 'group')
+-      panel.style.setProperty('--tone', teamTone.get(g))
+-      const heading = element('div', 'team-heading')
+-      heading.append(element('h3', '', teamLabel(g.name)))
+-      const koreanName = koreanTeamNames[g.name] ?? (/[가-힣]/.test(g.name) ? g.name : '')
+-      if (koreanName) heading.append(element('small', '', koreanName))
+-      panel.append(heading)
+-      if (g.waiting) panel.append(element('strong','state','팀 배정 대기'))
+-      const lead = g.members.find(r => r.name === g.lead)
+-      if (lead) panel.append(card(lead, true))
+-      const members = element('div', 'members')
+-      for (const role of g.members.filter(r => r !== lead)) {
+-        const slot = element('div', lead && !g.waiting && role.state === 'on' ? 'reports' : '')
+-        slot.append(card(role, false))
+-        members.append(slot)
 -      }
-+      for (const {pair:[a,b], topic} of relations)
-+        if ((g.members.includes(a) || g.members.includes(b)) && a.state === 'on' && b.state === 'on')
-+          links.append(flowLine(a, [b], 1), element('p','',topic))
-       for (const heading of links.querySelectorAll('h4')) {
-         if (!heading.nextElementSibling?.classList.contains('flow-line')) heading.after(element('p', 'empty', '명시된 역할 관계 없음'))
-       }
-@@ -359,40 +429,37 @@ class TeamChart extends HTMLElement {
+-      if (members.childElementCount) panel.append(members)
+-      const links = element('details', 'team-flows')
+-      links.append(element('summary', '', '업무 관계 보기'))
+-      links.append(element('h4', '', flowNames[0]))
+-      if (lead && !g.waiting) {
+-        const active = g.members.filter(r => r !== lead && r.state === 'on')
+-        if (active.length) links.append(flowLine(lead, active, 0),
+-          element('p','','단순 Task 하나는 코디네이터가 팀원에게 직접 배정할 수 있습니다.'))
+-        const planner = planning.find(r => r.name === 'planner' && r.state === 'on')
+-        if (planner && data.workflow) links.append(flowLine(lead, [planner], 0),
+-          element('p','','복잡한 내부 분해 시 팀장이 Planner에게 임시 배정'))
+-      }
+-      links.append(element('h4', '', flowNames[1]))
+-      for (const {pair:[a,b], topic} of relations)
+-        if ((g.members.includes(a) || g.members.includes(b)) && a.state === 'on' && b.state === 'on')
+-          links.append(flowLine(a, [b], 1), element('p','',topic))
+-      for (const heading of links.querySelectorAll('h4')) {
+-        if (!heading.nextElementSibling?.classList.contains('flow-line')) heading.after(element('p', 'empty', '명시된 역할 관계 없음'))
+-      }
+-      panel.append(links)
+-      branch.append(panel)
++      if (role.waiting) branch.classList.add('waiting')
++      branch.append(card(role))
+       branches.append(branch)
      }
++    const links = element('details', 'team-flows')
++    links.append(element('summary', '', '업무 관계 보기'), element('h4', '', flowNames[0]))
++    const pm = lineup.find(r => r.name === 'product-manager' && !r.waiting)
++    const assigned = lineup.filter(r => r !== pm && !r.waiting)
++    if (pm) links.append(flowLine(element('span', 'type-chip', '창구'), [pm], 0))
++    if (assigned.length) links.append(flowLine(element('span', 'type-chip', '코디네이터'), assigned, 0))
++    links.append(element('h4', '', flowNames[1]))
++    for (const r of relations)
++      if (r.pair.every(p => p.state === 'on'))
++        links.append(flowLine(roleButton(r.pair[0]), [r.pair[1]], 1), element('p','',[r.topic, limitText(r)].filter(Boolean).join(' · ')))
++    for (const heading of links.querySelectorAll('h4')) {
++      if (!heading.nextElementSibling?.classList.contains('flow-line')) heading.after(element('p', 'empty', '명시된 역할 관계 없음'))
++    }
      if (all.length && this.view === 1) {
        const content = element('div', 'collaboration-list')
--      for (const [index, field] of ['reporting', 'collab'].entries()) {
--        const section = element('section', 'relations')
--        section.append(element('h3', '', flowNames[index]))
--        for (const role of all) for (const note of outlines.get(role)[field]) {
--          const row = element('article', 'collaboration-row')
--          const body = element('div', '')
--          body.append(flowLine(role, linePeers(note, role), index), element('p', '', note))
--          const number = element('span', 'row-number', String(section.childElementCount).padStart(2, '0'))
--          number.setAttribute('aria-hidden', 'true')
--          row.append(number, body)
--          section.append(row)
--        }
--        if (section.childElementCount === 1) section.append(element('p', 'empty', '역할 정의에 명시된 항목이 없습니다.'))
--        content.append(section)
-+      for (const {pair:[a,b], topic, purposes} of relations) {
-+        if (a.state !== 'on' || b.state !== 'on') continue
-+        const row = element('article', 'collaboration-row')
-+        const body = element('div', '')
-+        body.append(flowLine(a,[b],1), element('p','',purposes.join(' ')))
-+        row.append(element('h3','',topic), body)
-+        content.append(row)
+-      for (const {pair:[a,b], topic, purposes} of relations) {
++      for (const r of relations) {
++        const {pair:[a,b], topic, purposes} = r
+         if (a.state !== 'on' || b.state !== 'on') continue
+         const row = element('article', 'collaboration-row')
+         const body = element('div', '')
+-        body.append(flowLine(a,[b],1), element('p','',purposes.join(' ')))
++        body.append(flowLine(roleButton(a),[b],1), element('p','',purposes.join(' ')))
++        if (r.limits.length) body.append(element('p','',limitText(r)))
+         row.append(element('h3','',topic), body)
+         content.append(row)
        }
-+      if (!content.childElementCount) content.append(element('p','empty','활성 역할 사이에 명시된 직접 협업이 없습니다.'))
-       this.chart.replaceChildren(content)
--    } else if (all.length && this.view === 2) {
-+    } else if (this.view === 2) {
+@@ -446,7 +398,7 @@ class TeamChart extends HTMLElement {
+     } else if (this.view === 2) {
        const table = element('table', 'matrix')
        const header = table.createTHead().insertRow()
--      for (const title of ['문서 · 범위', '담당 역할', '책임 구분']) header.append(element('th', '', title))
-+      for (const title of ['문서 · 범위', '정본 작성자', '주요 검토자']) header.append(element('th', '', title))
+-      for (const title of ['문서 · 범위', '정본 작성자', '주요 검토자']) header.append(element('th', '', title))
++      for (const title of ['문서 · 범위', '담당 에이전트', '주요 검토자']) header.append(element('th', '', title))
        const rows = table.createTBody()
--      for (const role of all) {
--        const info = outlines.get(role)
--        for (const [type, scope, paths] of info.ownership) {
--          const row = rows.insertRow()
--          const cell = row.insertCell()
--          for (const path of new Set(paths)) cell.append(element('code', 'path-chip', path))
--          if (!paths.includes(scope)) cell.append(element('p', 'scope', scope))
--          row.insertCell().append(roleButton(role))
--          row.insertCell().append(element('span', 'type-chip', type))
-+      for (const entry of data.ownership) {
-+        const row = rows.insertRow()
-+        const scope = row.insertCell()
-+        scope.append(pathButton(entry.path), element('p','scope',entry.scope))
-+        if (entry.checks.length) {
-+          const check = element('p','scope','확인 ')
-+          check.append(...entry.checks.map(n => roleButton(byName.get(n))))
-+          scope.append(check)
-         }
-+        row.insertCell().append(...writers(entry))
-+        const reviewers = row.insertCell()
-+        for (const name of entry.reviewers) reviewers.append(roleButton(byName.get(name)))
-+        if (!reviewers.childElementCount) reviewers.textContent = '—'
+       for (const entry of data.ownership) {
+         const row = rows.insertRow()
+@@ -462,7 +414,10 @@ class TeamChart extends HTMLElement {
+         for (const name of entry.reviewers) reviewers.append(roleButton(byName.get(name)))
+         if (!reviewers.childElementCount) reviewers.textContent = '—'
        }
-       this.chart.replaceChildren(rows.rows.length ? table : element('p', 'empty', '역할 정의에 명시된 ' + views[this.view] + ' 항목이 없습니다.'))
--    } else if (all.length || (this.view === 0 && data.workflow)) {
-+    } else if (this.view === 0 && (all.length || data.workflow || data.common.length || data.modelSelection)) {
+-      this.chart.replaceChildren(rows.rows.length ? table : element('p', 'empty', '역할 정의에 명시된 ' + views[this.view] + ' 항목이 없습니다.'))
++      const intro = element('p', 'intro', '모든 에이전트가 docs-management로 자기 문서를 쓴다. 전체 정합성은 doc-steward가 확인한다.')
++      this.chart.replaceChildren(...rows.rows.length ? [intro, table] : [element('p', 'empty', '역할 정의에 명시된 ' + views[this.view] + ' 항목이 없습니다.')])
++    } else if (this.view === 0 && data.notice) {
++      this.chart.replaceChildren(element('p', 'empty', data.notice))
+     } else if (this.view === 0 && (all.length || data.workflow || data.common.length || data.modelSelection)) {
        const legend = element('div', 'flow-legend')
        flowNames.forEach((name, i) => {
-         const label = element('span', '')
-@@ -401,25 +468,39 @@ class TeamChart extends HTMLElement {
+@@ -470,27 +425,20 @@ class TeamChart extends HTMLElement {
+         label.append(element('i', 'connector kind-' + i), name)
+         legend.append(label)
        })
-       if (teams.some(g => g.lead)) legend.append(element('span', '', '리본 = 팀장'))
+-      if (teams.some(g => g.lead)) legend.append(element('span', '', '리본 = 팀장'))
        if (data.workflow) canvas.classList.add('with-workflow')
--      if (data.workflow) canvas.append(workflowDiagram(data, teams, planning))
--      else if (teams.length) canvas.append(element('div', 'root', data.project))
-+      if (data.workflow) canvas.append(workflowDiagram(data, teams, planning, direct, () => navigate({common:true}), role => navigate({role:role.name})))
-+      else {
-+        if (data.common.length) legend.append(action('docs/ · 공통 기준 문서', () => navigate({common:true})))
-+        if (data.modelSelection) legend.append(action('모델 선택 표', () => window.open('/model-selection', '_blank', 'noopener')))
-+        if (teams.length) canvas.append(element('div', 'root', data.project))
-+      }
-       if (teams.length) canvas.append(branches)
+-      if (data.workflow) canvas.append(workflowDiagram(data, teams, planning, direct, () => navigate({common:true}), role => navigate({role:role.name})))
++      if (data.workflow) canvas.append(workflowDiagram(data, lineup, () => navigate({common:true})))
+       else {
+         if (data.common.length) legend.append(action('docs/ · 공통 기준 문서', () => navigate({common:true})))
+         if (data.modelSelection) legend.append(action('모델 선택 표', () => window.open('/model-selection', '_blank', 'noopener')))
+-        if (teams.length) canvas.append(element('div', 'root', data.project))
++        if (lineup.length) canvas.append(element('div', 'root', data.project))
+       }
+-      if (teams.length) canvas.append(branches)
++      if (lineup.length) canvas.append(branches)
        this.chart.replaceChildren(legend, canvas)
--      const independent = all.filter(role => !teams.includes(teamOf.get(role)) && !planning.includes(role))
--      for (const [title, roles] of [['창구 직속 기획 역할', planning], ['독립 역할', independent]]) {
-+      const independent = all.filter(role => !teams.includes(teamOf.get(role)) && !planning.includes(role) && !direct.includes(role))
-+      const operations = data.groups.filter(g => g.kind === '운영팀').map(g => [g.name + ' · 운영팀 · 팀장 없음', g.members])
-+      for (const [title, roles] of [...operations, ['코디네이터 직속',direct], ['독립 역할', independent]]) {
-         if (!roles.length) continue
+-      const independent = all.filter(role => !teams.includes(teamOf.get(role)) && !planning.includes(role) && !direct.includes(role))
+-      const operations = data.groups.filter(g => g.kind === '운영팀').map(g => [g.name + ' · 운영팀 · 팀장 없음', g.members])
+-      for (const [title, roles] of [...operations, ['코디네이터 직속',direct], ['독립 역할', independent]]) {
+-        if (!roles.length) continue
++      if (lineup.length) this.chart.append(links)
++      for (const g of data.groups.filter(g => !g.roster)) {
          const section = element('section', 'independent-roles')
-         section.append(element('h3', '', title))
--        for (const role of roles) section.append(card(role, false))
-+        for (const role of roles) {
-+          const button = card(role, false)
-+          button.style.setProperty('--tone',teamTone.get(teamOf.get(role)))
-+          section.append(button)
-+        }
+-        section.append(element('h3', '', title))
+-        for (const role of roles) {
+-          const button = card(role, false)
+-          button.style.setProperty('--tone',teamTone.get(teamOf.get(role)))
+-          section.append(button)
+-        }
++        section.append(element('h3', '', teamLabel(g.name)))
++        for (const role of g.members) section.append(card(role))
          this.chart.append(section)
        }
      }
-     else this.chart.replaceChildren(element('p', 'empty', '활성 Claude Code 에이전트가 없습니다.'))
-     this.shadowRoot.querySelector('#project').textContent = data.project
-     if (this.dialog.open) {
--      const role = all.find(r => r.name === this.selected)
--      if (role) details(role, this.source)
--      else this.dialog.close()
-+      if (this.selected?.role && !byName.has(this.selected.role)) this.dialog.close()
-+      else if (this.selected) {
-+        const top = this.dialog.scrollTop
-+        const focused = this.shadowRoot.activeElement?.textContent
-+        show(this.selected)
-+        Array.from(this.dialog.querySelectorAll('button')).find(b => b.textContent === focused)?.focus({preventScroll:true})
-+        this.dialog.scrollTop = top
-+      }
-     } else if (active) {
-       Array.from(this.chart.querySelectorAll('.node')).find(n => n.querySelector('strong').textContent === active)?.focus({preventScroll:true})
-     }
 diff --git a/team.mjs b/team.mjs
-index 47f51fa..5488578 100644
+index b872493..52bede7 100644
 --- a/team.mjs
 +++ b/team.mjs
-@@ -1,12 +1,14 @@
- import fs from 'node:fs'
- import path from 'node:path'
-+import { offSuffix } from './kit.mjs'
- 
- const codes = text => [...text.matchAll(/`([\w.-]+)`/g)].map(match => match[1])
- 
- // Read only regular project files, including when a directory is replaced by a link.
--function regular(root, rel, directory = false) {
-+export function regular(root, rel, directory = false) {
-   let current = root
-   const parts = rel.split('/')
-+  if (parts.some(p => !p || p === '.' || p === '..' || /[\\:\0]/.test(p) || /[ .]$/.test(p))) return
-   for (const [i, part] of parts.entries()) {
-     current = path.join(current, part)
-     const st = fs.lstatSync(current, { throwIfNoEntry: false })
-@@ -15,16 +17,123 @@ function regular(root, rel, directory = false) {
-   return current
- }
- 
-+const cells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
-+const clean = value => value.replaceAll('`', '').trim()
-+
-+function table(text, section, header) {
-+  const rows = []
-+  let inSection = false, inTable = false, fence = ''
-+  for (const line of text.split(/\r?\n/)) {
-+    const marker = line.trim().match(/^(`{3,}|~{3,})/)?.[1]
-+    if (marker) { if (!fence) fence = marker; else if (marker.startsWith(fence)) fence = ''; continue }
-+    if (fence) continue
-+    if (/^#{1,2} /.test(line)) { inSection = line.trim() === '## ' + section; inTable = false; continue }
-+    if (!inSection || !line.trim().startsWith('|')) { inTable = false; continue }
-+    const row = cells(line)
-+    if (row.join('|') === header) { inTable = true; continue }
-+    if (inTable && row.length === header.split('|').length && !row.every(c => /^:?-+:?$/.test(c))) rows.push(row)
-+  }
-+  return rows
-+}
-+
-+function docPath(cell, markdownFile) {
-+  const link = cell.match(/^\[[^\]]*\]\(([^)]+)\)$/)
-+  const target = clean(link?.[1] ?? cell).split('#')[0]
-+  if (!target) return
-+  if (target.startsWith('/') || /[\\:\0]/.test(target)) return target
-+  return path.posix.normalize(link ? path.posix.join(path.posix.dirname(markdownFile), target) : target)
-+}
-+
-+function documentData(project, roles) {
-+  const read = rel => {
-+    const file = regular(project, rel)
-+    return file ? fs.readFileSync(file, 'utf8') : null
-+  }
-+  const indexPath = 'docs/DOCUMENTATION_INDEX.md'
-+  const index = read(indexPath) ?? ''
-+  const entries = table(index, '문서', '위치|담는 것|정본 문서|관련 ID|마지막으로 갱신한 phase|상태')
-+  const drafts = JSON.parse(read('docs/harness/templates/document-drafts.json') ?? '{}')
-+  const common = [], aliases = new Map()
-+  const responsibilityKeys = {작성:'writers', 검토:'reviewers', 확인:'checks'}
-+  for (const draft of Object.keys(drafts)) {
-+    const folder = path.posix.dirname(draft)
-+    const location = folder === 'docs' ? draft : folder + '/'
-+    const entry = entries.find(row => clean(row[0]) === location)
-+    const canonical = entry?.[2] && clean(entry[2]) !== '없음' ? docPath(entry[2], indexPath) : ''
-+    const rel = canonical || draft
-+    aliases.set(draft, rel)
-+    common.push({ path: rel, title: entry?.[1] || draft, status: clean(entry?.[5] ?? ''), draft: !canonical })
-+  }
-+  if (!common.length) for (const [location, title, canonical, , , status] of entries) {
-+    const rel = clean(canonical) && clean(canonical) !== '없음' ? docPath(canonical, indexPath) : clean(location)
-+    if (rel) common.push({path:rel, title, status:clean(status), locationOnly:rel.endsWith('/')})
-+  }
-+  const ownership = []
-+  function scopeRow(rel, scope) {
-+    const target = aliases.get(rel) ?? rel
-+    let row = ownership.find(r => r.path === target && r.scope === scope)
-+    if (!row) { row = { path: target, scope, writers: [], reviewers: [], checks: [] }; ownership.push(row) }
-+    return row
-+  }
-+  for (const role of roles.values()) {
-+    const body = role.docs[0].body
-+    role.collaboration = table(body, '직접 협업', '상대|협의 주제|목적').flatMap(([peer, topic, purpose]) => {
-+      const names = codes(peer)
-+      return (names.length ? names : [clean(peer)]).filter(n => roles.has(n) && n !== role.name && topic && purpose)
-+        .map(name => ({ peer: name, topic: clean(topic), purpose: clean(purpose) }))
-+    })
-+    if (!/^## 직접 협업\s*$/m.test(body)) {
-+      const legacy = body.split(/^#{1,2} /m).find(s => /^(협업|직접 협의)[ \t]*\r?\n/.test(s)) ?? ''
-+      for (const line of legacy.split(/\r?\n/)) {
-+        const purpose = clean(line.replace(/^\s*[-*]\s*/, ''))
-+        if (!/^\s*[-*]\s/.test(line) || /^(?:정본 소유|소유 문서|편집 범위|출력)\s*[:：]/.test(purpose)) continue
-+        for (const peer of new Set(purpose.match(/[\w.-]+/g) ?? []))
-+          if (peer !== role.name && roles.has(peer)) role.collaboration.push({peer, topic:'협업', purpose})
-+      }
-+    }
-+    for (const [doc, scope, responsibility] of table(body, '문서 책임', '문서|범위|책임')) {
-+      const key = Object.hasOwn(responsibilityKeys, clean(responsibility)) && responsibilityKeys[clean(responsibility)]
-+      const rel = docPath(doc, role.docs[0].rel)
-+      if (rel && key) {
-+        const names = scopeRow(rel, clean(scope))[key]
-+        if (!names.includes(role.name)) names.push(role.name)
-+      }
-+    }
-+    if (!/^## 문서 책임\s*$/m.test(body)) {
-+      for (const match of body.matchAll(/^\s*[-*]\s*(?:정본 소유|소유 문서|문서 소유권)\s*[:：]\s*(.+)$/gm)) {
-+        const paths = [...match[1].matchAll(/`([^`]+)`/g)].map(m => m[1])
-+        for (const rel of paths.length ? paths : [match[1].trim()]) {
-+          if (!/\.[\w-]+$/.test(rel)) continue
-+          const names = scopeRow(rel, '').writers
-+          if (!names.includes(role.name)) names.push(role.name)
-+        }
-+      }
-+    }
-+  }
-+  for (const [doc, scope, status] of table(index, '작성자 배정 대기', '문서|범위|배정 상태')) {
-+    const rel = docPath(doc, indexPath)
-+    if (rel && ['미배정', '해당 없음'].includes(clean(status))) scopeRow(rel, clean(scope)).status = clean(status)
-+  }
-+  const files = Object.fromEntries([...new Set([...common, ...ownership].map(row => row.path))]
-+    .map(rel => [rel, read(rel)]))
-+  return { common, ownership, files }
-+}
-+
- export function teamStructure(project) {
-   const roles = new Map()
--  function files(dir, ext) {
-+  function files(dir, ext = '') {
-     const folder = regular(project, dir, true)
-     return folder ? fs.readdirSync(folder, { withFileTypes: true })
-       .filter(e => e.isFile() && e.name.endsWith(ext)).map(e => e.name) : []
+@@ -79,10 +79,10 @@ function documentData(project, roles) {
    }
-   for (const [dir, ext, engine] of [['.claude/agents', '.md', 'Claude Code'], ['.codex/agents', '.toml', 'Codex']]) {
--    for (const file of files(dir, ext)) {
--      const name = file.slice(0, -ext.length)
-+    const entries = files(dir)
-+    for (const file of entries.filter(f => f.endsWith(ext) || f.endsWith(ext + offSuffix))) {
-+      const off = file.endsWith(offSuffix)
-+      const active = off ? file.slice(0, -offSuffix.length) : file
-+      if (off && entries.includes(active)) continue
-+      const state = off ? 'off' : entries.includes(active + offSuffix) ? 'conflict' : 'on'
-+      const name = active.slice(0, -ext.length)
-       if (engine === 'Codex' && !roles.has(name)) continue
-       const role = roles.get(name) ?? { name, description: '', skills: [], engines: [], docs: [] }
-       const rel = dir + '/' + file
-@@ -33,6 +142,7 @@ export function teamStructure(project) {
-       const body = fs.readFileSync(p, 'utf8')
-       const header = body.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? ''
-       if (ext === '.md') {
-+        role.state = state
-         role.description = (header.match(/^description:[ \t]*(.*(?:\r?\n[ \t]+[^\r\n]*)*)/m)?.[1] ?? '')
-           .replace(/^[>|][-+]?\s*/, '').trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' ')
-         const preload = header.match(/^skills:[ \t]*\r?\n((?:[ \t]+- [^\r\n]+(?:\r?\n|$))+)/m)?.[1]
-@@ -42,7 +152,7 @@ export function teamStructure(project) {
-           ...codes(body.match(/로드할 스킬:[^\n]*/)?.[0] ?? '')])]
-       }
-       role.engines.push(engine)
--      role.docs.push({ rel, body })
-+      role.docs.push({ rel, body, engine, state })
-       roles.set(name, role)
-     }
+   for (const role of roles.values()) {
+     const body = role.docs[0].body
+-    role.collaboration = table(body, '직접 협업', '상대|협의 주제|목적').flatMap(([peer, topic, purpose]) => {
++    role.collaboration = table(body, '직접 협업', '상대|협의 주제|목적').flatMap(([peer, topic, purpose, limit = '']) => {
+       const names = codes(peer)
+       return (names.length ? names : [clean(peer)]).filter(n => roles.has(n) && n !== role.name && topic && purpose)
+-        .map(name => ({ peer: name, topic: clean(topic), purpose: clean(purpose) }))
++        .map(name => ({ peer: name, topic: clean(topic), purpose: clean(purpose), limit: clean(limit) }))
+     })
+     if (!/^## 직접 협업\s*$/m.test(body)) {
+       const legacy = body.split(/^#{1,2} /m).find(s => /^(협업|직접 협의)[ \t]*\r?\n/.test(s)) ?? ''
+@@ -189,48 +189,48 @@ export function teamStructure(project) {
+     role.references = [...refs]
+     role.editPaths = [...edits]
    }
-@@ -76,31 +186,40 @@ export function teamStructure(project) {
-   }
++  for (const role of roles.values()) Object.assign(role, { unit: '', scope: '', waiting: role.state !== 'on' })
    const groups = []
    const assigned = new Set()
--  function group(name, members, isTeam, lead, skill) {
-+  function group(name, members, kind, lead, skill) {
+-  function group(name, members, kind, lead, skill) {
++  function group(name, members, extra) {
      const nodes = [...new Set(members)].filter(n => roles.has(n) && !assigned.has(n))
      if (!nodes.length) return
      nodes.forEach(n => assigned.add(n))
--    const activeLead = nodes.includes(lead) ? lead : null
--    groups.push({ name, isTeam: isTeam && Boolean(activeLead), lead: activeLead, skill, members: nodes.map(n => roles.get(n)) })
-+    const waiting = kind === '실행팀' && roles.get(lead)?.state !== 'on'
-+    groups.push({ name, kind, isTeam: kind === '실행팀', waiting, lead, skill, members: nodes.map(n => roles.get(n)) })
-   }
-   const org = regular(project, 'docs/harness/team-org.md')
--  if (org) for (const line of fs.readFileSync(org, 'utf8').split(/\r?\n/)) {
--    const [, team, lead, members, skill] = line.trim().split('|')
--    if (!team || !lead || !members || !codes(team).length) continue
--    group(codes(team)[0], [...codes(lead), ...codes(members)], true, codes(lead)[0], codes(skill ?? '')[0])
-+  const orgLines = org ? fs.readFileSync(org, 'utf8').split(/\r?\n/) : []
-+  for (const line of orgLines) {
-+    const [team, lead, members, skill, , category] = cells(line)
-+    if (!team || members === undefined || !line.trim().startsWith('|')) continue
-+    const leader = codes(lead)[0]
-+    const kind = ['운영팀','실행팀','직속'].includes(clean(category ?? '')) ? clean(category)
-+      : leader ? '실행팀' : /창구가 직접/.test(lead) ? '운영팀' : ''
-+    if (!codes(team).length && !kind) continue
-+    group(clean(team), [...codes(lead), ...codes(members)], kind, leader, codes(skill ?? '')[0])
+-    const waiting = kind === '실행팀' && roles.get(lead)?.state !== 'on'
+-    groups.push({ name, kind, isTeam: kind === '실행팀', waiting, lead, skill, members: nodes.map(n => roles.get(n)) })
+-  }
+-  const org = regular(project, 'docs/harness/team-org.md')
+-  const orgLines = org ? fs.readFileSync(org, 'utf8').split(/\r?\n/) : []
+-  for (const line of orgLines) {
+-    const [team, lead, members, skill, , category] = cells(line)
+-    if (!team || members === undefined || !line.trim().startsWith('|')) continue
+-    const leader = codes(lead)[0]
+-    const kind = ['운영팀','실행팀','직속'].includes(clean(category ?? '')) ? clean(category)
+-      : leader ? '실행팀' : /창구가 직접/.test(lead) ? '운영팀' : ''
+-    if (!codes(team).length && !kind) continue
+-    group(clean(team), [...codes(lead), ...codes(members)], kind, leader, codes(skill ?? '')[0])
+-  }
+-  for (const line of orgLines) {
+-    const direct = line.match(/^- `([\w.-]+)`[은는] 어느 팀에도 속하지 않는다\.\s*코디네이터가 띄운다\./)
+-    if (direct) group(direct[1], [direct[1]], '직속')
+-  }
++    groups.push({ name, ...extra, members: nodes.map(n => roles.get(n)) })
 +  }
-+  for (const line of orgLines) {
-+    const direct = line.match(/^- `([\w.-]+)`[은는] 어느 팀에도 속하지 않는다\.\s*코디네이터가 띄운다\./)
-+    if (direct) group(direct[1], [direct[1]], '직속')
-   }
++  // Same rule as template/.claude/scripts/roster.mjs: find the table by its header names.
++  const rosterFile = regular(project, 'docs/harness/agents.md')
++  const rosterLines = rosterFile ? fs.readFileSync(rosterFile, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/) : []
++  const start = rosterLines.findIndex(l => l.startsWith('|') && cells(l).join('|') === '에이전트|맡는 단위|스킬|편집 범위')
++  const listed = []
++  for (const line of start < 0 ? [] : rosterLines.slice(start + 2)) {
++    if (!line.startsWith('|')) break
++    const [agent = '', unit = '', skills = '', scope = ''] = cells(line)
++    const role = roles.get(clean(agent))
++    if (!role) continue
++    Object.assign(role, { unit: clean(unit), skills: codes(skills), scope })
++    listed.push(role.name)
++  }
++  group('agents', listed, { roster: true })
++  const notice = !rosterFile && regular(project, 'docs/harness/team-org.md')
++    ? 'docs/harness/agents.md가 없고 옛 명단(team-org.md)만 있습니다. setup을 다시 돌려 새 구조로 옮기세요.' : undefined
    for (const file of files('.claude/agent-toggle', '.json')) {
      const record = JSON.parse(fs.readFileSync(regular(project, '.claude/agent-toggle/' + file), 'utf8'))
      const kit = file.slice(0, -5)
-     if (record.version === 2 || record.kit === true) group(kit.replace(/-kit$/, ''), record.agents ?? [kit],
--      kit === 'game-design-team-kit', kit === 'game-design-team-kit' ? 'game-design-lead' : null)
-+      kit === 'game-design-team-kit' ? '실행팀' : '', kit === 'game-design-team-kit' ? 'game-design-lead' : null)
+-    if (record.version === 2 || record.kit === true) group(kit.replace(/-kit$/, ''), record.agents ?? [kit],
+-      kit === 'game-design-team-kit' ? '실행팀' : '', kit === 'game-design-team-kit' ? 'game-design-lead' : null)
++    if (record.version === 2 || record.kit === true) group(kit.replace(/-kit$/, ''), record.agents ?? [kit])
    }
--  group('프로젝트 에이전트', [...roles.keys()], false)
-+  group('프로젝트 에이전트', [...roles.keys()], '')
+-  group('프로젝트 에이전트', [...roles.keys()], '')
++  group('프로젝트 에이전트', [...roles.keys()])
    const modelFile = regular(project, 'docs/harness/model-selection.md')
    const assignments = []
    if (modelFile) for (const line of fs.readFileSync(modelFile, 'utf8').split(/\r?\n/)) {
      const [, agent, unit, runtime, model, effort] = line.trim().split('|').map(cell => cell.trim().replaceAll('`', ''))
--    if (agent && model && runtime === 'claude') assignments.push({ agent, unit, runtime, model, effort })
-+    if (agent && model && ['claude','codex'].includes(runtime)) assignments.push({ agent, unit, runtime, model, effort })
+     if (agent && model && ['claude','codex'].includes(runtime)) assignments.push({ agent, unit, runtime, model, effort })
    }
-   for (const { lead, members } of groups) for (const role of members) {
+-  for (const { lead, members } of groups) for (const role of members) {
++  for (const { members } of groups) for (const role of members) {
      const exact = assignments.filter(a => a.agent === role.name)
-@@ -119,5 +238,5 @@ export function teamStructure(project) {
+     role.tasks = exact.flatMap(a => a.unit.split(',').map(s => s.trim()))
+     role.assignments = [...exact, ...assignments.filter(a => a.agent === '*' &&
+-      (a.unit === '기본' || (role.name === lead && a.unit === '리드')) && !role.tasks.includes(a.unit))]
++      a.unit === '기본' && !role.tasks.includes(a.unit))]
+     if (!role.assignments.length) {
+       const source = role.docs[0].body.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? ''
+       const model = source.match(/^model\s*[:=]\s*["']?([^\s"'#]+)/m)?.[1]
+@@ -243,5 +243,5 @@ export function teamStructure(project) {
        documents: Boolean(regular(project, 'docs/DOCUMENTATION_INDEX.md')),
        modelSelection: Boolean(modelFile)
      } : null
--  return { project: path.basename(project), groups, workflow }
-+  return { project: path.basename(project), groups, workflow, modelSelection:Boolean(modelFile), ...documentData(project, roles) }
+-  return { project: path.basename(project), groups, workflow, modelSelection:Boolean(modelFile), ...documentData(project, roles) }
++  return { project: path.basename(project), notice, groups, workflow, modelSelection:Boolean(modelFile), ...documentData(project, roles) }
  }
