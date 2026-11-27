@@ -104,6 +104,8 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 - 모델 표 `docs/harness/model-selection.md`의 `product-manager | 기획` 행에만 고른 model과 effort를 넣는다. 사용자 표·모델·기존 역할·진행 중인 phase의 기동 기록은 보존한다. answers에 옛 키 `planner.effort`가 있으면 거절하므로 `pm`으로 바꾼다.
 - 옛 키트가 깔았던 물러난 파일(`team-lead`·`team-qa` 스킬, `team-skill.md` 양식, 옛 역할 `planner`·`code-reviewer`·`qa-inspector`의 `.claude/agents/`·`.codex/agents/` 파일)을 지운다. 설치 기록의 해시와 같은 파일만 바로 지우고 출력의 `retired`에 적는다. 프로젝트가 고쳤거나 기록에 없는 파일은 `conflicts`로 올리고 `--approve`에 그 경로가 있을 때만 지운다. 꺼진 사본(`.agent-toggle-off`)과 `docs/harness/team-org.md`는 지우지 않는다. 7단계의 옮기기가 지운다.
 - setup이 깔았다가 프로젝트가 지운 기본 에이전트의 역할 파일은 다시 깔지 않는다(`skipped`에 사유 `사용자가 지움`). 꺼 둔 에이전트는 지운 것으로 보지 않는다. 그 밖의 빠진 파일은 다시 깐다.
+- 요청 접수 라우팅(`AGENTS.md` §규모별 경로, coordinator의 요청 규모별 경로, `front-desk.md`의 요청 분류, plan-orchestrate의 접수 경로)은 파일 단위 판정보다 먼저 본다. 옛 키트가 깐 문구가 그대로 한 번씩 있고 같은 표·문단에 창구가 직접 처리하는 다른 규칙이 없으면 그 행·문장만 새 문구로 바꾸고 출력의 `routed`에 적는다. 프로젝트의 앞뒤 절, 다른 행, 개행 형식은 그대로 둔다. 이미 새 문구면 쓰지 않는다. 설치 기록은 setup이 쓴 내용만 가리키므로 프로젝트가 고친 파일은 부분 갱신 뒤에도 `사용자가 고침`(기록이 없으면 충돌)으로 남는다.
+- 그 라우팅을 프로젝트가 고쳤거나(조건을 바꾼 행, 충돌하는 추가 규칙, 옛 문구 중복, 일부만 새 문구), 위치를 정할 수 없으면 그 파일의 라우팅은 쓰지 않고 출력의 `routing`에 경로·줄·현재(`current`)·제안(`proposed`)·충돌 줄(`conflicts`)과 `id`로 적는다.
 - 전역에 있는 그림 스킬은 건너뛴다(사유 `전역에 있음`).
 - `.claude/coordinator.keep.json`이 없으면 `coordinator-settings.mjs init-keep`으로 만들고, `permissionMode`에 고른 권한 모드를 넣는다.
 
@@ -120,6 +122,14 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . -
 ```
 
 승인받지 못한 충돌은 그대로 두고 보고에 적는다. 재설치 중 충돌이 있으면 이미 복사한 경로와 보류된 경로를 구분해 알린다. Codex 역할 동기화가 보류되면 `skipped`에 `.codex/agents/`가 표시된다.
+
+출력의 `routing`이 비지 않으면 항목마다 경로, 줄, 현재와 제안의 차이, `conflicts`를 보여 주고 "현행 유지"와 "이 부분 적용" 중에서 고르게 한다. 상태가 `ambiguous`나 `duplicate`면 같은 규칙의 후보 위치가 여럿이므로 적용할 위치를 고르게 한다. 같은 규칙을 다른 문구로 이미 옮긴 파일(ask 동의 규칙 등 새 규칙의 표지가 있고 파일 어디에도 `창구가 직접`·`창구가 바로` 줄이 없는 파일)은 반영된 것으로 보고 제안도 쓰기도 하지 않는다. `missing`은 옛 문구도, 새 규칙(같은 문구나 다른 문구)도, 고친 흔적도 찾지 못한 진짜 누락이라 `id`가 없다. 제안 문구를 보여 주고, 넣을지와 넣을 위치를 사용자가 정해 손으로 넣는다. 답을 받기 전이나 유지를 고르면 아무것도 쓰지 않는다. 적용을 고른 항목의 `id`만 쉼표로 이어 다시 실행한다.
+
+```sh
+node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" install --target . --answers _workspace/setup/answers.json --routing "<id>,<id>"
+```
+
+`--routing`은 고른 항목의 줄만 바꾼다. 같은 파일의 다른 항목, 파일의 나머지 내용은 그대로 둔다. 파일 전체 덮어쓰기 승인(`--approve`)은 이 선택을 대신하지 않으므로, 라우팅을 고치려고 `--approve`를 권하지 않는다. 보여 준 뒤 그 줄이 바뀌었으면 `id`가 맞지 않아 적용하지 않고 출력의 `stale`에 적는다. 그때는 새 `routing` 항목을 다시 보여 주고 다시 묻는다.
 
 출력의 `notices`는 그대로 보여 준다. 출력의 `edited`는 프로젝트가 고쳤고 키트의 내용도 바뀐 파일이다(0.5.1 프로젝트면 모델 표, `AGENTS.md`, 프로젝트가 고친 기본 역할 파일과 `docs/DOCUMENTATION_INDEX.md`). 목록을 사용자에게 보여 주고, 사용자가 승인한 경로만 `install --approve <경로>`로 덮어쓴다. 목록 전체를 묻지 않고 승인하지 않는다. 프로젝트가 이미 손으로 옮긴 파일도 설치 기록에 옛 설치의 해시가 남아 있어 다음 실행에서 `edited`에 다시 나오는데, 승인하면 키트의 내용으로 바뀌어 프로젝트가 쓴 내용(`AGENTS.md`면 프로젝트의 절)이 사라지므로 다시 승인을 권하거나 스스로 승인하지 않고, 사용자가 그 경로를 다시 고를 때만 덮어쓴다. 덮어쓰면 프로젝트가 고친 줄이 사라지므로 종류마다 이렇게 권한다. 기본 역할 파일은 승인한 뒤 프로젝트가 고친 줄을 git에서 다시 넣는다. 모델 표는 승인한 뒤 프로젝트의 행과 사용자가 고정한 값을 git에서 다시 넣거나, 손으로 옮긴다. `AGENTS.md`는 프로젝트의 절이 들어 있으므로 `## 하네스` 절을 손으로 옮긴다(승인했다면 프로젝트의 절을 git에서 되살린다). `docs/DOCUMENTATION_INDEX.md`는 옮기기 절차대로 한다. 승인하지 않은 파일은 0.5.1 판으로 남아 7단계에서 부르는 agent-author의 "0.5.1 프로젝트 옮기기" 5단계대로 옮긴다고 알린다. 옮기기 전에는 5단계 검증이 그 파일 때문에 실패할 수 있다(예: 모델 표에 행이 없는 에이전트).
 
@@ -171,7 +181,8 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/setup/scripts/setup.mjs" verify --target .
 
 사용자에게 다음을 알린다. Orca 틀을 깔지 않았으면 6단계의 것만 알린다.
 
-- 깔린 것: 3단계의 `written`.
+- 깔린 것: 3단계의 `written`, 라우팅만 바꾼 `routed`.
+- 라우팅 선택: `routing` 항목마다 고른 답(유지, 적용, 손으로 넣기)과 남은 항목.
 - 건너뛴 것: `skipped`와 사유, 승인받지 못한 `conflicts`.
 - 실패한 검증: 5단계 표의 ❌ 줄, 8단계 `node .claude/scripts/model-selection.mjs check`가 실패했으면 그 출력.
 - 8단계의 결과: 모델 표에서 바뀐 줄(없으면 없다고)과 `node .claude/scripts/model-selection.mjs check`의 결과.

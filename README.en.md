@@ -262,7 +262,9 @@ Requests to the front desk (your regular Claude Code session) are routed by the 
 
 | Request | Route |
 | --- | --- |
-| A simple question or a small edit to one file | The front desk handles it directly |
+| A question that only needs an answer | The front desk answers it |
+| A simple task (for example a small edit to one file) | Before starting, the front desk asks "Shall I do this myself without plan-orchestrate?". With an explicit yes it does only that request; with a no it takes the request through `plan-orchestrate`. Until you answer, it waits |
+| Any other new task | Taken through `plan-orchestrate` before work starts, whatever its size |
 | New requirements | The PM creates backlog items and reviews the requirements in the same session |
 | Named backlog IDs / delegated phase | Named IDs go straight to the PM's design. For a delegated phase, the PM selects a batch |
 | A Task in an approved plan | The coordinator assigns it directly to the Task's agent. With that agent OFF, the assignment waits |

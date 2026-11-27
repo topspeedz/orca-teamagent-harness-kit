@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Setup for the Orca harness template: inspect a project, install the template, verify the result.
 // Usage: node setup.mjs inspect --target <dir>
-//        node setup.mjs install --target <dir> --answers <json file> [--approve <path,...>]   exit 2 when unapproved conflicts remain
+//        node setup.mjs install --target <dir> --answers <json file> [--approve <path,...>] [--routing <id,...>]   exit 2 when unapproved conflicts remain
 //        node setup.mjs verify --target <dir>                                              exit 1 when a check fails
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -120,6 +120,101 @@ function hasPmRow(tableText, pm) {
 
 const json = (o) => `${JSON.stringify(o, null, 2)}\n`;
 const sha = (data) => createHash('sha256').update(data).digest('hex');
+
+// Request routing lines older kits installed and the lines that replace them. In an existing file setup changes only these
+// lines; a hunk applies only when the template ships its new lines. `find` locates a line the project rewrote;
+// `known` is the new rule in the project's own words, taken as migrated while no direct-handling rule is left in the file.
+const OLD_DIRECT_ROW = '| 단순 질문, BL 지정이 없는 한 파일의 작은 수정 | 창구가 직접 한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. |';
+const DIRECT = /창구가 (?:직접|바로)/; // a rule that lets the front desk act without asking
+const DIRECT_ROW = /^\|[^|]*\|[^|]*창구가 (?:직접|바로)/;
+export const ROUTING = {
+  'AGENTS.md': [
+    {
+      old: ['**규모별 경로.**'],
+      new: ['**규모별 경로.** 창구는 새 수행 요청마다 규모를 판단한다. 아래의 간단한 수행 요청 외에는 모두 작업 착수 전에 `plan-orchestrate`로 접수한다. 진행 중 요청의 범위가 달라지면 새 범위로 판단한다.'],
+      find: /^\*\*규모별 경로\.\*\*/,
+      known: /^\*\*규모별 경로\.\*\*.*plan-orchestrate/,
+    },
+    {
+      old: [OLD_DIRECT_ROW],
+      new: [
+        '| 단순 설명 질문 | 창구가 답한다. |',
+        '| 간단한 수행 요청(예: BL 지정이 없는 한 파일의 작은 수정) | 매 요청마다 작업 전에 ask로 “plan-orchestrate 없이 제가 수행할까요?”라고 묻는다. 명시적으로 동의하면 해당 요청만 직접 수행하고 검증한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다. 직접 수행을 거절하면 plan-orchestrate로 접수하고, 답변 전에는 기다린다. |',
+      ],
+      find: DIRECT_ROW,
+      known: /^\|.*ask.*동의/,
+    },
+  ],
+  '.claude/skills/coordinator/SKILL.md': [{
+    old: [OLD_DIRECT_ROW],
+    new: ['| 단순 질문·간단한 수행 요청·그 밖의 새 수행 요청 | `AGENTS.md` §규모별 경로에 따라 답변·ask·plan-orchestrate 접수를 구분한다. |'],
+    find: DIRECT_ROW,
+    known: /^\|.*규모별 경로.*ask/,
+  }],
+  '.claude/skills/coordinator/references/front-desk.md': [{
+    old: ['- 단순 질문이나 백로그 ID 지정이 없는 한 파일의 작은 수정은 창구가 직접 한다. Run도 phase 폴더도 만들지 않는다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.'],
+    new: ['- 새 요청은 `AGENTS.md` §규모별 경로를 따른다. 간단한 수행 요청은 ask에서 직접 수행에 동의한 경우에만 Run·phase 폴더 없이 진행한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.'],
+    find: /^- .*창구가 (?:직접|바로)/,
+    known: /^- .*ask.*동의/,
+  }, {
+    old: ['- 브리프에 승인된 BL과 동일한 버전의 배정·DAG·검토 기록을 전달한다. 일반 소규모 수정은 원래 창구 경로를 따른다. 승인된 계획의 Task는 코디네이터가 그 Task의 에이전트에게 직접 배정한다.'],
+    new: ['- 브리프에 승인된 BL과 동일한 버전의 배정·DAG·검토 기록을 전달한다. 간단한 수행 요청은 첫 항목의 ask 동의 규칙을 따른다. 승인된 계획의 Task는 코디네이터가 그 Task의 에이전트에게 직접 배정한다.'],
+    find: /^- 브리프에 승인된 BL/,
+    known: /^- .*ask.*동의/, // with the ask bullet in place, "원래 창구 경로" already means that rule
+  }],
+  '.claude/skills/plan-orchestrate/SKILL.md': [{
+    old: ['## 접수 경로', ''],
+    new: ['## 접수 경로', '', '창구는 `AGENTS.md` §규모별 경로에 따라 접수한다. 간단한 수행 요청에서 사용자가 직접 수행을 거절한 경우도 이 절차로 진행한다.', ''],
+    find: /^## 접수 경로/,
+    known: /직접 수행을 거절/,
+  }],
+};
+const blockAt = (lines, block) => lines.flatMap((_, i) => (block.every((b, k) => lines[i + k] === b) ? [i] : []));
+
+// Rewrites the routing hunks of one file when every hunk still holds the exact old lines, once and with no other direct-handling
+// rule in its paragraph or table. Otherwise nothing is written and each hunk is returned as a proposal whose id
+// binds its position, current lines and proposed lines; only ids in `chosen` are applied, so an edit after display drops the id.
+export function migrateRouting(path, text, hunks, chosen = []) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const raw = text.split(/(?<=\n)/);
+  const lines = raw.map((l) => l.replace(/\r?\n$/, ''));
+  const all = [];
+  let done = 0;
+  const offer =(state, at, len, proposed, extra = {}) => {
+    const current = lines.slice(at, at + len);
+    all.push({ id: sha([path, at, ...current, '\0', ...proposed].join('\n')).slice(0, 12), path, state, line: at + 1, current, proposed, ...extra });
+  };
+  for (const h of hunks) {
+    const fresh = blockAt(lines, h.new);
+    const old = blockAt(lines, h.old).filter((i) => !fresh.some((f) => i < f + h.new.length && f < i + h.old.length));
+    if (!old.length && fresh.length) { done++; continue; } // already the new rule
+    if (!fresh.length && lines.some((l) => h.known.test(l)) && !lines.some((l) => DIRECT.test(l))) { done++; continue; } // migrated by hand
+    if (old.length === 1 && !fresh.length) {
+      const [at] = old;
+      let a = at, b = at + h.old.length;
+      while (a > 0 && lines[a - 1].trim()) a--;
+      while (b < lines.length && lines[b].trim()) b++;
+      const conflicts = [];
+      for (let i = a; i < b; i++) if ((i < at || i >= at + h.old.length) && DIRECT.test(lines[i]) && !hunks.some((o) => o.old.includes(lines[i]))) conflicts.push({ line: i + 1, text: lines[i] });
+      offer(conflicts.length ? 'conflict' : 'old', at, h.old.length, h.new, conflicts.length ? { conflicts } : {});
+    } else if (old.length) {
+      for (const at of old) offer('duplicate', at, h.old.length, fresh.length ? [] : h.new); // the new rule is there too: drop the old lines
+    } else {
+      const near = lines.flatMap((l, i) => (h.find.test(l) ? [i] : []));
+      if (!near.length) all.push({ id: null, path, state: 'missing', line: null, current: [], proposed: h.new });
+      for (const at of near) offer(near.length === 1 ? 'modified' : 'ambiguous', at, 1, h.new);
+    }
+  }
+  // A file part rewritten by hand (some hunks new, some old) is a project edit: what is left waits for a choice.
+  const auto = !done && all.every((p) => p.state === 'old');
+  const apply = auto ? all : all.filter((p) => chosen.includes(p.id));
+  for (const p of [...apply].sort((x, y) => y.line - x.line)) {
+    const at = p.line - 1, len = p.current.length;
+    const last = /\r?\n$/.exec(raw[at + len - 1])?.[0] ?? '';
+    raw.splice(at, len, ...p.proposed.map((l, k) => l + (k === p.proposed.length - 1 ? last : eol)));
+  }
+  return { text: raw.join(''), applied: apply.map((p) => p.id), proposals: auto ? [] : all.filter((p) => !apply.includes(p)) };
+}
 function agentOff(target, to) {
   return /^(?:\.claude\/agents\/[^/]+\.md|\.codex\/agents\/[^/]+\.toml)$/.test(to) && existsSync(join(target, to + '.agent-toggle-off'));
 }
@@ -181,8 +276,11 @@ function planDocumentDrafts(plan, templateDir) {
   }
 }
 
-export function planInstall(templateDir, codexDir, target, answers, ins) {
-  const plan = { target, copy: [], skip: [], conflict: [], notices: [] };
+// choices.routing: proposal ids from an earlier run's `routing` the user chose to apply.
+export function planInstall(templateDir, codexDir, target, answers, ins, choices = {}) {
+  const plan = { target, copy: [], skip: [], conflict: [], notices: [], patch: [], routing: [] };
+  const chosen = choices.routing ?? [];
+  const applied = [];
   const pm = { ...PM_DEFAULT, ...answers.pm };
   const installed = readRecord(target);
   const sources = walk(templateDir).map((rel) => [join(templateDir, rel), rel]);
@@ -231,6 +329,20 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
       content = setPmRow(src, pm);
     }
     if (cur && cur.equals(Buffer.from(content))) { plan.skip.push({ to, reason: '같은 내용' }); continue; }
+    // Routing lines change before the whole-file rules below, which still classify the rest of the file as before.
+    if (cur && ROUTING[to]) {
+      const shipped = content.toString('utf8').split(/\r?\n/);
+      const hunks = ROUTING[to].filter((h) => blockAt(shipped, h.new).length);
+      const r = migrateRouting(to, cur.toString('utf8'), hunks, chosen);
+      plan.routing.push(...r.proposals);
+      applied.push(...r.applied);
+      if (r.text !== cur.toString('utf8')) {
+        const same = Buffer.from(r.text).equals(content);
+        // The record keeps saying what setup wrote: a project's own edits are never recorded as kit content.
+        plan.patch.push({ to, content: r.text, record: same ? sha(content) : installed[to] === sha(cur) ? sha(r.text) : installed[to] });
+        if (same) continue;
+      }
+    }
     if (cur && !merged) {
       // setup wrote this file and it changed since: the user's edit, overwritten only when its path is approved, never a conflict (설계서 4.4)
       if (installed[to] && installed[to] !== sha(cur)) {
@@ -249,6 +361,7 @@ export function planInstall(templateDir, codexDir, target, answers, ins) {
     const recorded = installed[path];
     return { path, state: !recorded ? 'untracked' : recorded === sha(readFileSync(join(target, path))) ? 'unchanged' : 'modified' };
   });
+  plan.stale = chosen.filter((id) => !applied.includes(id));
   return plan;
 }
 
@@ -262,6 +375,13 @@ export function applyInstall(plan, opts = { approve: [] }) {
   const notices = [...(plan.notices ?? [])];
   const skipped = [...plan.skip];
   const files = readRecord(plan.target);
+  const routed = [];
+  for (const p of plan.patch ?? []) {
+    if (approve.includes(p.to) && plan.copy.some((c) => c.to === p.to)) continue; // the approved whole file is written below
+    writeFileSync(join(plan.target, p.to), p.content);
+    routed.push(p.to);
+    if (p.record) files[p.to] = p.record;
+  }
   for (const c of plan.copy) {
     if (agentOff(plan.target, c.to)) { skipped.push({ to: c.to, reason: '에이전트 OFF' }); continue; }
     if (plan.conflict.includes(c.to) && !approve.includes(c.to)) { conflicts.push(c.to); continue; }
@@ -292,11 +412,11 @@ export function applyInstall(plan, opts = { approve: [] }) {
     delete files[path];
     retired.push(path);
   }
-  if (written.length || retired.length) {
+  if (written.length || retired.length || routed.length) {
     mkdirSync(join(plan.target, '.claude'), { recursive: true });
     writeFileSync(join(plan.target, INSTALL_RECORD), json({ files }));
   }
-  return { written, skipped, conflicts, edited, retired, notices };
+  return { written, routed, skipped, conflicts, edited, retired, notices, routing: plan.routing ?? [], stale: plan.stale ?? [] };
 }
 
 // Use the installed Markdown so project-specific role edits reach Codex too.
@@ -398,8 +518,9 @@ function main(argv) {
     const pm = { ...PM_DEFAULT, ...answers.pm };
     if (!PM_MODELS.includes(pm.model)) throw new Error(`pm.model은 ${PM_MODELS.join(', ')} 중 하나다`);
     if (!PM_EFFORTS.includes(pm.effort)) throw new Error(`pm.effort는 ${PM_EFFORTS.join(', ')} 중 하나다`);
-    const approve = (opt('--approve') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-    const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS)), { approve });
+    const list = (k) => (opt(k) ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const approve = list('--approve');
+    const r = applyInstall(planInstall(TEMPLATE, CODEX, target, answers, inspect(target, DEPS), { routing: list('--routing') }), { approve });
     if (answers.codex && r.conflicts.length) {
       r.skipped.push({ to: '.codex/agents/', reason: '설치 충돌 해결 뒤 역할 동기화' });
     } else if (answers.codex) {
@@ -415,7 +536,7 @@ function main(argv) {
     console.log(JSON.stringify(r, null, 2));
     return r.conflicts.length ? 2 : 0;
   }
-  console.log('usage: setup.mjs inspect|install|verify|sync-agent --target <dir> [--answers <json>] [--approve <path,...>] [--agent <name>]');
+  console.log('usage: setup.mjs inspect|install|verify|sync-agent --target <dir> [--answers <json>] [--approve <path,...>] [--routing <id,...>] [--agent <name>]');
   return 1;
 }
 

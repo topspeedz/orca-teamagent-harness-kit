@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { applyInstall, inspect, mergeGitignore, planInstall } from './setup.mjs';
+import { applyInstall, inspect, mergeGitignore, migrateRouting, planInstall, ROUTING } from './setup.mjs';
 import { lookup, parseTable } from '../../../template/.claude/scripts/model-selection.mjs';
 import { applyChoices } from './model-table.mjs';
 
@@ -586,6 +586,261 @@ test('verify runs the role checker for every agent on the installed roster', () 
   assert.equal(bad.status, 1, bad.stdout);
   assert.match(agentLine(bad.stdout, 'research'), /❌ .*research의 작업 단위/);
   assert.match(agentLine(bad.stdout, 'frontend'), /✅/);
+});
+
+// Request routing: the template ships the ask rule, an older install gets only its routing lines rewritten,
+// and a routing the project rewrote is shown as proposals and changed only by the ids the user picks.
+const lf = (s) => s.replaceAll('\r\n', '\n');
+const crlf = (s) => lf(s).replaceAll('\n', '\r\n');
+const ROUTE_FILES = Object.keys(ROUTING).sort();
+const AGENTS = 'AGENTS.md';
+const OLD_ROW = ROUTING[AGENTS][1].old[0];
+const block = (lines) => lines.map((l) => l + '\n').join('');
+const shipped = Object.fromEntries(ROUTE_FILES.map((rel) => [rel, lf(read(realTemplate, rel))]));
+// the shape an older kit shipped: each new hunk swapped back to its old lines
+const toOld = (rel) => ROUTING[rel].reduce((s, h) => s.replace(block(h.new), block(h.old)), shipped[rel]);
+const PROJECT_HEAD = '# 우리 프로젝트\n\n프로젝트 전용 앞 절.\n\n';
+const PROJECT_TAIL = '\n## 프로젝트 끝 절\n\n끝 절 본문.\n';
+const withProject = (body) => PROJECT_HEAD + body + PROJECT_TAIL;
+const rtpl = join(root, 'routing-template');
+for (const rel of ROUTE_FILES) put(rtpl, rel, shipped[rel]);
+const routeInstall = (t, choices = {}, approve = []) => applyInstall(planInstall(rtpl, codex, t, ANSWERS, INS, choices), { approve });
+const routeFiles = (t) => Object.fromEntries(ROUTE_FILES.map((rel) => [rel, readFileSync(join(t, rel))]));
+
+test('routing (a): the template ships the per-request ask rule and a fresh install gets it', () => {
+  for (const rel of ROUTE_FILES) {
+    const lines = shipped[rel].split('\n');
+    for (const h of ROUTING[rel]) {
+      assert.equal(lines.filter((_, i) => h.new.every((b, k) => lines[i + k] === b)).length, 1, `${rel}: new hunk once`);
+      if (h.old.length === 1) assert.ok(!lines.includes(h.old[0]), `${rel}: no old line`);
+    }
+    assert.notEqual(toOld(rel), shipped[rel], `${rel}: the old shape differs`);
+    assert.deepEqual(migrateRouting(rel, shipped[rel], ROUTING[rel]), { text: shipped[rel], applied: [], proposals: [] });
+  }
+  const t = target('routing fresh');
+  const r = routeInstall(t);
+  assert.deepEqual([r.routed, r.routing, r.conflicts], [[], [], []]);
+  for (const rel of ROUTE_FILES) assert.ok(r.written.includes(rel) && read(t, rel) === shipped[rel], rel);
+  const agents = read(t, AGENTS);
+  assert.match(agents, /“plan-orchestrate 없이 제가 수행할까요\?”/);
+  assert.match(agents, /명시적으로 동의하면 해당 요청만 직접 수행/);
+  assert.match(agents, /직접 수행을 거절하면 plan-orchestrate로 접수하고, 답변 전에는 기다린다/);
+  assert.match(agents, /간단한 수행 요청 외에는 모두 작업 착수 전에 `plan-orchestrate`로 접수/);
+  for (const rel of ROUTE_FILES) assert.doesNotMatch(read(t, rel), /창구가 직접 (?:한다|처리한다)/, rel);
+});
+
+for (const [eolName, eol] of [['LF', lf], ['CRLF', crlf]]) {
+  for (const recorded of [true, false]) {
+    test(`routing (b)(c)(f): ${eolName}, install record ${recorded ? 'present' : 'absent'} — only the routing lines change, once`, () => {
+      const t = target(`routing partial ${eolName} ${recorded}`);
+      install(t); // an install record for an older kit
+      const oldKit = {};
+      for (const rel of ROUTE_FILES) {
+        oldKit[rel] = eol(toOld(rel));
+        put(t, rel, eol(withProject(toOld(rel))));
+      }
+      const files = record(t);
+      for (const rel of ROUTE_FILES) if (recorded) files[rel] = hash(oldKit[rel]); else delete files[rel];
+      put(t, '.claude/harness-install.json', JSON.stringify({ files }));
+      const r = routeInstall(t);
+      assert.deepEqual([...r.routed].sort(), ROUTE_FILES);
+      assert.deepEqual([r.routing, r.stale], [[], []]);
+      for (const rel of ROUTE_FILES) {
+        assert.equal(read(t, rel), eol(withProject(shipped[rel])), `${rel}: routing lines only, rest byte for byte`);
+        assert.ok(!r.written.includes(rel), rel);
+      }
+      // (f) the record still says what setup wrote, so the project's file stays a project edit
+      const after = record(t);
+      for (const rel of ROUTE_FILES) assert.equal(after[rel], recorded ? hash(oldKit[rel]) : undefined, rel);
+      const expectHeld = (res) => {
+        for (const rel of ROUTE_FILES) {
+          if (recorded) assert.ok(res.skipped.some((s) => s.to === rel && s.reason === '사용자가 고침'), rel);
+          else assert.ok(res.conflicts.includes(rel), rel);
+          assert.ok(!res.skipped.some((s) => s.to === rel && s.reason === '같은 내용'), rel);
+        }
+      };
+      expectHeld(r);
+      // (c) the second run writes nothing
+      const bytes = routeFiles(t), rec = read(t, '.claude/harness-install.json');
+      const again = routeInstall(t);
+      assert.deepEqual([again.routed, again.routing, again.written], [[], [], []]);
+      for (const rel of ROUTE_FILES) assert.ok(readFileSync(join(t, rel)).equals(bytes[rel]), rel);
+      assert.equal(read(t, '.claude/harness-install.json'), rec);
+      expectHeld(again);
+    });
+  }
+}
+
+test('routing (f): an unedited older-kit file becomes the template and is recorded as it', () => {
+  const t = target('routing pristine');
+  install(t);
+  for (const rel of ROUTE_FILES) { put(t, rel, toOld(rel)); addRecord(t, rel, toOld(rel)); }
+  const r = routeInstall(t);
+  assert.deepEqual([[...r.routed].sort(), r.conflicts], [ROUTE_FILES, []]);
+  for (const rel of ROUTE_FILES) assert.equal(record(t)[rel], hash(shipped[rel]), rel);
+  for (const rel of ROUTE_FILES) assert.ok(routeInstall(t).skipped.some((s) => s.to === rel && s.reason === '같은 내용'), rel);
+});
+
+// the project's AGENTS.md in the older shape, with one routing change of its own
+const heldCase = (name, edit) => {
+  const t = target(`routing held ${name}`);
+  const body = edit(withProject(toOld(AGENTS)));
+  put(t, AGENTS, body);
+  return { t, body };
+};
+const HELD = {
+  modified: (s) => s.replace(OLD_ROW, '| 단순 질문, 두 파일 이하의 수정 | 창구가 직접 한다. |'),
+  conflict: (s) => s.replace(OLD_ROW, OLD_ROW + '\n| 문서 오타 | 창구가 바로 고친다. |'),
+  duplicate: (s) => s.replace(OLD_ROW, OLD_ROW + '\n| 승인 대기 |  |\n' + OLD_ROW),
+  ambiguous: (s) => s.replace(OLD_ROW, '| 단순 질문 | 창구가 직접 한다. |\n| 문서 수정 | 창구가 직접 한다. |'),
+  missing: (s) => s.replace(OLD_ROW + '\n', ''),
+};
+
+test('routing (d): a rewritten, conflicting, duplicated or missing rule is reported, not written', () => {
+  for (const [state, edit] of Object.entries(HELD)) {
+    const { t, body } = heldCase(state, edit);
+    const r = routeInstall(t);
+    assert.equal(read(t, AGENTS), body, state);
+    assert.ok(!r.routed.includes(AGENTS), state);
+    const rows = r.routing.filter((p) => p.path === AGENTS);
+    const heading = rows.find((p) => p.current[0] === '**규모별 경로.**');
+    assert.equal(heading.state, 'old', state);
+    assert.deepEqual(heading.proposed, ROUTING[AGENTS][0].new, state);
+    const row = rows.filter((p) => p !== heading);
+    assert.deepEqual([...new Set(row.map((p) => p.state))], [state], state);
+    assert.equal(row.length, ['duplicate', 'ambiguous'].includes(state) ? 2 : 1, state);
+    assert.equal(new Set(row.map((p) => p.id)).size, row.length, `${state}: one id per location`);
+    for (const p of row) {
+      assert.deepEqual(p.proposed, ROUTING[AGENTS][1].new, state);
+      if (state === 'missing') { assert.deepEqual([p.id, p.line, p.current], [null, null, []]); continue; }
+      assert.match(p.id, /^[0-9a-f]{12}$/);
+      assert.equal(body.split('\n')[p.line - 1], p.current[0], state);
+    }
+    if (state === 'conflict') assert.deepEqual(row[0].conflicts.map((c) => c.text), ['| 문서 오타 | 창구가 바로 고친다. |']);
+  }
+});
+
+test('routing (e): kept until chosen, a chosen id changes only its lines, an edit after display drops the id', () => {
+  const { t, body } = heldCase('choice', HELD.modified);
+  const shown = routeInstall(t).routing;
+  const row = shown.find((p) => p.state === 'modified');
+  const heading = shown.find((p) => p.state === 'old');
+  // keep: running again without a choice leaves the file as it was and shows the same proposals
+  const kept = routeInstall(t);
+  assert.equal(read(t, AGENTS), body);
+  assert.deepEqual(kept.routing, shown);
+  // apply: only the displayed row changes; the heading the user did not pick stays, on this run and the next
+  const picked = routeInstall(t, { routing: [row.id] });
+  const expected = body.replace(row.current[0] + '\n', row.proposed.map((l) => l + '\n').join(''));
+  assert.equal(read(t, AGENTS), expected);
+  assert.deepEqual([picked.routed, picked.stale, picked.routing.map((p) => p.id)], [[AGENTS], [], [heading.id]]);
+  assert.deepEqual(routeInstall(t).routed, []);
+  assert.equal(read(t, AGENTS), expected);
+  // an edit after display: the shown id no longer applies, the new difference is shown
+  const { t: t2 } = heldCase('choice stale', HELD.modified);
+  const id = routeInstall(t2).routing.find((p) => p.state === 'modified').id;
+  const changed = read(t2, AGENTS).replace('두 파일 이하의 수정', '세 파일 이하의 수정');
+  put(t2, AGENTS, changed);
+  const late = routeInstall(t2, { routing: [id] });
+  assert.equal(read(t2, AGENTS), changed);
+  assert.deepEqual([late.routed, late.stale], [[], [id]]);
+  const fresh = late.routing.find((p) => p.state === 'modified');
+  assert.notEqual(fresh.id, id);
+  assert.deepEqual(fresh.current, ['| 단순 질문, 세 파일 이하의 수정 | 창구가 직접 한다. |']);
+});
+
+test('routing (e)(g): through the CLI with the real template, other files keep their conflict and approval rules', () => {
+  const t = target('routing cli');
+  put(t, '.claude/coordinator.keep.json', '{ "permissionMode": "default", "plugins": {}, "skills": {} }\n');
+  put(t, 'answers.json', JSON.stringify(ANSWERS));
+  const cli = (...more) => {
+    const r = spawnSync(process.execPath, [SETUP, 'install', '--target', t, '--answers', join(t, 'answers.json'), ...more], { encoding: 'utf8' });
+    return { code: r.status, out: JSON.parse(r.stdout || '{}'), err: r.stderr };
+  };
+  const body = HELD.modified(withProject(toOld(AGENTS)));
+  put(t, AGENTS, body);
+  put(t, 'CLAUDE.md', '# 내 지침\n');
+  const first = cli();
+  assert.equal(first.code, 2, first.err);
+  assert.deepEqual(first.out.conflicts.sort(), [AGENTS, 'CLAUDE.md']);
+  assert.equal(read(t, AGENTS), body);
+  assert.equal(read(t, 'CLAUDE.md'), '# 내 지침\n');
+  const row = first.out.routing.find((p) => p.path === AGENTS && p.state === 'modified');
+  // approving CLAUDE.md is not a routing choice: AGENTS.md stays as it was
+  const approved = cli('--approve', 'CLAUDE.md');
+  assert.deepEqual([approved.out.conflicts, approved.out.routed], [[AGENTS], []]);
+  assert.equal(read(t, 'CLAUDE.md'), read(realTemplate, 'CLAUDE.md'));
+  assert.equal(read(t, AGENTS), body);
+  const chosen = cli('--routing', row.id);
+  assert.deepEqual([chosen.out.routed, chosen.out.stale], [[AGENTS], []]);
+  assert.equal(read(t, AGENTS), body.replace(row.current[0] + '\n', row.proposed.map((l) => l + '\n').join('')));
+  // approving the whole AGENTS.md is the old full overwrite, never a partial one
+  const whole = cli('--approve', AGENTS);
+  assert.deepEqual([whole.out.routed, whole.out.written.includes(AGENTS), whole.code], [[], true, 0]);
+  assert.equal(read(t, AGENTS), read(realTemplate, AGENTS));
+});
+
+const FD = '.claude/skills/coordinator/references/front-desk.md';
+const OLD_FD_SMALL = '일반 소규모 수정은 원래 창구 경로를 따른다.';
+const FD_BRIEF = '- 브리프에 승인된 BL과 동일한 버전의 배정·DAG·검토 기록을 전달한다. 일반 소규모 수정은 원래 창구 경로를 따른다. 승인된 계획의 Task는 코디네이터가 그 Task의 에이전트에게 직접 배정한다.';
+
+test('routing V-1: the old "원래 창구 경로" sentence is updated in an older-kit front-desk.md, once', () => {
+  assert.ok(!shipped[FD].includes(OLD_FD_SMALL), 'the template no longer ships the old sentence');
+  const t = target('routing V-1');
+  const old = withProject(toOld(FD));
+  assert.ok(old.includes(FD_BRIEF) && old.includes(ROUTING[FD][0].old[0]), 'fixture is the older kit shape');
+  put(t, FD, crlf(old));
+  const r = routeInstall(t);
+  assert.deepEqual([r.routed, r.routing.filter((p) => p.path === FD)], [[FD], []]);
+  assert.equal(read(t, FD), crlf(withProject(shipped[FD])));
+  const bytes = readFileSync(join(t, FD));
+  const again = routeInstall(t);
+  assert.deepEqual([again.routed, again.routing.filter((p) => p.path === FD)], [[], []]);
+  assert.ok(readFileSync(join(t, FD)).equals(bytes));
+});
+
+// DRLOMILOMI's hand migration (2026-11-27): the ask rule is there in its own words, one sentence short of the template
+const HAND_AGENTS = [
+  '**규모별 경로.** 창구는 새 수행 요청마다 규모를 판단한다. 아래의 간단한 수행 요청 외에는 모두 작업 착수 전에 `plan-orchestrate`로 접수한다. 진행 중 요청의 범위가 달라지면 새 범위로 판단한다.',
+  '',
+  '| 요청 | 경로 |',
+  '| --- | --- |',
+  '| 단순 설명 질문 | 창구가 답한다. |',
+  '| 간단한 수행 요청(예: BL 지정이 없는 한 파일의 작은 수정) | 매 요청마다 작업 전에 ask로 “plan-orchestrate 없이 제가 수행할까요?”라고 묻는다. 명시적으로 동의하면 해당 요청만 직접 수행하고 검증한다. 직접 수행을 거절하면 plan-orchestrate로 접수하고, 답변 전에는 기다린다. |',
+  '| 지정 BL 또는 한 phase 위임 | 창구가 `plan-orchestrate`의 해당 접수 경로를 따른다. 지정 ID는 PM의 설계, 묶음 선정 위임은 PM의 묶음 선정부터 시작한다. |',
+  '| 승인된 계획의 Task | 코디네이터가 그 Task의 에이전트에게 직접 배정한다. 에이전트가 OFF면 배정 대기다. |',
+  '| 요구사항이 흐릿한 큰 작업 | 설문부터 시작하는 전체 흐름(`plan-orchestrate`)을 탄다. |',
+].join('\n') + '\n';
+const HAND_FD = [
+  '- 새 요청은 `AGENTS.md` §규모별 경로를 따른다. 간단한 수행 요청은 ask에서 직접 수행에 동의한 경우에만 Run·phase 폴더 없이 진행한다. 테스트 먼저 쓰기와 검증 명령은 그대로 지킨다.',
+  '- 새 요구는 PM 항목화부터 시작하고 같은 PM 세션이 검토한다. 지정 BL은 PM의 설계부터, 한 phase 위임은 PM 묶음 선정부터 시작한다. 지정 ID는 ‘답이 정해진 작업’보다 우선한다. 설계·계획 승인 횟수와 단독 PRD·계획 검토는 `plan-orchestrate`의 접수 표를 따른다.',
+  FD_BRIEF,
+].join('\n') + '\n';
+
+test('routing V-2: a hand migration in other words gets no proposal and no write; a real gap is still missing', () => {
+  const t = target('routing V-2');
+  const files = { [AGENTS]: withProject(HAND_AGENTS), [FD]: crlf(withProject(HAND_FD)) };
+  for (const [rel, body] of Object.entries(files)) {
+    assert.ok(!body.includes(ROUTING[AGENTS][1].new[1]), `${rel}: not the template wording`);
+    assert.deepEqual(migrateRouting(rel, body, ROUTING[rel]), { text: body, applied: [], proposals: [] }, rel);
+    put(t, rel, body);
+  }
+  for (let run = 0; run < 2; run++) {
+    const r = routeInstall(t);
+    assert.deepEqual([r.routed, r.routing.filter((p) => p.path in files)], [[], []], `run ${run}`);
+    for (const [rel, body] of Object.entries(files)) assert.equal(read(t, rel), body, `${rel} run ${run}`);
+  }
+  // no ask rule and no direct-handling rule: nothing to call migrated, so the gap is reported
+  const ASK_ROW = HAND_AGENTS.split('\n')[5];
+  const gap = withProject(HAND_AGENTS.replace(ASK_ROW + '\n', ''));
+  const p = migrateRouting(AGENTS, gap, ROUTING[AGENTS]);
+  assert.equal(p.text, gap);
+  assert.deepEqual(p.proposals.map((x) => [x.state, x.id]), [['missing', null]]);
+  const fdGap = withProject(HAND_FD.replace(HAND_FD.split('\n')[0] + '\n', ''));
+  assert.deepEqual(migrateRouting(FD, fdGap, ROUTING[FD]).proposals.map((x) => x.state), ['missing', 'old']);
+  // the ask rule beside a rule that still lets the front desk act alone is not a migration
+  const mixed = withProject(HAND_AGENTS.replace(ASK_ROW, ASK_ROW + '\n| 문서 오타 | 창구가 바로 고친다. |'));
+  assert.deepEqual(migrateRouting(AGENTS, mixed, ROUTING[AGENTS]).proposals.map((x) => x.state), ['modified']);
 });
 
 console.log(`setup.check: ${n} passed`);
