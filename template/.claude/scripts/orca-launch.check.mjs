@@ -1502,7 +1502,7 @@ await ta(async () => {
 // ---- refusals before launch: fix Tasks, verification after a fix, full tests in the completion criteria ----
 const LEDGER = (rows, decisions = []) => ['## 결함 원장', '', '| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |', '| --- | --- | --- | --- | --- | --- |',
   ...rows, '', '## 결정', '', ...decisions, ''].join('\n');
-const H1 = '| H-1 | Q1 | High | 관찰 | 1 | 열림 |', M1 = '| M-1 | Q1 | Medium | 관찰 | 1 | 열림 |';
+const H1 = '| H-1 | Q1 | High | 관찰 — 중대한 피해: 주문 데이터 유실 | 1 | 열림 |', M1 = '| M-1 | Q1 | Medium | 관찰 | 1 | 열림 |';
 const FIX_NO_IDS = '수정 Task의 결함 ID 줄이 없음', POST_FIX = '수정 뒤의 검증은 결함 ID와 수정 diff가 필요함', NO_LEDGER = '장부를 읽을 수 없음';
 // T01 → Q1(verify) → F1(fix) → R1(recheck)
 // with q2 (true, or the Q2 node's extra fields), a second verify Task Q2 hangs off T01 beside Q1 (not behind F1); verify2 is added to its spec
@@ -1895,7 +1895,7 @@ await ta(async () => {
 // settle: one worker_done is judged, recorded or failed in one command
 {
   const LEDGER = '# 장부\n\n## 결함 원장\n\n| ID | 제기한 검증 | 심각도 | 증거 | 라운드 | 상태 |\n| --- | --- | --- | --- | --- | --- |\n\n## 결정\n\n## 스냅샷\n\n- T00 | tree_0\n';
-  const REPORT = '# 리포트\n## 결함\n| ID | 심각도 | 증거 | 위치 |\n| --- | --- | --- | --- |\n| A-1 | High | 관찰: 실패 | a.ts |\n## 검증\n- ✅ 완료 기준 1\n- ❌ (참고) 범위 밖\n';
+  const REPORT = '# 리포트\n## 결함\n| ID | 심각도 | 증거 | 위치 | 영향 근거 |\n| --- | --- | --- | --- | --- |\n| A-1 | High | 관찰: 실패 | a.ts | 핵심 흐름 차단: 정상 계정 로그인 불가 |\n## 검증\n- ✅ 완료 기준 1\n- ❌ (참고) 범위 밖\n';
   const settling = async (over = {}) => {
     const f = await registered();
     const m = f.map();
@@ -1916,8 +1916,29 @@ await ta(async () => {
     const { code, out } = await main([...S, '--expect', 'out.ts'], f.deps);
     assert.equal(code, 0, JSON.stringify(out));
     assert.deepEqual(out, { id: 'T01', ok: true, checked: 1, notes: ['- ❌ (참고) 범위 밖'], tree: 'tree_1', defects: { added: ['A-1'], existing: [] } });
-    assert.match(f.fs['ledger.md'], /\| A-1 \| T01 \| High \| 관찰 \| 1 \| 열림 \|/);
+    assert.match(f.fs['ledger.md'], /\| A-1 \| T01 \| High \| 관찰 — 핵심 흐름 차단: 정상 계정 로그인 불가 \| 1 \| 열림 \|/);
     assert.match(f.fs['ledger.md'], /- T00 \| tree_0\n- T01 \| tree_1\n/);
+    assert.equal(f.count('task-update'), 0);
+  });
+  // An invalid High holds the report and its dependents; the original failure and ledger survive.
+  await ta(async () => {
+    const report = REPORT.replace('핵심 흐름 차단: 정상 계정 로그인 불가', '영향 미확인');
+    const f = await settling({ 'r.md': report });
+    const r = await main(S, f.deps);
+    assert.equal(r.code, 1);
+    assert.match(r.out.cause, /A-1.*영향 근거/);
+    assert.deepEqual(r.out.demoted, ['T02']);
+    assert.equal(f.fs['ledger.md'], LEDGER);
+    assert.equal(f.fs['r.md'], report);
+  });
+  // A verifier can finish investigating without inventing a product defect. The failed assertion is retained.
+  await ta(async () => {
+    const report = '## 검증\n- ✅ 수락 기준의 입력을 검사함\n## 남은 것\n- 영향 미확인: 관련 시험 실패. 원본 results.json, 다음 확인은 저장 후 다시 열기.';
+    const f = await settling({ 'r.md': report });
+    const { code, out } = await main(S, f.deps);
+    assert.equal(code, 0);
+    assert.deepEqual(out.defects.added, []);
+    assert.equal(f.fs['r.md'], report);
     assert.equal(f.count('task-update'), 0);
   });
   // a missing artifact fails the Task and rebinds the Task Orca already made ready; the ledger is left alone

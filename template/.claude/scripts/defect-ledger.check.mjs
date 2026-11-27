@@ -10,20 +10,21 @@ import { addDefects, currentRound, fixAllowed, parseDefects, readLedger } from '
 let passed = 0;
 const ok = () => passed++;
 
-const report = '# 리포트\n\n## 결함\n\n| ID | 심각도 | 증거 | 위치 | 요지 |\n| --- | --- | --- | --- | --- |\n'
-  + '| H-1 | High | 관찰 `tests/login.test.mjs` | `src/login.mjs:12` | 잠금이 풀리지 않음 |\n'
-  + '| A-H-2 | High | 없음 | `src/a.mjs:3` | 근거 없이 올린 것 |\n'
+const report = '# 리포트\n\n## 결함\n\n| ID | 심각도 | 증거 | 위치 | 요지 | 영향 근거 |\n| --- | --- | --- | --- | --- | --- |\n'
+  + '| H-1 | High | 관찰 `tests/login.test.mjs` | `src/login.mjs:12` | 잠금이 풀리지 않음 | 핵심 흐름 차단: 사용자가 로그인할 수 없음 |\n'
+  + '| A-H-2 | Medium | 없음 | `src/a.mjs:3` | 근거 없이 올린 것 |\n'
   + '| M-1 | Medium | 인용 수락 기준 2 | `src/b.mjs:9` | 문구 다름 |\n\n## 검증\n';
-// 1. 표를 읽는다. 증거가 없는 High는 Medium으로 내린다
-assert.deepEqual(parseDefects(report).map(d => [d.id, d.severity, d.evidence, !!d.demoted]),
-  [['H-1', 'High', '관찰', false], ['A-H-2', 'Medium', '없음', true], ['M-1', 'Medium', '인용', false]]);
+// 1. 등급과 증거를 읽는다.
+assert.deepEqual(parseDefects(report).map(d => [d.id, d.severity, d.evidence]),
+  [['H-1', 'High', '관찰'], ['A-H-2', 'Medium', '없음'], ['M-1', 'Medium', '인용']]);
 ok();
 // 2. CRLF, 표 없음, 본문 "없음"
 assert.equal(parseDefects(report.replace(/\n/g, '\r\n')).length, 3);
 assert.deepEqual(parseDefects('# 리포트\n\n## 결함\n\n없음\n'), []);
 assert.deepEqual(parseDefects('# 리포트\n'), []);
-// 알 수 없는 첫 낱말은 없음, 그 High는 내린다
-assert.deepEqual(parseDefects(report.replace('관찰 `tests', '추정 `tests')).map(d => [d.severity, d.evidence]).slice(0, 1), [['Medium', '없음']]);
+// A failed test is evidence of a failed assertion. Its product impact is independently required.
+assert.throws(() => parseDefects(report.replace('관찰 `tests', '추정 `tests')), /H-1.*영향 근거/);
+assert.throws(() => parseDefects(report.replace('핵심 흐름 차단: 사용자가 로그인할 수 없음', '영향 미확인')), /H-1.*영향 근거/);
 ok();
 // 3. 원장에 넣는다. `## 결정` 앞에 절이 생기고, 두 번 넣어도 같다
 const led = '# 장부: phase-a\n\n## 결정\n\n- 첫 줄\n';
@@ -42,7 +43,7 @@ assert.ok(more.indexOf('| L-1 |') < more.indexOf('## 결정'));
 assert.equal(readLedger(addDefects('# 장부\n', { source: 'T1', round: 1, defects: parseDefects(report) })).defects.length, 3);
 ok();
 // 4. 손으로 고친 상태 칸은 다시 넣어도 남는다
-const closed = once.replace('| H-1 | T07 | High | 관찰 | 1 | 열림 |', '| H-1 | T07 | High | 관찰 | 1 | 확정 |');
+const closed = once.replace('| H-1 | T07 | High | 관찰 — 핵심 흐름 차단: 사용자가 로그인할 수 없음 | 1 | 열림 |', '| H-1 | T07 | High | 관찰 — 핵심 흐름 차단: 사용자가 로그인할 수 없음 | 1 | 확정 |');
 assert.notEqual(closed, once);
 assert.equal(addDefects(closed, { source: 'T07', round: 1, defects: parseDefects(report) }), closed);
 ok();
@@ -53,13 +54,31 @@ assert.equal(currentRound({ tasks: { A: { kind: 'verify', round: 1, dispatch: 'c
 assert.equal(currentRound({ tasks: {} }), 1);
 ok();
 // 6. 수정에 넣을 수 있는가
+const legacy = once.replace('관찰 — 핵심 흐름 차단: 사용자가 로그인할 수 없음', '관찰');
+assert.equal(fixAllowed(readLedger(legacy), ['H-1']).ok, false);
+assert.equal(addDefects(legacy, { source: 'someone-else', round: 3, defects: [parseDefects(report)[0]] }), legacy);
+assert.equal(addDefects(legacy, { source: 'T07', round: 3, defects: parseDefects(report) }), once);
 const L = readLedger(once.replace('- 첫 줄', '- M-1 | 수정 포함 승인 | 이번에 같이 고쳐 주세요'));
 assert.equal(fixAllowed(L, ['H-1', 'M-1']).ok, true);
 assert.deepEqual(fixAllowed(readLedger(once), ['M-1', 'X-9']).refused.map(r => r.id), ['M-1', 'X-9']);
 assert.equal(fixAllowed(readLedger(closed), ['H-1']).ok, false);   // 이미 닫힌 High
 ok();
 
-const tbl = (rows) => ['## 결함', '', '| ID | 심각도 | 증거 | 위치 | 요지 |', '| --- | --- | --- | --- | --- |', rows, ''].join('\n');
+const tbl = (rows) => ['## 결함', '', '| ID | 심각도 | 증거 | 위치 | 요지 | 영향 근거 |', '| --- | --- | --- | --- | --- | --- |', rows, ''].join('\n');
+
+// A failing required assertion remains in the report regardless of whether product impact is established.
+const failure = '관찰: 같은 입력에서 회귀 시험 실패';
+const unknown = `## 남은 것\n- 영향 미확인 · ${failure} · 다음 확인: 원래 수순 실행`;
+const pending = readLedger(addDefects(led, { source: 'QA', round: 1, defects: parseDefects(unknown) }));
+assert.equal(fixAllowed(pending, ['QA-1']).ok, false);
+for (const impact of ['', '영향 미확인', '핵심 흐름 차단: ', '출시 차단 기준: <출처>']) {
+  assert.throws(() => parseDefects(tbl(`| QA-1 | High | ${failure} | 화면 | 장면 차이 | ${impact} |`)), /QA-1.*영향 근거/);
+}
+const qualified = tbl(`| QA-1 | High | ${failure} | 화면 | 단축키 A\\|B | 핵심 흐름 차단: 저장 후 작업을 다시 열 수 없음 |`);
+const reviewed = readLedger(addDefects(led, { source: 'QA', round: 1, defects: parseDefects(qualified) }));
+assert.equal(fixAllowed(reviewed, ['QA-1']).ok, true);
+assert.throws(() => parseDefects(qualified.replace(failure, '관찰:')), /QA-1.*영향 근거/);
+ok();
 
 // 7. CLI add
 const script = fileURLToPath(new URL('./defect-ledger.mjs', import.meta.url));
@@ -79,7 +98,7 @@ assert.deepEqual(JSON.parse(r.stdout).added, []);
 assert.deepEqual(JSON.parse(r.stdout).existing, [{ id: 'H-1', source: 'T07' }, { id: 'A-H-2', source: 'T07' }, { id: 'M-1', source: 'T07' }]);
 // 다른 검증이 같은 ID를 다른 결함에 쓰면 장부는 그대로이고, 그 ID가 먼저 적힌 출처와 함께 existing에 나온다
 const beforeOther = readFileSync(ledgerP, 'utf8');
-const otherP = f('other.md', tbl('| H-1 | High | 관찰 다른 테스트 | src/c.mjs:1 | 다른 결함 |'));
+const otherP = f('other.md', tbl('| H-1 | High | 관찰 다른 테스트 | src/c.mjs:1 | 다른 결함 | 중대한 피해: 다른 사용자의 데이터 유실 |'));
 r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', otherP, '--source', 'T11');
 assert.equal(r.status, 0);
 assert.equal(readFileSync(ledgerP, 'utf8'), beforeOther);
@@ -93,13 +112,13 @@ assert.ok(JSON.parse(r.stdout).error);
 ok();
 
 // 8. unrecognised severity is refused, not dropped; messy spellings are normalised
-assert.deepEqual(parseDefects(tbl('| H-3 | high | 관찰`t.mjs` | a | b |\n| H-4 | **High** | 관찰 x | a | b |')).map(d => [d.severity, d.evidence]),
+assert.deepEqual(parseDefects(tbl('| H-3 | high | 관찰`t.mjs` | a | b | 출시 차단 기준: AC-1 필수 로그인이 실패 |\n| H-4 | **High** | 관찰 x | a | b | 핵심 흐름 차단: 로그인이 거부됨 |')).map(d => [d.severity, d.evidence]),
   [['High', '관찰'], ['High', '관찰']]);
-assert.throws(() => parseDefects(tbl('| H-3 | Critical | 관찰 x | a | b |')), /H-3.*Critical/);
+assert.throws(() => parseDefects(tbl('| H-3 | Critical | 관찰 x | a | b | 핵심 흐름 차단: 로그인이 거부됨 |')), /H-3.*Critical/);
 // an ID used twice in one report is refused instead of keeping only the first row
-assert.throws(() => parseDefects(tbl('| H-3 | High | 관찰 x | a | b |\n| H-3 | Medium | 관찰 y | c | d |')), /H-3/);
+assert.throws(() => parseDefects(tbl('| H-3 | High | 관찰 x | a | b | 핵심 흐름 차단: 로그인이 거부됨 |\n| H-3 | Medium | 관찰 y | c | d |')), /H-3/);
 assert.throws(() => readLedger(once.replace('| H-1 | T07 | High |', '| H-1 | T07 | Critical |')), /H-1/);
-const badP = f('bad.md', tbl('| H-3 | Critical | 관찰 x | a | b |'));
+const badP = f('bad.md', tbl('| H-3 | Critical | 관찰 x | a | b | 핵심 흐름 차단: 로그인이 거부됨 |'));
 r = cli('add', '--ledger', ledgerP, '--map', mapP, '--report', badP, '--source', 'T08');
 assert.equal(r.status, 1);
 assert.match(JSON.parse(r.stdout).error, /H-3/);

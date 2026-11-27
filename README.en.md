@@ -99,7 +99,7 @@ The roster's source is `docs/harness/agents.md`. The eight `frontend` and `backe
 | `secret-gate` hook | Blocks Playwright MCP calls that carry cookies, tokens or passwords, or that try to read cookies, so those values never land in the conversation log |
 | `orca-launch.mjs` | Starts workers in the execution Run with the approved Task assignments and shows the role, model and effort in each tab. Supports dependency registration, ready Tasks, decision gates, failure handling and retries. The `skip` command closes a Task whose node has `conditional: true`, or a fix or recheck Task in `rounds`, without running a worker |
 | `tree-snapshot.mjs` | Snapshots the whole working folder as a tree without touching the real index or working tree (`take`) and lists the files that changed between two trees (`diff`) |
-| `defect-ledger.mjs` | Copies the report's `## 결함` table into the ledger's `## 결함 원장`. A High row with no evidence is recorded as Medium, and an existing row is never rewritten |
+| `defect-ledger.mjs` | Copies the report's `## 결함` table into the ledger's `## 결함 원장`. A High row requires evidence and a separate impact rationale, and the original reporter can qualify an existing open High that predates the impact field |
 | `model-selection.mjs` | Validates the model assignment table (unknown agents, duplicate rows, unsupported combinations) |
 | `report-check.mjs` | Evaluates the `## 검증` (verification) section of a worker report and checks that the Task's artifact files exist |
 | `test-ledger.mjs` | Copies the JSON result of the full test run (vitest, jest) into the latest-result column of the test case ledger and switches `구현됨`/`검증됨` in the traceability matrix. A case missing from the run keeps its result and is listed |
@@ -134,9 +134,9 @@ Scripts and hooks use Node built-in modules only and ship with their own self-te
 
 **Verification converges**
 
-- Only High findings and unmet completion criteria get fixed. Medium and below go to the inbox.
-- When implementation is done, the coordinator runs the full test suite once. Failures go to a test-update Task for the agent that wrote the code, and end verification does not rerun the full suite.
-- Each fix leaves a reproduction test per defect, and right after the fixes the coordinator runs the final test, which checks them. A recheck is run only for a defect that has no reproduction test, and it only confirms whether that defect still reproduces. A High finding first seen during a recheck still counts as open. The fix loop runs at most twice. If a High finding remains after that and a third round would be needed, the run stops and asks the user.
+- Keep the original test failure. Investigate unknown impact and hold completion if a required check fails. Only open High defects with evidence and documented impact enter automatic fixes. [Verification workflow](template/docs/harness/verification.md)
+- During implementation, each agent tests the behavior it changed and the paths affected by that change. The coordinator runs the full suite once during final QA. A passing result is final when no fixes are needed.
+- Each fix leaves a reproduction test per defect, and the coordinator verifies the original failures and affected neighboring behavior on the fix. Repeat the full suite when the impact cannot be bounded or the project requires it. A recheck is run only for a defect that has no reproduction test, and it only confirms whether that defect still reproduces. A High finding first seen during a recheck still counts as open. The fix loop runs at most twice. If a High finding remains after that and a third round would be needed, the run stops and asks the user.
 - The agent that implemented a change does not approve it. Implementation tasks write the test first (TDD).
 - End verification is one `verifier` Task per area that both reads the code and runs it, and the per-area workers run at the same time. Browser verification does too. Two lines in `.claude/settings.json` (`PLAYWRIGHT_MCP_ISOLATED`, `PLAYWRIGHT_MCP_HEADLESS`) give each worker its own browser.
 - Those two lines apply to every session in the project. To use a visible browser that keeps its profile (logins) in a session you open yourself, including the front desk, start it with `claude --settings .claude/front-desk.settings.json`.

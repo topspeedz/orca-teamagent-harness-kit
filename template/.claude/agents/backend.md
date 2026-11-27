@@ -29,7 +29,7 @@ description: "백엔드를 만드는 담당. 백로그 항목 하나의 서버�
 | --- | --- | --- |
 | 구현 | `backend-db`, `backend-dev`, `backend-performance`, `backend-security`, `docs-management` | 바꾼 파일, 검증 명령과 결과, 바꾼 문서 절 |
 | 결함 수정 | `backend-dev`, `backend-db` | 결함 ID별 원인과 수정 diff, 재현 테스트 결과 |
-| 시험 갱신 | `backend-dev` | 갱신한 테스트와 전체 테스트 결과 |
+| 시험 갱신 | `backend-dev` | 갱신한 테스트와 해당 테스트의 실행 결과 |
 
 ## 경계
 

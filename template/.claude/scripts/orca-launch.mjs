@@ -734,13 +734,17 @@ async function execute(cmd, o, deps) {
     try { verdict = judge(o.report, csv(o.expect), o['round-cap'] ? { roundCap: Number(o['round-cap']) } : {}, { read: deps.read, exists: deps.exists }); }
     catch { verdict = { ok: false, checked: 0, failed: [`❌ 리포트를 읽을 수 없음: ${o.report}`], notes: [] }; }
     if (o.outcome === 'failed') verdict = { ...verdict, ok: false, failed: ['❌ 워커가 실패로 보고함', ...verdict.failed] };
+    let defects;
+    if (verdict.ok) {
+      try { defects = parseDefects(deps.read(o.report)); }
+      catch (err) { verdict = { ...verdict, ok: false, failed: [err.message] }; }
+    }
     if (!verdict.ok) {
       const cause = verdict.failed[0] ?? verdict.error ?? '검증 줄에 ✅가 없음';
       try { return { code: 1, out: { id: o.id, ok: false, cause, failed: verdict.failed, notes: verdict.notes, ...failTask(m, e, cause) } }; }
       catch (err) { return fail(err.message); }
     }
     const ledger = deps.read(o.ledger);
-    const defects = parseDefects(deps.read(o.report));
     const before = new Map(readLedger(ledger).defects.map((d) => [d.id, d.source]));
     const tree = deps.snapshot();
     deps.write(o.ledger, addSnapshot(addDefects(ledger, { source: o.id, round: currentRound(m), defects }), o.id, tree));
