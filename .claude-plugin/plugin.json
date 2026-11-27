@@ -1,6 +1,6 @@
 {
   "name": "orca-teamagent-harness-kit",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Orca 멀티 에이전트 하네스 설치, 에이전트에 스킬 더하기와 에이전트 만들기",
   "author": { "name": "Hans Koh" }
 }
