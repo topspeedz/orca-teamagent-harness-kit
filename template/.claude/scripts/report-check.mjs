@@ -13,9 +13,11 @@
 // Re-checks are the next version file (NN_<agent>_<output>_v<N>.md), so an older version fails when a higher one sits next to it,
 // and a `재검 회차: N` line with N above the cap fails. The cap is two re-checks; `--round-cap <N>` raises it for a round
 // the user approved after being asked.
+// A `## 결함` section goes through defect-ledger's parseDefects, the same parse settle runs; its error goes to failed.
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDefects } from './defect-ledger.mjs';
 
 export function check(text, { roundCap = 2 } = {}) {
   const out = { ok: false, checked: 0, failed: [], notes: [] };
@@ -46,6 +48,7 @@ export function check(text, { roundCap = 2 } = {}) {
   }
   const round = lines.map((l) => /재검 회차:\s*(\d+)/.exec(l)?.[1]).find(Boolean);
   if (Number(round) > roundCap) out.failed.unshift(`❌ 재검 상한 ${roundCap}회 초과`);
+  try { parseDefects(text); } catch (e) { out.failed.push(e.message); }
   out.ok = out.failed.length === 0 && out.checked > out.failed.length;
   return out;
 }

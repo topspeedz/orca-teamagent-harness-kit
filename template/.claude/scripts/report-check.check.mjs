@@ -60,7 +60,7 @@ assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
 ok();
 
 // QA boundary sections: ❌ under "## 경계면 대조" and "## 점검표 후보" are findings too, and only the 검증 lines are counted
-r = run('boundary.md', '# QA\n## 결함\n| H-1 | High | ❌ 발견 |\n## 경계면 대조\n| 응답 구조 | a.js:1 | b.js:2 | ❌ H-1 |\n- ❌ 응답 구조와 기대 형태가 같은가 → H-1\n- (해당 없음) 상태 전이\n## 점검표 후보\n- ❌ 날짜 형식이 양쪽에서 같은가\n## 검증\n- ✅ 흐름 실행\n- ✅ 경계면 대조: 점검표 항목마다 결과를 적음\n');
+r = run('boundary.md', '# QA\n## 결함\n| ID | 심각도 | 증거 | 위치 | 요지 | 영향 근거 |\n| --- | --- | --- | --- | --- | --- |\n| H-1 | High | 관찰: 응답 필드 누락 | a.js:1 | ❌ 발견 | 핵심 흐름 차단: 목록이 비어 보임 |\n## 경계면 대조\n| 응답 구조 | a.js:1 | b.js:2 | ❌ H-1 |\n- ❌ 응답 구조와 기대 형태가 같은가 → H-1\n- (해당 없음) 상태 전이\n## 점검표 후보\n- ❌ 날짜 형식이 양쪽에서 같은가\n## 검증\n- ✅ 흐름 실행\n- ✅ 경계면 대조: 점검표 항목마다 결과를 적음\n');
 assert.equal(r.code, 0);
 assert.deepEqual(r.out, { ok: true, checked: 2, failed: [], notes: [] });
 ok();
@@ -129,6 +129,25 @@ ok();
   assert.match(fourth.out.failed[0], /재검 상한 3회 초과/);
   ok();
 }
+
+// `## 결함` table: the same parse as settle (defect-ledger parseDefects), so the worker sees the error before worker_done
+const defectsHead = '| ID | 심각도 | 증거 | 위치 | 요지 | 영향 근거 |\n| --- | --- | --- | --- | --- | --- |\n';
+r = run('defects-bad-head.md', `# QA\n## 결함\n| 결함 | 등급 | 근거 | 파일 |\n| --- | --- | --- | --- |\n| M-1 | Medium | 관찰: 값 다름 | a.cs:1 |\n${head}- ✅ check\n`);
+assert.equal(r.code, 1);
+assert.deepEqual(r.out.failed, ['결함 표의 머리글을 확인하세요: ID | 심각도 | 증거 | 위치']);
+ok();
+r = run('defects-placeholder.md', `# QA\n## 결함\n${defectsHead}| (없음) | | | |\n${head}- ✅ check\n`);
+assert.equal(r.code, 1);
+assert.match(r.out.failed[0], /심각도를 읽을 수 없음: \(없음\)/);
+ok();
+r = run('defects-none.md', `# QA\n## 결함\n없음\n${head}- ✅ check\n`);
+assert.equal(r.code, 0);
+assert.deepEqual(r.out, { ok: true, checked: 1, failed: [], notes: [] });
+ok();
+r = run('defects-ok.md', `# QA\n## 결함\n${defectsHead}| M-1 | Medium | 관찰: 값 다름 | \`a.cs:1\` | 표시 어긋남 | 없음 |\n${head}- ✅ check\n`);
+assert.equal(r.code, 0);
+assert.deepEqual(r.out, { ok: true, checked: 1, failed: [], notes: [] });
+ok();
 
 // CRLF gives the same result as LF
 const body = '# 리포트\n## 결함\n- ❌ 발견\n## 검증\n- ✅ check\n- (참고) ❌ 미실행\n```\n- ❌ 양식\n```\n';

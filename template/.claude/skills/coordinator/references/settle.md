@@ -51,6 +51,7 @@ phase마다 `_workspace/_run/<phase>/ledger.md` 하나를 양식 `docs/harness/t
 | 상황 | 처리 |
 | --- | --- |
 | 네 가지 확인 중 하나가 아니다, 또는 `--outcome failed` | `settle`이 이미 그 Task를 실패로 되돌렸다. 출력의 `cause`를 장부의 재시도 열에 적는다. 같은 원인을 그 Task의 메모(spec 옆의 `<Task ID>.memo.md`)에 적은 뒤 **같은 Task를** 1회 다시 띄운다: `node .claude/scripts/orca-launch.mjs worker --map <map> --id <Task ID> --bracket <…> --does <…> --retry`. Orca에 등록된 spec은 바꿀 수 없으므로 원인은 메모로만 전한다. 그래도 실패하면 그 Task 없이 진행할 수 있는지 보고 `ask --wait`로 사용자에게 올린다. |
+| 검증 Task가 실패로 정산됐지만 산출물이 있고 뒤 Task의 실제 입력이 갖춰졌다 | `pull`로 실제 입력만 의존으로 남기고(`SKILL.md`의 워커 기동) 사유를 장부 `## 결정`에 적고 진행한다. |
 | 기동 영수증의 `turnStarted: false` | 자동으로 멈추거나 다시 띄우지 않는다. 화면에서 턴이 시작되지 않은 것을 확인한 뒤에만 사람이 복구한다. 장부에 그 상태를 적는다. |
 | 등록이 배정 불일치로 거부 | 계획 Task ID와 승인 버전, 역할·단위·실제 spec을 대조한다. 승인값을 쓸 수 없으면 창구에 올린다. 현재 표를 소급 적용하지 않는다. |
 | 같은 워커에게 일을 더해야 한다 | `send`로 보태지 않고 새 Task를 등록해 띄운다. |
